@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Capsule Testbed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./styles/main.css">
+</head>
+<body>
+
+<!-- ── Sidebar control panel ── -->
+<div id="sidebar" class="sidebar"></div>
+
+<!-- ── HUD ── -->
+<div id="ui" class="ui-hud">
+  <div class="ui-panel"><span class="ui-label">Time</span><span class="ui-value" id="timer-value">00:00</span></div>
+  <div class="ui-panel"><span class="ui-label">Kills</span><span class="ui-value" id="kills-value">0</span></div>
+</div>
+
+<!-- ── Top-left HUD ── -->
+<div id="hud-top-left">
+  <div id="fpsOverlay">FPS: <span id="fpsVal">0</span></div>
+</div>
+
+<!-- ── Elite boss bar ── -->
+<div id="elite-bar-wrap" style="display:none;">
+  <div id="elite-bar-label" class="elite-bar-label">ELITE</div>
+  <div id="elite-bar-track">
+    <div id="elite-bar-fill"></div>
+  </div>
+</div>
+
+<!-- ── Instructions ── -->
+<div id="instructions">WASD Move · SHIFT Dash · Auto-Shoot · TAB Toggle Panel</div>
+
+<!-- ── Game Over ── -->
+<div id="game-over">
+  <div class="go-panel">
+    <div class="go-title">GAME OVER</div>
+    <div id="final-stats" class="go-stats"></div>
+    <button class="go-btn" onclick="window.location.reload()">RESTART</button>
+  </div>
+</div>
+
+<!-- ── Health bar styles (used by CSS2D labels) ── -->
+<style>
+.health-bar-wrap {
+  width: 72px; height: 8px;
+  background: rgba(0,0,0,0.65);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.health-bar-fill {
+  height: 100%;
+  background: linear-gradient(to right, #00aa00, #44ff44);
+  border-radius: 4px;
+  transition: width 0.08s linear;
+}
+</style>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
