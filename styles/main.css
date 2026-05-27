@@ -192,7 +192,7 @@ canvas { display: block; }
   overflow: hidden;
   transform: translateX(100%);
   transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
-  z-index: 30;
+  z-index: 1000;
   font-family: var(--rj);
   box-shadow: -4px 0 24px rgba(0,0,0,0.18);
 }
@@ -390,7 +390,7 @@ input[type=color]::-webkit-color-swatch { border: none; border-radius: 3px; }
 .tog { position: relative; width: 32px; height: 18px; cursor: pointer; flex-shrink: 0; }
 .tog input { opacity: 0; width: 0; height: 0; }
 .tog-track {
-  position: fixed; inset: 0; background: var(--cp-border);
+  position: absolute; inset: 0; background: var(--cp-border);
   border-radius: 9px; border: 1px solid var(--cp-border); transition: all 0.2s;
 }
 .tog input:checked + .tog-track { background: var(--cp-accent); border-color: var(--cp-accent); }
@@ -524,6 +524,31 @@ position: fixed;
 /* ── Mechanics Lab overrides ─────────────────────────────────────────────── */
 body.mode-playing #cp.open { transform: translateX(0); }
 body.mode-playing #cp:not(.open) { transform: translateX(100%); }
+#cp-open-handle {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%) rotate(-90deg) translateY(50%);
+  transform-origin: right center;
+  z-index: 999;
+  padding: 8px 14px;
+  border: 1px solid var(--cp-border);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: var(--cp-card);
+  color: var(--cp-text);
+  font-family: var(--rj);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: -2px 0 16px rgba(0,0,0,0.18);
+}
+#cp.open ~ #cp-open-handle {
+  opacity: 0;
+  pointer-events: none;
+}
 #cp-scroll { overflow-y: auto; }
 .cap-tabs { grid-template-columns: repeat(5, 1fr); }
 .cap-tab[data-t="game"].active { color: #111827; border-bottom-color: #111827; background: rgba(17,24,39,0.07); }
@@ -552,4 +577,13 @@ body.mode-playing #cp:not(.open) { transform: translateX(100%); }
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+
+
+@media (max-width: 720px) {
+  :root { --pw: min(100vw, 400px); }
+  #cp { width: var(--pw); }
+  .cap-tabs { grid-template-columns: repeat(2, 1fr); }
+  .cp-top-bar { flex-direction: column; align-items: stretch; }
+  .inv-row { justify-content: space-between; }
 }

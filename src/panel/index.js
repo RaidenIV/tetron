@@ -226,21 +226,29 @@ function applyEmissive() {
 }
 
 // ── Open / close ──────────────────────────────────────────────────────────────
-export function togglePanel() {
-  state.panelOpen = !state.panelOpen;
-  cpEl.classList.toggle('open', state.panelOpen);
-  uiEl.classList.toggle('po',   state.panelOpen);
-  hintEl.classList.toggle('po', state.panelOpen);
+function setPanelOpen(open) {
+  state.panelOpen = !!open;
+  cpEl?.classList.toggle('open', state.panelOpen);
+  uiEl?.classList.toggle('po',   state.panelOpen);
+  hintEl?.classList.toggle('po', state.panelOpen);
   xpHudEl?.classList.toggle('po', state.panelOpen);
+
   if (state.panelOpen) {
-  // Opening the control panel should NOT pause the game and should NOT show the pause overlay.
-  clock.getDelta();
-  loadPanel();
-}
-updatePauseBtn();
+    // Opening the control panel should NOT pause the game and should NOT show the pause overlay.
+    clock.getDelta();
+    loadPanel();
+  }
+
+  updatePauseBtn();
   state.keys.w = state.keys.a = state.keys.s = state.keys.d = false;
 }
-g('cp-close').addEventListener('click', togglePanel);
+
+export function openPanel() { setPanelOpen(true); }
+export function closePanel() { setPanelOpen(false); }
+export function togglePanel() { setPanelOpen(!state.panelOpen); }
+
+g('cp-close')?.addEventListener('click', closePanel);
+g('cp-open-handle')?.addEventListener('click', openPanel);
 
 // ── Pause button ──────────────────────────────────────────────────────────────
 export function updatePauseBtn() {
@@ -860,3 +868,10 @@ function applyImport(data) {
   syncBulletBloomUI();
   loadPanel();
 }
+
+
+// Initial mechanics sidebar sync. The HTML ships with #cp.open so the panel is
+// visible even if the app is deployed before the first animation frame.
+openPanel();
+loadPanel();
+updatePauseBtn();

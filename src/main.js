@@ -11,7 +11,7 @@ import { setLevelUpCallback, setVictoryCallback } from './enemies.js';
 import { triggerVictory, restartGame } from './gameFlow.js';
 import { initInput }        from './input.js';
 import { tick }             from './loop.js';
-import { togglePanel, togglePause } from './panel/index.js';
+import { openPanel, togglePanel, togglePause } from './panel/index.js';
 import { initAudio, resumeAudioContext, playSound, startMusic } from './audio.js';
 import { initHudCoin }      from './hudCoin.js';
 
@@ -40,7 +40,7 @@ window.addEventListener('resize', () => {
 // ── Start directly in the mechanics sandbox ──────────────────────────────────
 state.uiMode = 'playing';
 state.paused = false;
-state.panelOpen = false;
+state.panelOpen = true;
 document.body.classList.remove('mode-menu');
 document.body.classList.add('mode-playing');
 
@@ -60,6 +60,4 @@ if (!state.loopStarted) {
 }
 
 // Keep the testing sidebar visible by default.
-requestAnimationFrame(() => {
-  if (!state.panelOpen) togglePanel();
-});
+openPanel();
