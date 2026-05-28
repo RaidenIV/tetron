@@ -41,8 +41,12 @@
   "reticleVisible": true,
   "reticleType": "dot",
   "reticleColor": "#ffffff",
-  "reticleSize": 4,
+  "reticleSize": 24,
   "reticleThickness": 2,
   "reticleOpacity": 1,
-  "reticleGlow": false
+  "reticleGlow": false,
+  "thirdMouseLook": true,
+  "thirdMouseSensitivityX": 0.003,
+  "thirdMouseSensitivityY": 0.0024,
+  "thirdPitch": -0.22
 }

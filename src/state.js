@@ -3,6 +3,7 @@ export const state = {
   panelOpen: true,
   panelMinimized: false,
   activePreset: 'default',
+  mouseLookActive: false,
   keys: { w: false, a: false, s: false, d: false },
   sidebarWidth: 320,
 
@@ -25,6 +26,10 @@ export const state = {
     thirdAzimuth: 2.36,   // radians, ~135° behind-right
     thirdLookAhead: 2.0,
     thirdSmoothPos: 8.0, thirdSmoothLook: 12.0,
+    thirdMouseLook: true,
+    thirdMouseSensitivityX: 0.003,
+    thirdMouseSensitivityY: 0.0024,
+    thirdPitch: -0.28,
     thirdOffsetMode: 'parallel', // 'parallel' | 'pivot'
     thirdOffsetX: 0.0, thirdOffsetY: 0.0, thirdOffsetZ: 0.0,
 
@@ -50,7 +55,7 @@ export const state = {
     reticleVisible: true,
     reticleType: 'dot',
     reticleColor: '#ffffff',
-    reticleSize: 4,
+    reticleSize: 24,
     reticleThickness: 2,
     reticleOpacity: 1,
     reticleGlow: false,

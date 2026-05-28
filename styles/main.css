@@ -209,21 +209,20 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   pointer-events: none; z-index: 25;
 }
 .reticle-part {
-  position: absolute; top: 50%; left: 50%; display: none;
-  background: var(--reticle-color); border-radius: 999px;
+  position: absolute; top: 50%; left: 50%; display: block;
   transform: translate(-50%, -50%);
+}
+.reticle-line, .reticle-dot {
+  background: var(--reticle-color); border-radius: 999px;
 }
 .reticle-line-h { width: var(--reticle-size); height: var(--reticle-thickness); }
 .reticle-line-v { width: var(--reticle-thickness); height: var(--reticle-size); }
 .reticle-dot { width: var(--reticle-dot-size); height: var(--reticle-dot-size); }
-#target-reticle.type-dot .reticle-dot { display: block; }
-#target-reticle.type-cross .reticle-line { display: block; }
-#target-reticle.type-ring {
+.reticle-ring {
+  width: var(--reticle-size); height: var(--reticle-size);
   border: var(--reticle-thickness) solid var(--reticle-color);
   border-radius: 50%;
 }
-#target-reticle.type-cross-dot .reticle-line,
-#target-reticle.type-cross-dot .reticle-dot { display: block; }
 #target-reticle.reticle-glow {
   filter: drop-shadow(0 0 6px var(--reticle-color));
 }

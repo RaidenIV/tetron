@@ -89,33 +89,49 @@ const _tgt = new THREE.Vector3();
 const _thirdForward = new THREE.Vector3();
 const _thirdRight = new THREE.Vector3();
 const _thirdLateral = new THREE.Vector3();
+const _thirdViewDir = new THREE.Vector3();
+
+function clamp(v, min, max) {
+  return Math.min(max, Math.max(min, v));
+}
 
 export function updateThirdCamera(playerPos, delta) {
-  const az = state.params.thirdAzimuth;
-  _thirdForward.set(-Math.sin(az), 0, -Math.cos(az));
-  _thirdRight.set(Math.cos(az), 0, -Math.sin(az));
+  const p = state.params;
+  const az = Number(p.thirdAzimuth) || 0;
+  const pitch = clamp(Number(p.thirdPitch) || 0, -1.1, 1.1);
+  p.thirdPitch = pitch;
 
-  _thirdLateral.copy(_thirdRight).multiplyScalar(state.params.thirdOffsetX);
+  _thirdForward.set(-Math.sin(az), 0, -Math.cos(az)).normalize();
+  _thirdRight.set(Math.cos(az), 0, -Math.sin(az)).normalize();
+
+  const pitchCos = Math.cos(pitch);
+  _thirdViewDir.set(
+    _thirdForward.x * pitchCos,
+    Math.sin(pitch),
+    _thirdForward.z * pitchCos
+  ).normalize();
+
+  _thirdLateral.copy(_thirdRight).multiplyScalar(p.thirdOffsetX);
 
   // desired eye position — distance/height plus over-shoulder offset controls
   _eye.copy(playerPos)
-    .addScaledVector(_thirdForward, -state.params.thirdDist + state.params.thirdOffsetZ)
+    .addScaledVector(_thirdForward, -p.thirdDist + p.thirdOffsetZ)
     .add(_thirdLateral);
-  _eye.y = playerPos.y + state.params.thirdHeight + state.params.thirdOffsetY;
+  _eye.y = playerPos.y + p.thirdHeight + p.thirdOffsetY;
 
-  // desired look-at — slightly ahead of the player.
-  // In parallel mode, the lateral offset is applied to both the eye and target so
-  // over-the-shoulder framing stays uncanted. Pivot mode keeps the older behavior
-  // where the camera is offset but still looks back toward the player center.
-  _tgt.copy(playerPos)
-    .addScaledVector(_thirdForward, state.params.thirdLookAhead);
-  if (state.params.thirdOffsetMode === 'parallel') {
-    _tgt.add(_thirdLateral);
+  if (p.thirdOffsetMode === 'pivot') {
+    // Canted/pivot behavior: offset the camera, but converge back toward the
+    // player's forward focal lane. Pitch still controls vertical aim.
+    _tgt.copy(playerPos).addScaledVector(_thirdForward, p.thirdLookAhead);
+    _tgt.y = _eye.y + Math.tan(pitch) * Math.max(1, p.thirdDist + p.thirdLookAhead);
+  } else {
+    // Parallel OTS behavior: shift the camera sideways without toe-in. The
+    // camera looks straight along its yaw/pitch vector, like a PC action game.
+    _tgt.copy(_eye).addScaledVector(_thirdViewDir, Math.max(1, p.thirdDist + p.thirdLookAhead));
   }
-  _tgt.y = playerPos.y + 0.8 + (state.params.thirdOffsetMode === 'parallel' ? state.params.thirdOffsetY * 0.35 : 0);
 
-  const sp = Math.min(1, state.params.thirdSmoothPos  * delta);
-  const sl = Math.min(1, state.params.thirdSmoothLook * delta);
+  const sp = Math.min(1, p.thirdSmoothPos  * delta);
+  const sl = Math.min(1, p.thirdSmoothLook * delta);
 
   // lerp toward target
   state._camPos.x += (_eye.x - state._camPos.x) * sp;
@@ -129,8 +145,8 @@ export function updateThirdCamera(playerPos, delta) {
   thirdCamera.lookAt(state._camTarget.x, state._camTarget.y, state._camTarget.z);
 
   // sync FOV from params
-  if (thirdCamera.fov !== state.params.thirdFov) {
-    thirdCamera.fov = state.params.thirdFov;
+  if (thirdCamera.fov !== p.thirdFov) {
+    thirdCamera.fov = p.thirdFov;
     thirdCamera.updateProjectionMatrix();
   }
 }

@@ -32,6 +32,14 @@ const PRESET_SETTINGS = [
   "thirdLookAhead": 2,
   "thirdSmoothPos": 8,
   "thirdSmoothLook": 12,
+  "thirdMouseLook": true,
+  "thirdMouseSensitivityX": 0.003,
+  "thirdMouseSensitivityY": 0.0024,
+  "thirdPitch": -0.28,
+  "thirdOffsetMode": "parallel",
+  "thirdOffsetX": 1.2,
+  "thirdOffsetY": 0,
+  "thirdOffsetZ": 0,
   "playerSpeed": 7,
   "playerColor": "#0044cc",
   "playerMetalness": 0.67,
@@ -49,6 +57,7 @@ const PRESET_SETTINGS = [
   "sunAngleX": 16,
   "sunAngleZ": 14,
   "shadows": true,
+  "shadowQuality": "high",
   "fogNear": 1,
   "fogFar": 200,
   "bgColor": "#06080d",
@@ -56,7 +65,14 @@ const PRESET_SETTINGS = [
   "gridColor": "#1a2a4a",
   "showFloor": true,
   "showGrid": true,
-  "showFps": false
+  "showFps": false,
+  "reticleVisible": true,
+  "reticleType": "dot",
+  "reticleColor": "#ffffff",
+  "reticleSize": 24,
+  "reticleThickness": 2,
+  "reticleOpacity": 1,
+  "reticleGlow": false
 } },
   { key: 'g1', label: 'G1', path: './presets/testbed.json', data: {
   "cameraMode": "third",
@@ -68,6 +84,14 @@ const PRESET_SETTINGS = [
   "thirdLookAhead": 3.8,
   "thirdSmoothPos": 10,
   "thirdSmoothLook": 12,
+  "thirdMouseLook": true,
+  "thirdMouseSensitivityX": 0.003,
+  "thirdMouseSensitivityY": 0.0024,
+  "thirdPitch": -0.22,
+  "thirdOffsetMode": "parallel",
+  "thirdOffsetX": 1.25,
+  "thirdOffsetY": -0.25,
+  "thirdOffsetZ": -0.25,
   "playerSpeed": 7,
   "playerColor": "#0044cc",
   "playerMetalness": 0.67,
@@ -85,6 +109,7 @@ const PRESET_SETTINGS = [
   "sunAngleX": 16,
   "sunAngleZ": 14,
   "shadows": true,
+  "shadowQuality": "high",
   "fogNear": 1,
   "fogFar": 200,
   "bgColor": "#142130",
@@ -92,7 +117,14 @@ const PRESET_SETTINGS = [
   "gridColor": "#000000",
   "showFloor": true,
   "showGrid": true,
-  "showFps": true
+  "showFps": true,
+  "reticleVisible": true,
+  "reticleType": "dot",
+  "reticleColor": "#ffffff",
+  "reticleSize": 24,
+  "reticleThickness": 2,
+  "reticleOpacity": 1,
+  "reticleGlow": false
 } },
 ];
 
@@ -326,6 +358,18 @@ function buildCamera(body) {
     { key: 'thirdSmoothPos',  label: 'Pos Smoothing',  min: 1,  max: 30,          step: 0.5,  dec: 1 },
     { key: 'thirdSmoothLook', label: 'Look Smoothing', min: 1,  max: 30,          step: 0.5,  dec: 1 },
   ].forEach(o => thirdGroup.appendChild(slider(o)));
+
+  thirdGroup.appendChild(subhdr('Mouse Aim'));
+  thirdGroup.appendChild(toggle('Mouse Look', 'thirdMouseLook'));
+  thirdGroup.appendChild(slider({
+    key: 'thirdMouseSensitivityX', label: 'Yaw Sens.', min: 0.0005, max: 0.01, step: 0.0001, dec: 4,
+  }));
+  thirdGroup.appendChild(slider({
+    key: 'thirdMouseSensitivityY', label: 'Pitch Sens.', min: 0.0005, max: 0.01, step: 0.0001, dec: 4,
+  }));
+  thirdGroup.appendChild(slider({
+    key: 'thirdPitch', label: 'Pitch', min: -1.1, max: 1.1, step: 0.01, dec: 2,
+  }));
 
   thirdGroup.appendChild(subhdr('Offset'));
   thirdGroup.appendChild(select('Offset Mode', 'thirdOffsetMode', [
@@ -566,38 +610,45 @@ function notify(msg) {
   n._t = setTimeout(() => { n.style.opacity = '0'; }, 2000);
 }
 
-function ensureReticleParts(el) {
-  if (el.querySelector('.reticle-part')) return;
-  el.innerHTML = `
+const RETICLE_MARKUP = {
+  dot: `
+    <span class="reticle-part reticle-dot"></span>
+  `,
+  cross: `
+    <span class="reticle-part reticle-line reticle-line-h"></span>
+    <span class="reticle-part reticle-line reticle-line-v"></span>
+  `,
+  ring: `
+    <span class="reticle-part reticle-ring"></span>
+  `,
+  crossDot: `
     <span class="reticle-part reticle-line reticle-line-h"></span>
     <span class="reticle-part reticle-line reticle-line-v"></span>
     <span class="reticle-part reticle-dot"></span>
-  `;
+  `,
+};
+
+function setReticleType(el, type) {
+  const normalizedType = RETICLE_MARKUP[type] ? type : 'dot';
+  if (el.dataset.reticleType !== normalizedType) {
+    el.innerHTML = RETICLE_MARKUP[normalizedType];
+    el.dataset.reticleType = normalizedType;
+  }
+  el.classList.toggle('reticle-glow', !!state.params.reticleGlow);
 }
 
 function applyReticleSettings() {
   const el = document.getElementById('target-reticle');
   if (!el) return;
-  ensureReticleParts(el);
 
   const p = state.params;
+  setReticleType(el, p.reticleType || 'dot');
   el.style.display = p.reticleVisible ? '' : 'none';
   el.style.setProperty('--reticle-color', p.reticleColor);
   el.style.setProperty('--reticle-size', `${p.reticleSize}px`);
   el.style.setProperty('--reticle-thickness', `${p.reticleThickness}px`);
   el.style.setProperty('--reticle-dot-size', `${Math.max(p.reticleThickness * 2, 3)}px`);
   el.style.setProperty('--reticle-opacity', p.reticleOpacity);
-  el.dataset.reticleType = p.reticleType || 'dot';
-
-  ['type-dot', 'type-cross', 'type-ring', 'type-cross-dot'].forEach(cls => el.classList.remove(cls));
-  const typeClass = {
-    dot: 'type-dot',
-    cross: 'type-cross',
-    ring: 'type-ring',
-    crossDot: 'type-cross-dot',
-  }[p.reticleType] || 'type-dot';
-  el.classList.add(typeClass);
-  el.classList.toggle('reticle-glow', !!p.reticleGlow);
 }
 
 const SHADOW_QUALITY = {

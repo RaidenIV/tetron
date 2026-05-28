@@ -40,14 +40,18 @@ function isViewportTarget(target) {
   return target === renderer.domElement || target === document.body || target === document.documentElement;
 }
 
+function isMouseLookEnabled() {
+  return state.params.thirdMouseLook !== false;
+}
+
 function canUseMouseLook(target) {
   return state.params.cameraMode === 'third'
-    && state.params.thirdMouseLook
+    && isMouseLookEnabled()
     && isViewportTarget(target);
 }
 
 function applyMouseLookDelta(dx, dy) {
-  if (state.params.cameraMode !== 'third' || !state.params.thirdMouseLook) return;
+  if (state.params.cameraMode !== 'third' || !isMouseLookEnabled()) return;
 
   const sx = Number(state.params.thirdMouseSensitivityX) || 0.003;
   const sy = Number(state.params.thirdMouseSensitivityY) || 0.0024;
