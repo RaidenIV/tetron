@@ -196,7 +196,10 @@ function slider({ key, label, min, max, step = 0.01, dec = 2, onChange }) {
   wrap.className = 'sb-slider-wrap';
   wrap.appendChild(inp);
   wrap.appendChild(num);
-  return row(label, wrap);
+
+  const r = row(label, wrap);
+  r.classList.add('sb-row-slider');
+  return r;
 }
 
 function colorPicker(label, key, onChange) {
@@ -325,8 +328,12 @@ function buildCamera(body) {
   ].forEach(o => thirdGroup.appendChild(slider(o)));
 
   thirdGroup.appendChild(subhdr('Offset'));
+  thirdGroup.appendChild(select('Offset Mode', 'thirdOffsetMode', [
+    ['parallel', 'Parallel OTS'],
+    ['pivot', 'Canted Pivot'],
+  ]));
   [
-    { key: 'thirdOffsetX', label: 'Side Offset',    min: -10, max: 10, step: 0.25, dec: 2 },
+    { key: 'thirdOffsetX', label: 'Lateral Offset', min: -10, max: 10, step: 0.25, dec: 2 },
     { key: 'thirdOffsetY', label: 'Vertical Offset', min: -5,  max: 10, step: 0.25, dec: 2 },
     { key: 'thirdOffsetZ', label: 'Forward Offset',  min: -10, max: 10, step: 0.25, dec: 2 },
   ].forEach(o => thirdGroup.appendChild(slider(o)));
@@ -391,10 +398,13 @@ function buildLighting(body) {
   body.appendChild(slider({ key: 'sunAngleZ', label: 'Z offset', min: -40, max: 40, step: 1, dec: 0 }));
 
   body.appendChild(subhdr('Shadows'));
-  body.appendChild(toggle('Cast Shadows', 'shadows', v => {
-    sunLight.castShadow = v;
-    renderer.shadowMap.needsUpdate = true;
-  }));
+  body.appendChild(toggle('Cast Shadows', 'shadows', () => applyShadowSettings()));
+  body.appendChild(select('Quality', 'shadowQuality', [
+    ['low', 'Low'],
+    ['medium', 'Medium'],
+    ['high', 'High'],
+    ['ultra', 'Ultra'],
+  ], () => applyShadowSettings()));
 }
 
 function buildScene(body) {
@@ -556,9 +566,19 @@ function notify(msg) {
   n._t = setTimeout(() => { n.style.opacity = '0'; }, 2000);
 }
 
+function ensureReticleParts(el) {
+  if (el.querySelector('.reticle-part')) return;
+  el.innerHTML = `
+    <span class="reticle-part reticle-line reticle-line-h"></span>
+    <span class="reticle-part reticle-line reticle-line-v"></span>
+    <span class="reticle-part reticle-dot"></span>
+  `;
+}
+
 function applyReticleSettings() {
   const el = document.getElementById('target-reticle');
   if (!el) return;
+  ensureReticleParts(el);
 
   const p = state.params;
   el.style.display = p.reticleVisible ? '' : 'none';
@@ -567,6 +587,7 @@ function applyReticleSettings() {
   el.style.setProperty('--reticle-thickness', `${p.reticleThickness}px`);
   el.style.setProperty('--reticle-dot-size', `${Math.max(p.reticleThickness * 2, 3)}px`);
   el.style.setProperty('--reticle-opacity', p.reticleOpacity);
+  el.dataset.reticleType = p.reticleType || 'dot';
 
   ['type-dot', 'type-cross', 'type-ring', 'type-cross-dot'].forEach(cls => el.classList.remove(cls));
   const typeClass = {
@@ -577,6 +598,33 @@ function applyReticleSettings() {
   }[p.reticleType] || 'type-dot';
   el.classList.add(typeClass);
   el.classList.toggle('reticle-glow', !!p.reticleGlow);
+}
+
+const SHADOW_QUALITY = {
+  low:    { size: 512,  type: THREE.BasicShadowMap },
+  medium: { size: 1024, type: THREE.PCFShadowMap },
+  high:   { size: 2048, type: THREE.PCFSoftShadowMap },
+  ultra:  { size: 4096, type: THREE.PCFSoftShadowMap },
+};
+
+function applyShadowSettings() {
+  const p = state.params;
+  const q = SHADOW_QUALITY[p.shadowQuality] || SHADOW_QUALITY.high;
+
+  renderer.shadowMap.enabled = !!p.shadows;
+  renderer.shadowMap.type = q.type;
+  renderer.shadowMap.needsUpdate = true;
+
+  sunLight.castShadow = !!p.shadows;
+  if (sunLight.shadow) {
+    if (sunLight.shadow.map) {
+      sunLight.shadow.map.dispose();
+      sunLight.shadow.map = null;
+    }
+    sunLight.shadow.mapSize.set(q.size, q.size);
+    sunLight.shadow.needsUpdate = true;
+    sunLight.shadow.camera?.updateProjectionMatrix?.();
+  }
 }
 
 // Push every param back into Three.js objects — used after import and reset.
@@ -591,8 +639,7 @@ function applyAllParams() {
   sunLight.intensity     = p.sunIntensity;
   fillLight.intensity    = p.fillIntensity;
   rimLight.intensity     = p.rimIntensity;
-  sunLight.castShadow    = p.shadows;
-  renderer.shadowMap.needsUpdate = true;
+  applyShadowSettings();
   scene.background = new THREE.Color(p.bgColor);
   if (scene.fog) { scene.fog.near = p.fogNear; scene.fog.far = p.fogFar; scene.fog.color.set(p.bgColor); }
   setFloorColor(p.floorColor);
@@ -633,8 +680,59 @@ function rebuildPanel() {
 
 // ── Init & toggle ──────────────────────────────────────────────────────────────
 
+const SIDEBAR_MIN_WIDTH = 286;
+const SIDEBAR_MAX_WIDTH = 560;
+const SIDEBAR_DEFAULT_WIDTH = 320;
+
+function clampSidebarWidth(width) {
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width));
+}
+
+function applySidebarWidth() {
+  if (!sidebar) return;
+  const width = clampSidebarWidth(state.sidebarWidth || SIDEBAR_DEFAULT_WIDTH);
+  state.sidebarWidth = width;
+  sidebar.style.setProperty('--sb-width', `${width}px`);
+  document.documentElement.style.setProperty('--sb-width', `${width}px`);
+}
+
+function initSidebarResize() {
+  const handle = document.getElementById('sb-resizer');
+  if (!handle) return;
+
+  let dragging = false;
+
+  const stopDrag = () => {
+    dragging = false;
+    document.body.classList.remove('sb-resizing');
+  };
+
+  handle.addEventListener('pointerdown', event => {
+    if (state.panelMinimized) return;
+    dragging = true;
+    document.body.classList.add('sb-resizing');
+    handle.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  });
+
+  handle.addEventListener('dblclick', () => {
+    state.sidebarWidth = SIDEBAR_DEFAULT_WIDTH;
+    applySidebarWidth();
+  });
+
+  window.addEventListener('pointermove', event => {
+    if (!dragging) return;
+    state.sidebarWidth = clampSidebarWidth(window.innerWidth - event.clientX);
+    applySidebarWidth();
+  });
+
+  window.addEventListener('pointerup', stopDrag);
+  window.addEventListener('pointercancel', stopDrag);
+}
+
 function updatePanelChrome() {
   if (!sidebar) return;
+  applySidebarWidth();
   sidebar.classList.toggle('minimized', !!state.panelMinimized);
   const btn = document.getElementById('sb-close-btn');
   if (btn) {
@@ -654,6 +752,7 @@ function setPanelMinimized(minimized) {
 export function initPanel() {
   if (!sidebar) return;
   sidebar.innerHTML = `
+    <div class="sb-resizer" id="sb-resizer" title="Resize sidebar" aria-hidden="true"></div>
     <div class="sb-header">
       <span class="sb-title">Game Lab</span>
       <button class="sb-close" id="sb-close-btn" title="Minimize sidebar" aria-label="Minimize sidebar">◀</button>
@@ -661,6 +760,7 @@ export function initPanel() {
     <div id="sb-body" class="sb-body"></div>
   `;
   document.getElementById('sb-close-btn')?.addEventListener('click', togglePanel);
+  initSidebarResize();
   applyAllParams();
   rebuildPanel();
   updatePanelChrome();

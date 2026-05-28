@@ -4,6 +4,7 @@ export const state = {
   panelMinimized: false,
   activePreset: 'default',
   keys: { w: false, a: false, s: false, d: false },
+  sidebarWidth: 320,
 
   // dash runtime
   dashTimer: 0, dashCooldown: 0,
@@ -24,6 +25,7 @@ export const state = {
     thirdAzimuth: 2.36,   // radians, ~135° behind-right
     thirdLookAhead: 2.0,
     thirdSmoothPos: 8.0, thirdSmoothLook: 12.0,
+    thirdOffsetMode: 'parallel', // 'parallel' | 'pivot'
     thirdOffsetX: 0.0, thirdOffsetY: 0.0, thirdOffsetZ: 0.0,
 
     // player
@@ -37,7 +39,7 @@ export const state = {
     // lighting
     ambientIntensity: 0.42,
     sunIntensity: 5.8, fillIntensity: 1.35, rimIntensity: 0.82,
-    sunAngleX: 16, sunAngleZ: 14, shadows: true,
+    sunAngleX: 16, sunAngleZ: 14, shadows: true, shadowQuality: 'high',
 
     // scene
     fogNear: 1, fogFar: 200,

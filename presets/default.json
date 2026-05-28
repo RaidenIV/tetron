@@ -32,5 +32,10 @@
   "gridColor": "#1a2a4a",
   "showFloor": true,
   "showGrid": true,
-  "showFps": false
+  "showFps": false,
+  "thirdOffsetMode": "parallel",
+  "thirdOffsetX": 0,
+  "thirdOffsetY": 0,
+  "thirdOffsetZ": 0,
+  "shadowQuality": "high"
 }

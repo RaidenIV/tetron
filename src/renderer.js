@@ -88,22 +88,31 @@ const _eye = new THREE.Vector3();
 const _tgt = new THREE.Vector3();
 const _thirdForward = new THREE.Vector3();
 const _thirdRight = new THREE.Vector3();
+const _thirdLateral = new THREE.Vector3();
 
 export function updateThirdCamera(playerPos, delta) {
   const az = state.params.thirdAzimuth;
   _thirdForward.set(-Math.sin(az), 0, -Math.cos(az));
   _thirdRight.set(Math.cos(az), 0, -Math.sin(az));
 
+  _thirdLateral.copy(_thirdRight).multiplyScalar(state.params.thirdOffsetX);
+
   // desired eye position — distance/height plus over-shoulder offset controls
   _eye.copy(playerPos)
     .addScaledVector(_thirdForward, -state.params.thirdDist + state.params.thirdOffsetZ)
-    .addScaledVector(_thirdRight, state.params.thirdOffsetX);
+    .add(_thirdLateral);
   _eye.y = playerPos.y + state.params.thirdHeight + state.params.thirdOffsetY;
 
-  // desired look-at — slightly ahead of the player
+  // desired look-at — slightly ahead of the player.
+  // In parallel mode, the lateral offset is applied to both the eye and target so
+  // over-the-shoulder framing stays uncanted. Pivot mode keeps the older behavior
+  // where the camera is offset but still looks back toward the player center.
   _tgt.copy(playerPos)
     .addScaledVector(_thirdForward, state.params.thirdLookAhead);
-  _tgt.y = playerPos.y + 0.8;
+  if (state.params.thirdOffsetMode === 'parallel') {
+    _tgt.add(_thirdLateral);
+  }
+  _tgt.y = playerPos.y + 0.8 + (state.params.thirdOffsetMode === 'parallel' ? state.params.thirdOffsetY * 0.35 : 0);
 
   const sp = Math.min(1, state.params.thirdSmoothPos  * delta);
   const sl = Math.min(1, state.params.thirdSmoothLook * delta);
