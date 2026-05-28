@@ -24,6 +24,52 @@ playerMesh.castShadow = true;
 playerMesh.position.y = 0.4 + 1.2 / 2;
 playerGroup.add(playerMesh);
 
+function createContactShadowTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+
+  const ctx = canvas.getContext('2d');
+  const gradient = ctx.createRadialGradient(64, 64, 4, 64, 64, 64);
+  gradient.addColorStop(0.0, 'rgba(0, 0, 0, 0.58)');
+  gradient.addColorStop(0.46, 'rgba(0, 0, 0, 0.32)');
+  gradient.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+const contactShadowMat = new THREE.MeshBasicMaterial({
+  map: createContactShadowTexture(),
+  transparent: true,
+  opacity: 0.7,
+  depthWrite: false,
+  depthTest: true,
+  toneMapped: false,
+});
+
+export const playerContactShadow = new THREE.Mesh(
+  new THREE.PlaneGeometry(1, 1),
+  contactShadowMat
+);
+playerContactShadow.rotation.x = -Math.PI / 2;
+playerContactShadow.position.y = 0.008;
+playerContactShadow.renderOrder = 2;
+playerGroup.add(playerContactShadow);
+
+function applyPlayerContactShadow() {
+  const p = state.params;
+  const contactSize = Math.max(0.82, p.playerRadius * 3.1);
+  playerContactShadow.scale.set(contactSize, contactSize, 1);
+  playerContactShadow.visible = !!p.shadows && !!p.showFloor;
+}
+
+applyPlayerContactShadow();
+
 // ── Rebuild geometry at runtime ────────────────────────────────────────────────
 // The panel calls this after changing playerRadius or playerLength.
 export function rebuildPlayerGeo() {
@@ -33,6 +79,7 @@ export function rebuildPlayerGeo() {
   playerMesh.geometry = newGeo;
   playerGeo = newGeo;
   playerMesh.position.y = p.playerRadius + p.playerLength / 2;
+  applyPlayerContactShadow();
 }
 
 // ── Apply material from params ─────────────────────────────────────────────────
@@ -84,6 +131,7 @@ const _v = new THREE.Vector3();
 
 export function updatePlayer(delta, moveForward, moveRight) {
   const p = state.params;
+  applyPlayerContactShadow();
 
   // Walking — poll state.keys each frame
   _v.set(0, 0, 0);
