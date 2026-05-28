@@ -1,6 +1,7 @@
 // src/state.js
 export const state = {
   panelOpen: true,
+  panelMinimized: false,
   keys: { w: false, a: false, s: false, d: false },
 
   // dash runtime

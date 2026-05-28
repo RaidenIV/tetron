@@ -48,6 +48,7 @@ function section(icon, title, buildFn) {
 
   const hdr = document.createElement('div');
   hdr.className = 'sb-section-hdr';
+  hdr.title = title;
 
   const iconWrap = document.createElement('span');
   iconWrap.className = 'sb-icon';
@@ -67,6 +68,13 @@ function section(icon, title, buildFn) {
   body.className = 'sb-section-body'; // display: none by default
 
   hdr.addEventListener('click', () => {
+    if (state.panelMinimized) {
+      setPanelMinimized(false);
+      body.classList.add('open');
+      hdr.querySelector('.arrow').textContent = '▴';
+      return;
+    }
+
     const open = body.classList.toggle('open'); // display: block when open
     hdr.querySelector('.arrow').textContent = open ? '▴' : '▾';
   });
@@ -77,7 +85,7 @@ function section(icon, title, buildFn) {
   return { el: wrap, body, hdr };
 }
 
-// Slider: write to state.params, then call onChange
+// Slider: write to state.params, keep the range + number input in sync, then call onChange.
 function slider({ key, label, min, max, step = 0.01, dec = 2, onChange }) {
   const inp = document.createElement('input');
   inp.type = 'range';
@@ -85,21 +93,32 @@ function slider({ key, label, min, max, step = 0.01, dec = 2, onChange }) {
   inp.min = min; inp.max = max; inp.step = step;
   inp.value = state.params[key];
 
-  const val = document.createElement('span');
-  val.className = 'sb-val';
-  val.textContent = Number(state.params[key]).toFixed(dec);
+  const num = document.createElement('input');
+  num.type = 'number';
+  num.className = 'sb-number';
+  num.min = min; num.max = max; num.step = step;
+  num.value = Number(state.params[key]).toFixed(dec);
+  num.inputMode = 'decimal';
 
-  inp.addEventListener('input', () => {
-    const v = parseFloat(inp.value);
-    state.params[key] = v;
-    val.textContent   = v.toFixed(dec);
-    onChange?.(v); // optional immediate side-effect (e.g. light.intensity = v)
-  });
+  function format(v) { return Number(v).toFixed(dec); }
+  function clamp(v) { return Math.min(max, Math.max(min, v)); }
+  function commit(v, { clampValue = false } = {}) {
+    if (!Number.isFinite(v)) return;
+    const next = clampValue ? clamp(v) : v;
+    state.params[key] = next;
+    inp.value = next;
+    num.value = format(next);
+    onChange?.(next); // optional immediate side-effect (e.g. light.intensity = v)
+  }
+
+  inp.addEventListener('input', () => commit(parseFloat(inp.value)));
+  num.addEventListener('input', () => commit(parseFloat(num.value)));
+  num.addEventListener('change', () => commit(parseFloat(num.value), { clampValue: true }));
 
   const wrap = document.createElement('div');
   wrap.className = 'sb-slider-wrap';
   wrap.appendChild(inp);
-  wrap.appendChild(val);
+  wrap.appendChild(num);
   return row(label, wrap);
 }
 
@@ -144,7 +163,9 @@ function colorPicker(label, key, onChange) {
 
   wrap.appendChild(swatch);
   wrap.appendChild(hexInp);
-  return row(label, wrap);
+  const r = row(label, wrap);
+  r.classList.add('sb-row-color');
+  return r;
 }
 
 function toggle(label, key, onChange) {
@@ -422,22 +443,40 @@ function rebuildPanel() {
 
 // ── Init & toggle ──────────────────────────────────────────────────────────────
 
+function updatePanelChrome() {
+  if (!sidebar) return;
+  sidebar.classList.toggle('minimized', !!state.panelMinimized);
+  const btn = document.getElementById('sb-close-btn');
+  if (btn) {
+    btn.textContent = state.panelMinimized ? '☰' : '◀';
+    btn.title = state.panelMinimized ? 'Expand sidebar' : 'Minimize sidebar';
+    btn.setAttribute('aria-label', btn.title);
+  }
+}
+
+function setPanelMinimized(minimized) {
+  state.panelMinimized = minimized;
+  state.panelOpen = true;
+  if (sidebar) sidebar.style.display = '';
+  updatePanelChrome();
+}
+
 export function initPanel() {
   if (!sidebar) return;
   sidebar.innerHTML = `
     <div class="sb-header">
       <span class="sb-title">Game Lab</span>
-      <button class="sb-close" id="sb-close-btn" title="Tab">✕</button>
+      <button class="sb-close" id="sb-close-btn" title="Minimize sidebar" aria-label="Minimize sidebar">◀</button>
     </div>
     <div id="sb-body" class="sb-body"></div>
   `;
   document.getElementById('sb-close-btn')?.addEventListener('click', togglePanel);
   rebuildPanel();
+  updatePanelChrome();
 }
 
 export function togglePanel() {
-  state.panelOpen = !state.panelOpen;
-  if (sidebar) sidebar.style.display = state.panelOpen ? '' : 'none';
+  setPanelMinimized(!state.panelMinimized);
 }
 
 initPanel();
