@@ -34,8 +34,19 @@
   "showGrid": true,
   "showFps": false,
   "thirdOffsetMode": "parallel",
-  "thirdOffsetX": 0,
+  "thirdOffsetX": 1.2,
   "thirdOffsetY": 0,
   "thirdOffsetZ": 0,
-  "shadowQuality": "high"
+  "shadowQuality": "high",
+  "thirdMouseLook": true,
+  "thirdMouseSensitivityX": 0.003,
+  "thirdMouseSensitivityY": 0.0024,
+  "thirdPitch": -0.08,
+  "reticleVisible": true,
+  "reticleType": "dot",
+  "reticleColor": "#ffffff",
+  "reticleSize": 24,
+  "reticleThickness": 2,
+  "reticleOpacity": 1,
+  "reticleGlow": false
 }
