@@ -19,6 +19,83 @@ const ICON_PLAYER = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewB
 const ICON_LIGHT  = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M565-395q35-35 35-85t-35-85q-35-35-85-35t-85 35q-35 35-35 85t35 85q35 35 85 35t85-35Zm-198.42 28.42Q320-413.15 320-480t46.58-113.42Q413.15-640 480-640t113.42 46.58Q640-546.85 640-480t-46.58 113.42Q546.85-320 480-320t-113.42-46.58ZM80-460q-8.54 0-14.27-5.73T60-480q0-8.54 5.73-14.27T80-500h100q8.54 0 14.27 5.73T200-480q0 8.54-5.73 14.27T180-460H80Zm700 0q-8.54 0-14.27-5.73T760-480q0-8.54 5.73-14.27T780-500h100q8.54 0 14.27 5.73T900-480q0 8.54-5.73 14.27T880-460H780ZM465.73-765.73Q460-771.46 460-780v-100q0-8.54 5.73-14.27T480-900q8.54 0 14.27 5.73T500-880v100q0 8.54-5.73 14.27T480-760q-8.54 0-14.27-5.73Zm0 700Q460-71.46 460-80v-100q0-8.54 5.73-14.27T480-200q8.54 0 14.27 5.73T500-180v100q0 8.54-5.73 14.27T480-60q-8.54 0-14.27-5.73ZM254.46-678.77l-57.61-55.85q-5.85-5.61-5.73-13.76.11-8.16 5.73-14.77 6.61-6.62 14.38-6.62 7.77 0 14.15 6.62L282-706.31q6.38 6.62 6.38 14.16 0 7.53-6.38 14.15-5.62 6.62-13.27 6.12-7.65-.5-14.27-6.89Zm480.16 481.92L678-253.69q-6.38-6.62-6.38-14.27 0-7.66 6.38-14.04 5.62-6.62 13.27-6.12 7.65.5 14.27 6.89l57.61 55.85q5.85 5.61 5.73 13.76-.11 8.16-5.73 14.77-6.61 6.62-14.38 6.62-7.77 0-14.15-6.62ZM678-678q-6.62-5.62-6.12-13.27.5-7.65 6.89-14.27l55.85-57.61q5.61-5.85 13.76-5.73 8.16.11 14.77 5.73 6.62 6.61 6.62 14.38 0 7.77-6.62 14.15L706.31-678q-6.62 6.38-14.16 6.38-7.53 0-14.15-6.38ZM196.85-196.85q-6.62-6.61-6.62-14.38 0-7.77 6.62-14.15L253.69-282q6.62-6.38 14.27-6.38 7.66 0 14.04 6.38 5.85 5.62 5.35 13.27-.5 7.65-6.12 14.27l-55.85 57.61q-6.38 6.62-14.15 6.5-7.77-.11-14.38-6.5ZM480-480Z"/></svg>`;
 const ICON_SCENE  = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M340-148.42q-65.69-28.43-114.42-77.16-48.73-48.73-77.16-114.42Q120-405.69 120-480.12q0-74.42 28.42-140 28.43-65.57 77.16-114.3 48.73-48.73 114.42-77.16Q405.69-840 480.12-840q74.42 0 140 28.42 65.57 28.43 114.3 77.16 48.73 48.73 77.16 114.3 28.42 65.58 28.42 140 0 74.43-28.42 140.12-28.43 65.69-77.16 114.42-48.73 48.73-114.3 77.16-65.58 28.42-140 28.42-74.43 0-140.12-28.42Zm140-11.27q35.23-45.23 58.08-88.85 22.84-43.61 37.15-97.61H384.77q15.85 57.07 37.92 100.69 22.08 43.61 57.31 85.77Zm-50.92-6q-28-33-51.12-81.58-23.11-48.58-34.42-98.88H190.15q34.39 74.61 97.5 122.38 63.12 47.77 141.43 58.08Zm101.84 0q78.31-10.31 141.43-58.08 63.11-47.77 97.5-122.38H616.46q-15.15 51.07-38.27 99.65-23.11 48.58-47.27 80.81ZM173.85-386.15h161.38q-4.54-24.62-6.42-47.97-1.89-23.34-1.89-45.88 0-22.54 1.89-45.88 1.88-23.35 6.42-47.97H173.85q-6.54 20.77-10.2 45.27Q160-504.08 160-480t3.65 48.58q3.66 24.5 10.2 45.27Zm201.38 0h209.54q4.54-24.62 6.42-47.2 1.89-22.57 1.89-46.65t-1.89-46.65q-1.88-22.58-6.42-47.2H375.23q-4.54 24.62-6.42 47.2-1.89 22.57-1.89 46.65t1.89 46.65q1.88 22.58 6.42 47.2Zm249.54 0h161.38q6.54-20.77 10.2-45.27Q800-455.92 800-480t-3.65-48.58q-3.66-24.5-10.2-45.27H624.77q4.54 24.62 6.42 47.97 1.89 23.34 1.89 45.88 0 22.54-1.89 45.88-1.88 23.35-6.42 47.97Zm-8.31-227.7h153.39Q734.69-690 673.5-736.23q-61.19-46.23-142.58-58.85 28 36.85 50.35 84.27 22.35 47.43 35.19 96.96Zm-231.69 0h190.46q-15.85-56.3-39.08-101.84-23.23-45.54-56.15-84.62-32.92 39.08-56.15 84.62-23.23 45.54-39.08 101.84Zm-194.62 0h153.39q12.84-49.53 35.19-96.96 22.35-47.42 50.35-84.27-82.16 12.62-142.96 59.23-60.81 46.62-95.97 122Z"/></svg>`;
 
+const ICON_WEAPONS = `<img src="./assets/weapons.svg" alt="" class="sb-icon-img">`;
+
+const PRESET_SETTINGS = [
+  { key: 'default', label: 'Default', path: './presets/default.json', data: {
+  "cameraMode": "iso",
+  "isoCamD": 12,
+  "thirdDist": 14,
+  "thirdHeight": 7,
+  "thirdFov": 65,
+  "thirdAzimuth": 2.36,
+  "thirdLookAhead": 2,
+  "thirdSmoothPos": 8,
+  "thirdSmoothLook": 12,
+  "playerSpeed": 7,
+  "playerColor": "#0044cc",
+  "playerMetalness": 0.67,
+  "playerRoughness": 0,
+  "playerRadius": 0.4,
+  "playerLength": 1.2,
+  "dashEnabled": true,
+  "dashSpeed": 28,
+  "dashDuration": 0.18,
+  "dashCooldown": 1.4,
+  "ambientIntensity": 0.42,
+  "sunIntensity": 5.8,
+  "fillIntensity": 1.35,
+  "rimIntensity": 0.82,
+  "sunAngleX": 16,
+  "sunAngleZ": 14,
+  "shadows": true,
+  "fogNear": 1,
+  "fogFar": 200,
+  "bgColor": "#06080d",
+  "floorColor": "#0c1020",
+  "gridColor": "#1a2a4a",
+  "showFloor": true,
+  "showGrid": true,
+  "showFps": false
+} },
+  { key: 'g1', label: 'G1', path: './presets/testbed.json', data: {
+  "cameraMode": "third",
+  "isoCamD": 12,
+  "thirdDist": 4,
+  "thirdHeight": 3.5,
+  "thirdFov": 62,
+  "thirdAzimuth": 0,
+  "thirdLookAhead": 3.8,
+  "thirdSmoothPos": 10,
+  "thirdSmoothLook": 12,
+  "playerSpeed": 7,
+  "playerColor": "#0044cc",
+  "playerMetalness": 0.67,
+  "playerRoughness": 0,
+  "playerRadius": 0.4,
+  "playerLength": 1.2,
+  "dashEnabled": true,
+  "dashSpeed": 28,
+  "dashDuration": 0.18,
+  "dashCooldown": 1.4,
+  "ambientIntensity": 0.42,
+  "sunIntensity": 5.8,
+  "fillIntensity": 1.35,
+  "rimIntensity": 0.82,
+  "sunAngleX": 16,
+  "sunAngleZ": 14,
+  "shadows": true,
+  "fogNear": 1,
+  "fogFar": 200,
+  "bgColor": "#142130",
+  "floorColor": "#0C1620",
+  "gridColor": "#000000",
+  "showFloor": true,
+  "showGrid": true,
+  "showFps": true
+} },
+];
+
 // ── DOM helpers ────────────────────────────────────────────────────────────────
 
 function row(label, control) {
@@ -238,12 +315,20 @@ function buildCamera(body) {
   const thirdGroup = document.createElement('div');
   thirdGroup.style.display = state.params.cameraMode === 'third' ? '' : 'none';
   [
-    { key: 'thirdDist',      label: 'Distance',   min: 4,  max: 40,          step: 0.5, dec: 1 },
-    { key: 'thirdHeight',    label: 'Height',     min: 2,  max: 20,          step: 0.5, dec: 1 },
-    { key: 'thirdFov',       label: 'FOV',        min: 30, max: 120,         step: 1,   dec: 0 },
-    { key: 'thirdAzimuth',   label: 'Azimuth',    min: 0,  max: Math.PI * 2, step: 0.05, dec: 2 },
-    { key: 'thirdLookAhead', label: 'Look Ahead', min: 0,  max: 8,           step: 0.1, dec: 1 },
-    { key: 'thirdSmoothPos', label: 'Smoothing',  min: 1,  max: 30,          step: 0.5, dec: 1 },
+    { key: 'thirdDist',       label: 'Distance',       min: 4,  max: 40,          step: 0.5,  dec: 1 },
+    { key: 'thirdHeight',     label: 'Height',         min: 2,  max: 20,          step: 0.5,  dec: 1 },
+    { key: 'thirdFov',        label: 'FOV',            min: 30, max: 120,         step: 1,    dec: 0 },
+    { key: 'thirdAzimuth',    label: 'Azimuth',        min: 0,  max: Math.PI * 2, step: 0.05, dec: 2 },
+    { key: 'thirdLookAhead',  label: 'Look Ahead',     min: 0,  max: 8,           step: 0.1,  dec: 1 },
+    { key: 'thirdSmoothPos',  label: 'Pos Smoothing',  min: 1,  max: 30,          step: 0.5,  dec: 1 },
+    { key: 'thirdSmoothLook', label: 'Look Smoothing', min: 1,  max: 30,          step: 0.5,  dec: 1 },
+  ].forEach(o => thirdGroup.appendChild(slider(o)));
+
+  thirdGroup.appendChild(subhdr('Offset'));
+  [
+    { key: 'thirdOffsetX', label: 'Side Offset',    min: -10, max: 10, step: 0.25, dec: 2 },
+    { key: 'thirdOffsetY', label: 'Vertical Offset', min: -5,  max: 10, step: 0.25, dec: 2 },
+    { key: 'thirdOffsetZ', label: 'Forward Offset',  min: -10, max: 10, step: 0.25, dec: 2 },
   ].forEach(o => thirdGroup.appendChild(slider(o)));
   body.appendChild(thirdGroup);
 }
@@ -337,6 +422,32 @@ function buildScene(body) {
   }));
 }
 
+
+function buildWeapons(body) {
+  body.appendChild(subhdr('Reticle'));
+  body.appendChild(toggle('Show Reticle', 'reticleVisible', () => applyReticleSettings()));
+  body.appendChild(select('Type', 'reticleType', [
+    ['dot', 'Dot'],
+    ['cross', 'Crosshair'],
+    ['ring', 'Ring'],
+    ['crossDot', 'Cross + Dot'],
+  ], () => applyReticleSettings()));
+  body.appendChild(colorPicker('Color', 'reticleColor', () => applyReticleSettings()));
+  body.appendChild(slider({
+    key: 'reticleSize', label: 'Size', min: 2, max: 48, step: 1, dec: 0,
+    onChange: () => applyReticleSettings(),
+  }));
+  body.appendChild(slider({
+    key: 'reticleThickness', label: 'Thickness', min: 1, max: 8, step: 1, dec: 0,
+    onChange: () => applyReticleSettings(),
+  }));
+  body.appendChild(slider({
+    key: 'reticleOpacity', label: 'Opacity', min: 0.1, max: 1, step: 0.05, dec: 2,
+    onChange: () => applyReticleSettings(),
+  }));
+  body.appendChild(toggle('Glow', 'reticleGlow', () => applyReticleSettings()));
+}
+
 // ── JSON export / import / reset ───────────────────────────────────────────────
 
 // Export serialises state.params and triggers a file download.
@@ -345,6 +456,25 @@ function buildScene(body) {
 function buildExportImport(container) {
   const wrap = document.createElement('div');
   wrap.className = 'sb-export-row';
+
+  const presetSelect = document.createElement('select');
+  presetSelect.className = 'sb-select sb-preset-select';
+  PRESET_SETTINGS.forEach(({ key, label }) => {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = label;
+    opt.selected = state.activePreset === key;
+    presetSelect.appendChild(opt);
+  });
+  if (!PRESET_SETTINGS.some(({ key }) => state.activePreset === key)) {
+    const customOpt = document.createElement('option');
+    customOpt.value = 'custom';
+    customOpt.textContent = 'Custom';
+    customOpt.selected = true;
+    presetSelect.appendChild(customOpt);
+  }
+  presetSelect.addEventListener('change', () => applyPreset(presetSelect.value));
+  wrap.appendChild(row('Preset', presetSelect));
 
   wrap.appendChild(btn('⬇ Export JSON', 'sb-btn-accent', () => {
     const blob = new Blob([JSON.stringify(state.params, null, 2)], { type: 'application/json' });
@@ -356,10 +486,12 @@ function buildExportImport(container) {
   wrap.appendChild(btn('⬆ Import JSON', '', () => {
     const inp = Object.assign(document.createElement('input'), { type: 'file', accept: '.json' });
     inp.addEventListener('change', () => {
+      if (!inp.files?.[0]) return;
       const reader = new FileReader();
       reader.onload = e => {
         try {
-          Object.assign(state.params, JSON.parse(e.target.result));
+          applyParamObject(JSON.parse(e.target.result));
+          state.activePreset = 'custom';
           applyAllParams();
           rebuildPanel();
           notify('Imported ✓');
@@ -371,13 +503,45 @@ function buildExportImport(container) {
   }));
 
   wrap.appendChild(btn('↩ Reset Defaults', 'sb-btn-muted', () => {
-    Object.assign(state.params, JSON.parse(JSON.stringify(defaultParams)));
+    applyParamObject(defaultParams);
+    state.activePreset = 'default';
     applyAllParams();
     rebuildPanel();
     notify('Reset ✓');
   }));
 
   container.appendChild(wrap);
+}
+
+function applyParamObject(params) {
+  Object.assign(
+    state.params,
+    JSON.parse(JSON.stringify(defaultParams)),
+    params || {}
+  );
+}
+
+async function applyPreset(key) {
+  const preset = PRESET_SETTINGS.find(item => item.key === key);
+  if (!preset) return;
+
+  try {
+    let presetData = preset.data;
+    try {
+      const response = await fetch(preset.path, { cache: 'no-store' });
+      if (response.ok) presetData = await response.json();
+    } catch {
+      // Fall back to the embedded preset so local file previews still work.
+    }
+
+    applyParamObject(presetData);
+    state.activePreset = preset.key;
+    applyAllParams();
+    rebuildPanel();
+    notify(`${preset.label} loaded ✓`);
+  } catch {
+    notify(`⚠ Could not load ${preset.label}`);
+  }
 }
 
 function notify(msg) {
@@ -392,11 +556,35 @@ function notify(msg) {
   n._t = setTimeout(() => { n.style.opacity = '0'; }, 2000);
 }
 
+function applyReticleSettings() {
+  const el = document.getElementById('target-reticle');
+  if (!el) return;
+
+  const p = state.params;
+  el.style.display = p.reticleVisible ? '' : 'none';
+  el.style.setProperty('--reticle-color', p.reticleColor);
+  el.style.setProperty('--reticle-size', `${p.reticleSize}px`);
+  el.style.setProperty('--reticle-thickness', `${p.reticleThickness}px`);
+  el.style.setProperty('--reticle-dot-size', `${Math.max(p.reticleThickness * 2, 3)}px`);
+  el.style.setProperty('--reticle-opacity', p.reticleOpacity);
+
+  ['type-dot', 'type-cross', 'type-ring', 'type-cross-dot'].forEach(cls => el.classList.remove(cls));
+  const typeClass = {
+    dot: 'type-dot',
+    cross: 'type-cross',
+    ring: 'type-ring',
+    crossDot: 'type-cross-dot',
+  }[p.reticleType] || 'type-dot';
+  el.classList.add(typeClass);
+  el.classList.toggle('reticle-glow', !!p.reticleGlow);
+}
+
 // Push every param back into Three.js objects — used after import and reset.
 function applyAllParams() {
   const p = state.params;
   applyIsoCamD(p.isoCamD);
   setActiveCamera(p.cameraMode);
+  onResize();
   applyPlayerMaterial();
   rebuildPlayerGeo();
   ambientLight.intensity = p.ambientIntensity;
@@ -413,6 +601,7 @@ function applyAllParams() {
   setGridVisible(p.showGrid);
   const fpsEl = document.getElementById('fps-overlay');
   if (fpsEl) fpsEl.style.display = p.showFps ? '' : 'none';
+  applyReticleSettings();
 }
 
 // ── Build / rebuild panel DOM ──────────────────────────────────────────────────
@@ -423,10 +612,11 @@ function rebuildPanel() {
   body.innerHTML = '';
 
   const sections = [
-    section(ICON_CAMERA, 'Camera',   buildCamera),
-    section(ICON_PLAYER, 'Player',   buildPlayer),
-    section(ICON_LIGHT,  'Lighting', buildLighting),
-    section(ICON_SCENE,  'Scene',    buildScene),
+    section(ICON_CAMERA,  'Camera',   buildCamera),
+    section(ICON_PLAYER,  'Player',   buildPlayer),
+    section(ICON_LIGHT,   'Lighting', buildLighting),
+    section(ICON_SCENE,   'Scene',    buildScene),
+    section(ICON_WEAPONS, 'Weapons',  buildWeapons),
   ];
 
   sections.forEach(({ el, body: b, hdr }, i) => {
@@ -471,6 +661,7 @@ export function initPanel() {
     <div id="sb-body" class="sb-body"></div>
   `;
   document.getElementById('sb-close-btn')?.addEventListener('click', togglePanel);
+  applyAllParams();
   rebuildPanel();
   updatePanelChrome();
 }

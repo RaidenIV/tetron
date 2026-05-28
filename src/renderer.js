@@ -86,22 +86,24 @@ export function updateIsoCamera(playerPos) {
 
 const _eye = new THREE.Vector3();
 const _tgt = new THREE.Vector3();
+const _thirdForward = new THREE.Vector3();
+const _thirdRight = new THREE.Vector3();
 
 export function updateThirdCamera(playerPos, delta) {
   const az = state.params.thirdAzimuth;
+  _thirdForward.set(-Math.sin(az), 0, -Math.cos(az));
+  _thirdRight.set(Math.cos(az), 0, -Math.sin(az));
 
-  // desired eye position
-  _eye.set(
-    playerPos.x + Math.sin(az) * state.params.thirdDist,
-    playerPos.y + state.params.thirdHeight,
-    playerPos.z + Math.cos(az) * state.params.thirdDist
-  );
+  // desired eye position — distance/height plus over-shoulder offset controls
+  _eye.copy(playerPos)
+    .addScaledVector(_thirdForward, -state.params.thirdDist + state.params.thirdOffsetZ)
+    .addScaledVector(_thirdRight, state.params.thirdOffsetX);
+  _eye.y = playerPos.y + state.params.thirdHeight + state.params.thirdOffsetY;
+
   // desired look-at — slightly ahead of the player
-  _tgt.set(
-    playerPos.x - Math.sin(az) * state.params.thirdLookAhead,
-    playerPos.y + 0.8,
-    playerPos.z - Math.cos(az) * state.params.thirdLookAhead
-  );
+  _tgt.copy(playerPos)
+    .addScaledVector(_thirdForward, state.params.thirdLookAhead);
+  _tgt.y = playerPos.y + 0.8;
 
   const sp = Math.min(1, state.params.thirdSmoothPos  * delta);
   const sl = Math.min(1, state.params.thirdSmoothLook * delta);

@@ -2,6 +2,7 @@
 export const state = {
   panelOpen: true,
   panelMinimized: false,
+  activePreset: 'default',
   keys: { w: false, a: false, s: false, d: false },
 
   // dash runtime
@@ -23,6 +24,7 @@ export const state = {
     thirdAzimuth: 2.36,   // radians, ~135° behind-right
     thirdLookAhead: 2.0,
     thirdSmoothPos: 8.0, thirdSmoothLook: 12.0,
+    thirdOffsetX: 0.0, thirdOffsetY: 0.0, thirdOffsetZ: 0.0,
 
     // player
     playerSpeed: 7,
@@ -41,6 +43,15 @@ export const state = {
     fogNear: 1, fogFar: 200,
     bgColor: '#06080d', floorColor: '#0c1020', gridColor: '#1a2a4a',
     showFloor: true, showGrid: true, showFps: false,
+
+    // weapons / reticle
+    reticleVisible: true,
+    reticleType: 'dot',
+    reticleColor: '#ffffff',
+    reticleSize: 4,
+    reticleThickness: 2,
+    reticleOpacity: 1,
+    reticleGlow: false,
   },
 };
 
