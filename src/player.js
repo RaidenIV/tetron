@@ -92,13 +92,17 @@ const shieldPanelMat = new THREE.MeshBasicMaterial({
   toneMapped: false,
 });
 
-const shieldLineMat = new THREE.LineBasicMaterial({
+const shieldLineMat = new THREE.MeshBasicMaterial({
   color: 0x1e7bff,
   transparent: true,
   opacity: 0.72,
   depthWrite: false,
+  side: THREE.DoubleSide,
   blending: THREE.AdditiveBlending,
   toneMapped: false,
+  polygonOffset: true,
+  polygonOffsetFactor: -1,
+  polygonOffsetUnits: -1,
 });
 
 const shieldGlowMat = new THREE.MeshBasicMaterial({
@@ -119,7 +123,7 @@ playerShield.frustumCulled = false;
 playerShield.renderOrder = 6;
 shieldGroup.add(playerShield);
 
-export const playerShieldLines = new THREE.LineSegments(
+export const playerShieldLines = new THREE.Mesh(
   new THREE.BufferGeometry(),
   shieldLineMat
 );
@@ -128,7 +132,7 @@ playerShieldLines.renderOrder = 7;
 shieldGroup.add(playerShieldLines);
 
 export const playerShieldGlow = new THREE.Mesh(
-  new THREE.IcosahedronGeometry(1, 3),
+  new THREE.SphereGeometry(1, 64, 32),
   shieldGlowMat
 );
 playerShieldGlow.frustumCulled = false;
@@ -220,58 +224,140 @@ function sortCellCorners(normal, corners) {
   });
 }
 
-function buildGoldbergShieldGeometry(radius, detail) {
+function sphericalLerp(a, b, t, radius) {
+  const start = a.clone().normalize();
+  const end = b.clone().normalize();
+  const dot = Math.max(-1, Math.min(1, start.dot(end)));
+  const theta = Math.acos(dot);
+
+  if (theta < 0.000001) {
+    return start.lerp(end, t).normalize().multiplyScalar(radius);
+  }
+
+  const sinTheta = Math.sin(theta);
+  return start
+    .multiplyScalar(Math.sin((1 - t) * theta) / sinTheta)
+    .add(end.multiplyScalar(Math.sin(t * theta) / sinTheta))
+    .normalize()
+    .multiplyScalar(radius);
+}
+
+function sphericalTrianglePoint(a, b, c, u, v, radius) {
+  return new THREE.Vector3()
+    .addScaledVector(a, 1 - u - v)
+    .addScaledVector(b, u)
+    .addScaledVector(c, v)
+    .normalize()
+    .multiplyScalar(radius);
+}
+
+function addCurvedShieldTriangle(targetVertices, targetIndices, a, b, c, radius, subdivisions) {
+  const rows = [];
+
+  for (let i = 0; i <= subdivisions; i++) {
+    const row = [];
+    for (let j = 0; j <= subdivisions - i; j++) {
+      const u = i / subdivisions;
+      const v = j / subdivisions;
+      const point = sphericalTrianglePoint(a, b, c, u, v, radius);
+      const index = targetVertices.length / 3;
+      pushVector(targetVertices, point);
+      row.push(index);
+    }
+    rows.push(row);
+  }
+
+  for (let i = 0; i < subdivisions; i++) {
+    for (let j = 0; j < subdivisions - i; j++) {
+      const a0 = rows[i][j];
+      const b0 = rows[i + 1][j];
+      const c0 = rows[i][j + 1];
+      targetIndices.push(a0, b0, c0);
+
+      if (j < subdivisions - i - 1) {
+        const d0 = rows[i + 1][j + 1];
+        targetIndices.push(b0, d0, c0);
+      }
+    }
+  }
+}
+
+function addCurvedShieldLine(targetVertices, targetIndices, start, end, radius, thickness) {
+  const angle = start.clone().normalize().angleTo(end.clone().normalize());
+  const segments = Math.max(4, Math.min(14, Math.ceil(angle / 0.045)));
+  const halfThickness = Math.max(0.001, thickness) / 2;
+  const samples = [];
+
+  for (let i = 0; i <= segments; i++) {
+    samples.push(sphericalLerp(start, end, i / segments, radius));
+  }
+
+  const baseIndex = targetVertices.length / 3;
+
+  for (let i = 0; i <= segments; i++) {
+    const point = samples[i];
+    const prev = samples[Math.max(0, i - 1)];
+    const next = samples[Math.min(segments, i + 1)];
+    const tangent = next.clone().sub(prev).normalize();
+    let side = new THREE.Vector3().crossVectors(point.clone().normalize(), tangent);
+
+    if (side.lengthSq() < 0.000001) side = new THREE.Vector3(1, 0, 0);
+    side.normalize();
+
+    const left = point.clone().addScaledVector(side, halfThickness).normalize().multiplyScalar(radius);
+    const right = point.clone().addScaledVector(side, -halfThickness).normalize().multiplyScalar(radius);
+    pushVector(targetVertices, left);
+    pushVector(targetVertices, right);
+  }
+
+  for (let i = 0; i < segments; i++) {
+    const left0 = baseIndex + i * 2;
+    const right0 = left0 + 1;
+    const left1 = baseIndex + (i + 1) * 2;
+    const right1 = left1 + 1;
+    targetIndices.push(left0, left1, right0);
+    targetIndices.push(right0, left1, right1);
+  }
+}
+
+function buildGoldbergShieldGeometry(radius, detail, lineThickness) {
   const { vertices, vertexFaces, faceCenters } = getTriangleData(radius, detail);
   const panelVertices = [];
   const panelIndices = [];
   const lineVertices = [];
+  const lineIndices = [];
   const lineLookup = new Map();
+  const panelSubdivisions = Math.max(3, 6 - detail);
 
   for (let i = 0; i < vertices.length; i++) {
     const adjacentFaces = vertexFaces[i];
     if (adjacentFaces.length < 3) continue;
 
     const normal = vertices[i].clone().normalize();
-    const corners = adjacentFaces.map(faceIndex => faceCenters[faceIndex].clone());
+    const corners = adjacentFaces.map(faceIndex => faceCenters[faceIndex].clone().normalize().multiplyScalar(radius));
     sortCellCorners(normal, corners);
 
-    const cellCenter = new THREE.Vector3();
-    for (const corner of corners) cellCenter.add(corner);
-    cellCenter.multiplyScalar(1 / corners.length).normalize().multiplyScalar(radius * 1.002);
+    const cellCenter = vertices[i].clone().normalize().multiplyScalar(radius);
 
-    const centerIndex = panelVertices.length / 3;
-    pushVector(panelVertices, cellCenter);
-
-    const cornerIndices = [];
-    for (const corner of corners) {
-      corner.multiplyScalar(1.002);
-      const cornerIndex = panelVertices.length / 3;
-      pushVector(panelVertices, corner);
-      cornerIndices.push(cornerIndex);
-    }
-
-    for (let j = 0; j < cornerIndices.length; j++) {
-      const a = cornerIndices[j];
-      const b = cornerIndices[(j + 1) % cornerIndices.length];
-      panelIndices.push(centerIndex, a, b);
-
-      const va = new THREE.Vector3(
-        panelVertices[a * 3],
-        panelVertices[a * 3 + 1],
-        panelVertices[a * 3 + 2]
+    for (let j = 0; j < corners.length; j++) {
+      const currentCorner = corners[j];
+      const nextCorner = corners[(j + 1) % corners.length];
+      addCurvedShieldTriangle(
+        panelVertices,
+        panelIndices,
+        cellCenter,
+        currentCorner,
+        nextCorner,
+        radius,
+        panelSubdivisions
       );
-      const vb = new THREE.Vector3(
-        panelVertices[b * 3],
-        panelVertices[b * 3 + 1],
-        panelVertices[b * 3 + 2]
-      );
-      const ka = vectorKey(va);
-      const kb = vectorKey(vb);
+
+      const ka = vectorKey(currentCorner);
+      const kb = vectorKey(nextCorner);
       const key = edgeKey(ka, kb);
       if (!lineLookup.has(key)) {
         lineLookup.set(key, true);
-        pushVector(lineVertices, va);
-        pushVector(lineVertices, vb);
+        addCurvedShieldLine(lineVertices, lineIndices, currentCorner, nextCorner, radius, lineThickness);
       }
     }
   }
@@ -284,18 +370,20 @@ function buildGoldbergShieldGeometry(radius, detail) {
 
   const lineGeometry = new THREE.BufferGeometry();
   lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(lineVertices, 3));
+  lineGeometry.setIndex(lineIndices);
+  lineGeometry.computeVertexNormals();
   lineGeometry.computeBoundingSphere();
 
   return { panelGeometry, lineGeometry };
 }
 
-function rebuildShieldCells(radius, hexSize) {
+function rebuildShieldCells(radius, hexSize, lineThickness) {
   const detail = shieldDetailFromHexSize(radius, hexSize);
-  const key = `${radius.toFixed(4)}:${hexSize.toFixed(4)}:${detail}`;
+  const key = `${radius.toFixed(4)}:${hexSize.toFixed(4)}:${lineThickness.toFixed(4)}:${detail}`;
   if (_shieldGeometryKey === key) return;
   _shieldGeometryKey = key;
 
-  const { panelGeometry, lineGeometry } = buildGoldbergShieldGeometry(radius, detail);
+  const { panelGeometry, lineGeometry } = buildGoldbergShieldGeometry(radius, detail, lineThickness);
 
   playerShield.geometry.dispose();
   playerShield.geometry = panelGeometry;
@@ -310,10 +398,11 @@ export function applyShieldSettings() {
   const radius = Math.max(0.2, Number(p.shieldRadius) || 1.35);
   const hexSize = Math.max(0.03, Number(p.shieldHexSize) || 0.22);
   const opacity = Math.max(0, Math.min(1, Number(p.shieldOpacity) || 0.22));
+  const lineThickness = Math.max(0.001, Number(p.shieldLineThickness) || 0.012);
   const color = p.shieldColor || '#1e7bff';
   const glowEnabled = !!p.shieldGlow;
 
-  rebuildShieldCells(radius, hexSize);
+  rebuildShieldCells(radius, hexSize, lineThickness);
 
   shieldGroup.visible = !!p.shieldVisible;
   shieldGroup.position.y = playerMesh.position.y;
@@ -329,7 +418,7 @@ export function applyShieldSettings() {
   shieldGlowMat.color.set(color);
   shieldGlowMat.opacity = glowEnabled ? Math.min(0.22, opacity * 0.36) : 0;
   shieldGlowMat.needsUpdate = true;
-  playerShieldGlow.scale.setScalar(radius * 1.04);
+  playerShieldGlow.scale.setScalar(radius);
   playerShieldGlow.visible = !!p.shieldVisible && glowEnabled;
 }
 

@@ -43,6 +43,7 @@ export const state = {
     shieldOpacity: 0.22,
     shieldRadius: 1.45,
     shieldHexSize: 0.22,
+    shieldLineThickness: 0.012,
     shieldGlow: true,
     dashEnabled: true, dashSpeed: 28,
     dashDuration: 0.18, dashCooldown: 1.4,

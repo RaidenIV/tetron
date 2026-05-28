@@ -52,6 +52,7 @@ const PRESET_SETTINGS = [
   "shieldOpacity": 0.22,
   "shieldRadius": 1.45,
   "shieldHexSize": 0.22,
+  "shieldLineThickness": 0.012,
   "shieldGlow": true,
   "dashEnabled": true,
   "dashSpeed": 28,
@@ -110,6 +111,7 @@ const PRESET_SETTINGS = [
   "shieldOpacity": 0.22,
   "shieldRadius": 1.45,
   "shieldHexSize": 0.22,
+  "shieldLineThickness": 0.012,
   "shieldGlow": true,
   "dashEnabled": true,
   "dashSpeed": 28,
@@ -442,6 +444,10 @@ function buildShield(body) {
   }));
   body.appendChild(slider({
     key: 'shieldHexSize', label: 'Hex Size', min: 0.05, max: 0.6, step: 0.01, dec: 2,
+    onChange: () => applyShieldSettings(),
+  }));
+  body.appendChild(slider({
+    key: 'shieldLineThickness', label: 'Line Thickness', min: 0.002, max: 0.06, step: 0.001, dec: 3,
     onChange: () => applyShieldSettings(),
   }));
   body.appendChild(slider({
