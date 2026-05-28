@@ -72,25 +72,15 @@ applyPlayerContactShadow();
 
 
 // ── Hex shield ────────────────────────────────────────────────────────────────
-// A screen-visible, player-attached geodesic-style shield made from tangent
-// hexagonal panels plus an additive blue glow shell.
-const SHIELD_CELL_COUNT = 92;
-const _shieldAxis = new THREE.Vector3(0, 0, 1);
-const _shieldNormal = new THREE.Vector3();
-const _shieldPos = new THREE.Vector3();
-const _shieldQuat = new THREE.Quaternion();
-const _shieldScale = new THREE.Vector3();
-const _shieldMatrix = new THREE.Matrix4();
-const _shieldEdgeA = new THREE.Vector3();
-const _shieldEdgeB = new THREE.Vector3();
+// A player-attached Goldberg-style shield. It is generated as the dual of a
+// subdivided icosahedron, so the cells share edges and fit together cleanly.
+// A closed spherical tiling cannot be made from only hexagons; this creates
+// mostly hexagons with the required pentagon cells at the geodesic seams.
 let _shieldGeometryKey = '';
 
 const shieldGroup = new THREE.Group();
 shieldGroup.name = 'PlayerHexShield';
 playerGroup.add(shieldGroup);
-
-const shieldHexGeo = new THREE.CircleGeometry(1, 6);
-shieldHexGeo.rotateZ(Math.PI / 6);
 
 const shieldPanelMat = new THREE.MeshBasicMaterial({
   color: 0x1e7bff,
@@ -121,12 +111,10 @@ const shieldGlowMat = new THREE.MeshBasicMaterial({
   toneMapped: false,
 });
 
-export const playerShield = new THREE.InstancedMesh(
-  shieldHexGeo,
-  shieldPanelMat,
-  SHIELD_CELL_COUNT
+export const playerShield = new THREE.Mesh(
+  new THREE.BufferGeometry(),
+  shieldPanelMat
 );
-playerShield.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 playerShield.frustumCulled = false;
 playerShield.renderOrder = 6;
 shieldGroup.add(playerShield);
@@ -147,55 +135,173 @@ playerShieldGlow.frustumCulled = false;
 playerShieldGlow.renderOrder = 5;
 shieldGroup.add(playerShieldGlow);
 
-function rebuildShieldCells(radius, hexSize) {
-  const key = `${radius.toFixed(4)}:${hexSize.toFixed(4)}`;
-  if (_shieldGeometryKey === key) return;
-  _shieldGeometryKey = key;
+function shieldDetailFromHexSize(radius, hexSize) {
+  const ratio = hexSize / Math.max(0.2, radius);
+  if (ratio <= 0.09) return 3;
+  if (ratio <= 0.22) return 2;
+  return 1;
+}
 
+function vectorKey(v, precision = 100000) {
+  return `${Math.round(v.x * precision)},${Math.round(v.y * precision)},${Math.round(v.z * precision)}`;
+}
+
+function edgeKey(a, b) {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+function pushVector(target, v) {
+  target.push(v.x, v.y, v.z);
+}
+
+function getTriangleData(radius, detail) {
+  const source = new THREE.IcosahedronGeometry(radius, detail);
+  const pos = source.getAttribute('position');
+  const index = source.index;
+  const vertices = [];
+  const vertexLookup = new Map();
+  const faces = [];
+  const vertexFaces = [];
+
+  function getVertexIndex(sourceIndex) {
+    const v = new THREE.Vector3().fromBufferAttribute(pos, sourceIndex).normalize().multiplyScalar(radius);
+    const key = vectorKey(v);
+    let uniqueIndex = vertexLookup.get(key);
+    if (uniqueIndex === undefined) {
+      uniqueIndex = vertices.length;
+      vertexLookup.set(key, uniqueIndex);
+      vertices.push(v);
+      vertexFaces.push([]);
+    }
+    return uniqueIndex;
+  }
+
+  const triangleCount = index ? index.count / 3 : pos.count / 3;
+  for (let i = 0; i < triangleCount; i++) {
+    const a = getVertexIndex(index ? index.getX(i * 3) : i * 3);
+    const b = getVertexIndex(index ? index.getX(i * 3 + 1) : i * 3 + 1);
+    const c = getVertexIndex(index ? index.getX(i * 3 + 2) : i * 3 + 2);
+    if (a === b || b === c || c === a) continue;
+
+    const faceIndex = faces.length;
+    faces.push([a, b, c]);
+    vertexFaces[a].push(faceIndex);
+    vertexFaces[b].push(faceIndex);
+    vertexFaces[c].push(faceIndex);
+  }
+
+  const faceCenters = faces.map(([a, b, c]) => (
+    new THREE.Vector3()
+      .add(vertices[a])
+      .add(vertices[b])
+      .add(vertices[c])
+      .multiplyScalar(1 / 3)
+      .normalize()
+      .multiplyScalar(radius)
+  ));
+
+  source.dispose();
+  return { vertices, vertexFaces, faceCenters };
+}
+
+function sortCellCorners(normal, corners) {
+  const tangentA = new THREE.Vector3(0, 1, 0).cross(normal);
+  if (tangentA.lengthSq() < 0.0001) {
+    tangentA.set(1, 0, 0).cross(normal);
+  }
+  tangentA.normalize();
+
+  const tangentB = new THREE.Vector3().crossVectors(normal, tangentA).normalize();
+
+  corners.sort((a, b) => {
+    const angleA = Math.atan2(a.dot(tangentB), a.dot(tangentA));
+    const angleB = Math.atan2(b.dot(tangentB), b.dot(tangentA));
+    return angleA - angleB;
+  });
+}
+
+function buildGoldbergShieldGeometry(radius, detail) {
+  const { vertices, vertexFaces, faceCenters } = getTriangleData(radius, detail);
+  const panelVertices = [];
+  const panelIndices = [];
   const lineVertices = [];
-  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+  const lineLookup = new Map();
 
-  for (let i = 0; i < SHIELD_CELL_COUNT; i++) {
-    const t = SHIELD_CELL_COUNT === 1 ? 0.5 : i / (SHIELD_CELL_COUNT - 1);
-    const y = 1 - t * 2;
-    const r = Math.sqrt(Math.max(0, 1 - y * y));
-    const theta = i * goldenAngle;
+  for (let i = 0; i < vertices.length; i++) {
+    const adjacentFaces = vertexFaces[i];
+    if (adjacentFaces.length < 3) continue;
 
-    _shieldNormal.set(
-      Math.cos(theta) * r,
-      y,
-      Math.sin(theta) * r
-    ).normalize();
+    const normal = vertices[i].clone().normalize();
+    const corners = adjacentFaces.map(faceIndex => faceCenters[faceIndex].clone());
+    sortCellCorners(normal, corners);
 
-    _shieldPos.copy(_shieldNormal).multiplyScalar(radius);
-    _shieldQuat.setFromUnitVectors(_shieldAxis, _shieldNormal);
-    _shieldScale.set(hexSize, hexSize, 1);
-    _shieldMatrix.compose(_shieldPos, _shieldQuat, _shieldScale);
-    playerShield.setMatrixAt(i, _shieldMatrix);
+    const cellCenter = new THREE.Vector3();
+    for (const corner of corners) cellCenter.add(corner);
+    cellCenter.multiplyScalar(1 / corners.length).normalize().multiplyScalar(radius * 1.002);
 
-    for (let j = 0; j < 6; j++) {
-      const a = Math.PI / 6 + (j / 6) * Math.PI * 2;
-      const b = Math.PI / 6 + ((j + 1) / 6) * Math.PI * 2;
-      _shieldEdgeA.set(Math.cos(a) * hexSize, Math.sin(a) * hexSize, 0)
-        .applyQuaternion(_shieldQuat)
-        .add(_shieldPos);
-      _shieldEdgeB.set(Math.cos(b) * hexSize, Math.sin(b) * hexSize, 0)
-        .applyQuaternion(_shieldQuat)
-        .add(_shieldPos);
-      lineVertices.push(
-        _shieldEdgeA.x, _shieldEdgeA.y, _shieldEdgeA.z,
-        _shieldEdgeB.x, _shieldEdgeB.y, _shieldEdgeB.z
+    const centerIndex = panelVertices.length / 3;
+    pushVector(panelVertices, cellCenter);
+
+    const cornerIndices = [];
+    for (const corner of corners) {
+      corner.multiplyScalar(1.002);
+      const cornerIndex = panelVertices.length / 3;
+      pushVector(panelVertices, corner);
+      cornerIndices.push(cornerIndex);
+    }
+
+    for (let j = 0; j < cornerIndices.length; j++) {
+      const a = cornerIndices[j];
+      const b = cornerIndices[(j + 1) % cornerIndices.length];
+      panelIndices.push(centerIndex, a, b);
+
+      const va = new THREE.Vector3(
+        panelVertices[a * 3],
+        panelVertices[a * 3 + 1],
+        panelVertices[a * 3 + 2]
       );
+      const vb = new THREE.Vector3(
+        panelVertices[b * 3],
+        panelVertices[b * 3 + 1],
+        panelVertices[b * 3 + 2]
+      );
+      const ka = vectorKey(va);
+      const kb = vectorKey(vb);
+      const key = edgeKey(ka, kb);
+      if (!lineLookup.has(key)) {
+        lineLookup.set(key, true);
+        pushVector(lineVertices, va);
+        pushVector(lineVertices, vb);
+      }
     }
   }
 
-  playerShield.instanceMatrix.needsUpdate = true;
+  const panelGeometry = new THREE.BufferGeometry();
+  panelGeometry.setAttribute('position', new THREE.Float32BufferAttribute(panelVertices, 3));
+  panelGeometry.setIndex(panelIndices);
+  panelGeometry.computeVertexNormals();
+  panelGeometry.computeBoundingSphere();
 
-  const nextLineGeo = new THREE.BufferGeometry();
-  nextLineGeo.setAttribute('position', new THREE.Float32BufferAttribute(lineVertices, 3));
-  nextLineGeo.computeBoundingSphere();
+  const lineGeometry = new THREE.BufferGeometry();
+  lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(lineVertices, 3));
+  lineGeometry.computeBoundingSphere();
+
+  return { panelGeometry, lineGeometry };
+}
+
+function rebuildShieldCells(radius, hexSize) {
+  const detail = shieldDetailFromHexSize(radius, hexSize);
+  const key = `${radius.toFixed(4)}:${hexSize.toFixed(4)}:${detail}`;
+  if (_shieldGeometryKey === key) return;
+  _shieldGeometryKey = key;
+
+  const { panelGeometry, lineGeometry } = buildGoldbergShieldGeometry(radius, detail);
+
+  playerShield.geometry.dispose();
+  playerShield.geometry = panelGeometry;
+
   playerShieldLines.geometry.dispose();
-  playerShieldLines.geometry = nextLineGeo;
+  playerShieldLines.geometry = lineGeometry;
 }
 
 // ── Apply shield from params ──────────────────────────────────────────────────
