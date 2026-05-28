@@ -7,7 +7,7 @@ import { state, defaultParams } from '../state.js';
 import { scene, renderer, applyIsoCamD, setActiveCamera, onResize } from '../renderer.js';
 import { ambientLight, sunLight, fillLight, rimLight } from '../lighting.js';
 import {
-  playerMat, playerBaseColor, rebuildPlayerGeo, applyPlayerMaterial,
+  playerMat, playerBaseColor, rebuildPlayerGeo, applyPlayerMaterial, applyShieldSettings,
 } from '../player.js';
 import { setFloorVisible, setGridVisible, setFloorColor, setGridColor } from '../terrain.js';
 
@@ -16,6 +16,7 @@ const sidebar = document.getElementById('sidebar');
 // ── SVG icons (from uploaded assets) ──────────────────────────────────────────
 const ICON_CAMERA = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M481-590.77h299.62q-26.24-70.54-83.66-124.65Q639.54-769.54 566-788l-99.69 171.85q-5.23 8.46-.04 16.92 5.2 8.46 14.73 8.46Zm-127.08 54.62q5.18 8.46 14.67 8.46t14.72-8.46l151.46-259.74q-11-2.11-27.39-3.11-16.38-1-27.38-1-66 0-123 25t-101 67l97.92 171.85ZM170-400h197.62q9.23 0 14.69-8.46 5.46-8.46.23-16.92L234.15-683.69q-35.07 43.31-54.61 94.53Q160-537.95 160-480q0 21 2.5 40.5T170-400Zm225.54 228L495-343.85q5.23-8.46-.23-16.92-5.46-8.46-14.69-8.46h-300.7q26.24 70.54 84.43 124.65Q322-190.46 395.54-172ZM480-160q66 0 123-25t101-67l-97.92-171.85q-5.18-8.46-14.67-8.46t-14.72 8.46L426.77-165.54q11 2.77 26.11 4.16Q468-160 480-160Zm245.85-116.31q32-41 53.07-94.34Q800-424 800-480q0-21-2.5-40.5T790-560H592.38q-9.23 0-14.69 8.46-5.46 8.46-.23 16.92l148.39 258.31ZM480-480Zm-.24 360q-74.07 0-139.65-28.3-65.58-28.3-114.55-77.26-48.96-48.97-77.26-114.55Q120-405.69 120-479.76q0-74.96 28.42-140.45 28.43-65.48 77.16-114.21 48.73-48.73 114.51-77.16Q405.86-840 479.75-840q74.79 0 140.37 28.42 65.57 28.43 114.3 77.16 48.73 48.73 77.16 114.21Q840-554.72 840-479.76q0 74.07-28.42 139.76-28.43 65.69-77.16 114.42-48.73 48.73-114.21 77.16Q554.72-120 479.76-120Z"/></svg>`;
 const ICON_PLAYER = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M247.85-260.62q51-36.69 108.23-58.03Q413.31-340 480-340t123.92 21.35q57.23 21.34 108.23 58.03 39.62-41 63.73-96.84Q800-413.31 800-480q0-133-93.5-226.5T480-800q-133 0-226.5 93.5T160-480q0 66.69 24.12 122.54 24.11 55.84 63.73 96.84Zm146.88-234.11Q360-529.46 360-580t34.73-85.27Q429.46-700 480-700t85.27 34.73Q600-630.54 600-580t-34.73 85.27Q530.54-460 480-460t-85.27-34.73ZM480-120q-75.31 0-141-28.04t-114.31-76.65Q176.08-273.31 148.04-339 120-404.69 120-480t28.04-141q28.04-65.69 76.65-114.31 48.62-48.61 114.31-76.65Q404.69-840 480-840t141 28.04q65.69 28.04 114.31 76.65 48.61 48.62 76.65 114.31Q840-555.31 840-480t-28.04 141q-28.04 65.69-76.65 114.31-48.62 48.61-114.31 76.65Q555.31-120 480-120Zm108.85-59.35q53.53-19.34 92.53-52.96-39-31.31-90.23-49.5Q539.92-300 480-300q-59.92 0-111.54 17.81-51.61 17.81-89.84 49.88 39 33.62 92.53 52.96Q424.69-160 480-160q55.31 0 108.85-19.35Zm-52-343.8Q560-546.31 560-580t-23.15-56.85Q513.69-660 480-660t-56.85 23.15Q400-613.69 400-580t23.15 56.85Q446.31-500 480-500t56.85-23.15ZM480-580Zm0 350Z"/></svg>`;
+const ICON_SHIELD = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M480-80q-140-35-230-162.5T160-522v-238l320-120 320 120v238q0 152-90 279.5T480-80Zm0-84q104-33 172-132t68-226v-183l-240-90-240 90v183q0 127 68 226t172 132Zm0-316Z"/></svg>`;
 const ICON_LIGHT  = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M565-395q35-35 35-85t-35-85q-35-35-85-35t-85 35q-35 35-35 85t35 85q35 35 85 35t85-35Zm-198.42 28.42Q320-413.15 320-480t46.58-113.42Q413.15-640 480-640t113.42 46.58Q640-546.85 640-480t-46.58 113.42Q546.85-320 480-320t-113.42-46.58ZM80-460q-8.54 0-14.27-5.73T60-480q0-8.54 5.73-14.27T80-500h100q8.54 0 14.27 5.73T200-480q0 8.54-5.73 14.27T180-460H80Zm700 0q-8.54 0-14.27-5.73T760-480q0-8.54 5.73-14.27T780-500h100q8.54 0 14.27 5.73T900-480q0 8.54-5.73 14.27T880-460H780ZM465.73-765.73Q460-771.46 460-780v-100q0-8.54 5.73-14.27T480-900q8.54 0 14.27 5.73T500-880v100q0 8.54-5.73 14.27T480-760q-8.54 0-14.27-5.73Zm0 700Q460-71.46 460-80v-100q0-8.54 5.73-14.27T480-200q8.54 0 14.27 5.73T500-180v100q0 8.54-5.73 14.27T480-60q-8.54 0-14.27-5.73ZM254.46-678.77l-57.61-55.85q-5.85-5.61-5.73-13.76.11-8.16 5.73-14.77 6.61-6.62 14.38-6.62 7.77 0 14.15 6.62L282-706.31q6.38 6.62 6.38 14.16 0 7.53-6.38 14.15-5.62 6.62-13.27 6.12-7.65-.5-14.27-6.89Zm480.16 481.92L678-253.69q-6.38-6.62-6.38-14.27 0-7.66 6.38-14.04 5.62-6.62 13.27-6.12 7.65.5 14.27 6.89l57.61 55.85q5.85 5.61 5.73 13.76-.11 8.16-5.73 14.77-6.61 6.62-14.38 6.62-7.77 0-14.15-6.62ZM678-678q-6.62-5.62-6.12-13.27.5-7.65 6.89-14.27l55.85-57.61q5.61-5.85 13.76-5.73 8.16.11 14.77 5.73 6.62 6.61 6.62 14.38 0 7.77-6.62 14.15L706.31-678q-6.62 6.38-14.16 6.38-7.53 0-14.15-6.38ZM196.85-196.85q-6.62-6.61-6.62-14.38 0-7.77 6.62-14.15L253.69-282q6.62-6.38 14.27-6.38 7.66 0 14.04 6.38 5.85 5.62 5.35 13.27-.5 7.65-6.12 14.27l-55.85 57.61q-6.38 6.62-14.15 6.5-7.77-.11-14.38-6.5ZM480-480Z"/></svg>`;
 const ICON_SCENE  = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M340-148.42q-65.69-28.43-114.42-77.16-48.73-48.73-77.16-114.42Q120-405.69 120-480.12q0-74.42 28.42-140 28.43-65.57 77.16-114.3 48.73-48.73 114.42-77.16Q405.69-840 480.12-840q74.42 0 140 28.42 65.57 28.43 114.3 77.16 48.73 48.73 77.16 114.3 28.42 65.58 28.42 140 0 74.43-28.42 140.12-28.43 65.69-77.16 114.42-48.73 48.73-114.3 77.16-65.58 28.42-140 28.42-74.43 0-140.12-28.42Zm140-11.27q35.23-45.23 58.08-88.85 22.84-43.61 37.15-97.61H384.77q15.85 57.07 37.92 100.69 22.08 43.61 57.31 85.77Zm-50.92-6q-28-33-51.12-81.58-23.11-48.58-34.42-98.88H190.15q34.39 74.61 97.5 122.38 63.12 47.77 141.43 58.08Zm101.84 0q78.31-10.31 141.43-58.08 63.11-47.77 97.5-122.38H616.46q-15.15 51.07-38.27 99.65-23.11 48.58-47.27 80.81ZM173.85-386.15h161.38q-4.54-24.62-6.42-47.97-1.89-23.34-1.89-45.88 0-22.54 1.89-45.88 1.88-23.35 6.42-47.97H173.85q-6.54 20.77-10.2 45.27Q160-504.08 160-480t3.65 48.58q3.66 24.5 10.2 45.27Zm201.38 0h209.54q4.54-24.62 6.42-47.2 1.89-22.57 1.89-46.65t-1.89-46.65q-1.88-22.58-6.42-47.2H375.23q-4.54 24.62-6.42 47.2-1.89 22.57-1.89 46.65t1.89 46.65q1.88 22.58 6.42 47.2Zm249.54 0h161.38q6.54-20.77 10.2-45.27Q800-455.92 800-480t-3.65-48.58q-3.66-24.5-10.2-45.27H624.77q4.54 24.62 6.42 47.97 1.89 23.34 1.89 45.88 0 22.54-1.89 45.88-1.88 23.35-6.42 47.97Zm-8.31-227.7h153.39Q734.69-690 673.5-736.23q-61.19-46.23-142.58-58.85 28 36.85 50.35 84.27 22.35 47.43 35.19 96.96Zm-231.69 0h190.46q-15.85-56.3-39.08-101.84-23.23-45.54-56.15-84.62-32.92 39.08-56.15 84.62-23.23 45.54-39.08 101.84Zm-194.62 0h153.39q12.84-49.53 35.19-96.96 22.35-47.42 50.35-84.27-82.16 12.62-142.96 59.23-60.81 46.62-95.97 122Z"/></svg>`;
 
@@ -46,6 +47,12 @@ const PRESET_SETTINGS = [
   "playerRoughness": 0,
   "playerRadius": 0.4,
   "playerLength": 1.2,
+  "shieldVisible": true,
+  "shieldColor": "#1e7bff",
+  "shieldOpacity": 0.22,
+  "shieldRadius": 1.45,
+  "shieldHexSize": 0.22,
+  "shieldGlow": true,
   "dashEnabled": true,
   "dashSpeed": 28,
   "dashDuration": 0.18,
@@ -98,6 +105,12 @@ const PRESET_SETTINGS = [
   "playerRoughness": 0,
   "playerRadius": 0.4,
   "playerLength": 1.2,
+  "shieldVisible": true,
+  "shieldColor": "#1e7bff",
+  "shieldOpacity": 0.22,
+  "shieldRadius": 1.45,
+  "shieldHexSize": 0.22,
+  "shieldGlow": true,
   "dashEnabled": true,
   "dashSpeed": 28,
   "dashDuration": 0.18,
@@ -419,6 +432,25 @@ function buildPlayer(body) {
   body.appendChild(slider({ key: 'dashCooldown', label: 'Cooldown', min: 0.1,  max: 5,   step: 0.1,  dec: 1 }));
 }
 
+
+function buildShield(body) {
+  body.appendChild(toggle('Shield Enabled', 'shieldVisible', () => applyShieldSettings()));
+  body.appendChild(colorPicker('Color', 'shieldColor', () => applyShieldSettings()));
+  body.appendChild(slider({
+    key: 'shieldRadius', label: 'Radius', min: 0.8, max: 4, step: 0.05, dec: 2,
+    onChange: () => applyShieldSettings(),
+  }));
+  body.appendChild(slider({
+    key: 'shieldHexSize', label: 'Hex Size', min: 0.05, max: 0.6, step: 0.01, dec: 2,
+    onChange: () => applyShieldSettings(),
+  }));
+  body.appendChild(slider({
+    key: 'shieldOpacity', label: 'Opacity', min: 0.05, max: 0.75, step: 0.01, dec: 2,
+    onChange: () => applyShieldSettings(),
+  }));
+  body.appendChild(toggle('Glow', 'shieldGlow', () => applyShieldSettings()));
+}
+
 function buildLighting(body) {
   body.appendChild(slider({
     key: 'ambientIntensity', label: 'Ambient', min: 0, max: 3, step: 0.01, dec: 2,
@@ -686,6 +718,7 @@ function applyAllParams() {
   onResize();
   applyPlayerMaterial();
   rebuildPlayerGeo();
+  applyShieldSettings();
   ambientLight.intensity = p.ambientIntensity;
   sunLight.intensity     = p.sunIntensity;
   fillLight.intensity    = p.fillIntensity;
@@ -712,6 +745,7 @@ function rebuildPanel() {
   const sections = [
     section(ICON_CAMERA,  'Camera',   buildCamera),
     section(ICON_PLAYER,  'Player',   buildPlayer),
+    section(ICON_SHIELD,  'Shield',   buildShield),
     section(ICON_LIGHT,   'Lighting', buildLighting),
     section(ICON_SCENE,   'Scene',    buildScene),
     section(ICON_WEAPONS, 'Weapons',  buildWeapons),

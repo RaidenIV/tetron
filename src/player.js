@@ -70,6 +70,165 @@ function applyPlayerContactShadow() {
 
 applyPlayerContactShadow();
 
+
+// ── Hex shield ────────────────────────────────────────────────────────────────
+// A screen-visible, player-attached geodesic-style shield made from tangent
+// hexagonal panels plus an additive blue glow shell.
+const SHIELD_CELL_COUNT = 92;
+const _shieldAxis = new THREE.Vector3(0, 0, 1);
+const _shieldNormal = new THREE.Vector3();
+const _shieldPos = new THREE.Vector3();
+const _shieldQuat = new THREE.Quaternion();
+const _shieldScale = new THREE.Vector3();
+const _shieldMatrix = new THREE.Matrix4();
+const _shieldEdgeA = new THREE.Vector3();
+const _shieldEdgeB = new THREE.Vector3();
+let _shieldGeometryKey = '';
+
+const shieldGroup = new THREE.Group();
+shieldGroup.name = 'PlayerHexShield';
+playerGroup.add(shieldGroup);
+
+const shieldHexGeo = new THREE.CircleGeometry(1, 6);
+shieldHexGeo.rotateZ(Math.PI / 6);
+
+const shieldPanelMat = new THREE.MeshBasicMaterial({
+  color: 0x1e7bff,
+  transparent: true,
+  opacity: 0.22,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+  blending: THREE.AdditiveBlending,
+  toneMapped: false,
+});
+
+const shieldLineMat = new THREE.LineBasicMaterial({
+  color: 0x1e7bff,
+  transparent: true,
+  opacity: 0.72,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+  toneMapped: false,
+});
+
+const shieldGlowMat = new THREE.MeshBasicMaterial({
+  color: 0x1e7bff,
+  transparent: true,
+  opacity: 0.08,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+  blending: THREE.AdditiveBlending,
+  toneMapped: false,
+});
+
+export const playerShield = new THREE.InstancedMesh(
+  shieldHexGeo,
+  shieldPanelMat,
+  SHIELD_CELL_COUNT
+);
+playerShield.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+playerShield.frustumCulled = false;
+playerShield.renderOrder = 6;
+shieldGroup.add(playerShield);
+
+export const playerShieldLines = new THREE.LineSegments(
+  new THREE.BufferGeometry(),
+  shieldLineMat
+);
+playerShieldLines.frustumCulled = false;
+playerShieldLines.renderOrder = 7;
+shieldGroup.add(playerShieldLines);
+
+export const playerShieldGlow = new THREE.Mesh(
+  new THREE.IcosahedronGeometry(1, 3),
+  shieldGlowMat
+);
+playerShieldGlow.frustumCulled = false;
+playerShieldGlow.renderOrder = 5;
+shieldGroup.add(playerShieldGlow);
+
+function rebuildShieldCells(radius, hexSize) {
+  const key = `${radius.toFixed(4)}:${hexSize.toFixed(4)}`;
+  if (_shieldGeometryKey === key) return;
+  _shieldGeometryKey = key;
+
+  const lineVertices = [];
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+
+  for (let i = 0; i < SHIELD_CELL_COUNT; i++) {
+    const t = SHIELD_CELL_COUNT === 1 ? 0.5 : i / (SHIELD_CELL_COUNT - 1);
+    const y = 1 - t * 2;
+    const r = Math.sqrt(Math.max(0, 1 - y * y));
+    const theta = i * goldenAngle;
+
+    _shieldNormal.set(
+      Math.cos(theta) * r,
+      y,
+      Math.sin(theta) * r
+    ).normalize();
+
+    _shieldPos.copy(_shieldNormal).multiplyScalar(radius);
+    _shieldQuat.setFromUnitVectors(_shieldAxis, _shieldNormal);
+    _shieldScale.set(hexSize, hexSize, 1);
+    _shieldMatrix.compose(_shieldPos, _shieldQuat, _shieldScale);
+    playerShield.setMatrixAt(i, _shieldMatrix);
+
+    for (let j = 0; j < 6; j++) {
+      const a = Math.PI / 6 + (j / 6) * Math.PI * 2;
+      const b = Math.PI / 6 + ((j + 1) / 6) * Math.PI * 2;
+      _shieldEdgeA.set(Math.cos(a) * hexSize, Math.sin(a) * hexSize, 0)
+        .applyQuaternion(_shieldQuat)
+        .add(_shieldPos);
+      _shieldEdgeB.set(Math.cos(b) * hexSize, Math.sin(b) * hexSize, 0)
+        .applyQuaternion(_shieldQuat)
+        .add(_shieldPos);
+      lineVertices.push(
+        _shieldEdgeA.x, _shieldEdgeA.y, _shieldEdgeA.z,
+        _shieldEdgeB.x, _shieldEdgeB.y, _shieldEdgeB.z
+      );
+    }
+  }
+
+  playerShield.instanceMatrix.needsUpdate = true;
+
+  const nextLineGeo = new THREE.BufferGeometry();
+  nextLineGeo.setAttribute('position', new THREE.Float32BufferAttribute(lineVertices, 3));
+  nextLineGeo.computeBoundingSphere();
+  playerShieldLines.geometry.dispose();
+  playerShieldLines.geometry = nextLineGeo;
+}
+
+// ── Apply shield from params ──────────────────────────────────────────────────
+export function applyShieldSettings() {
+  const p = state.params;
+  const radius = Math.max(0.2, Number(p.shieldRadius) || 1.35);
+  const hexSize = Math.max(0.03, Number(p.shieldHexSize) || 0.22);
+  const opacity = Math.max(0, Math.min(1, Number(p.shieldOpacity) || 0.22));
+  const color = p.shieldColor || '#1e7bff';
+  const glowEnabled = !!p.shieldGlow;
+
+  rebuildShieldCells(radius, hexSize);
+
+  shieldGroup.visible = !!p.shieldVisible;
+  shieldGroup.position.y = playerMesh.position.y;
+
+  shieldPanelMat.color.set(color);
+  shieldPanelMat.opacity = opacity;
+  shieldPanelMat.needsUpdate = true;
+
+  shieldLineMat.color.set(color);
+  shieldLineMat.opacity = glowEnabled ? Math.min(1, opacity * 3.2) : Math.min(1, opacity * 1.9);
+  shieldLineMat.needsUpdate = true;
+
+  shieldGlowMat.color.set(color);
+  shieldGlowMat.opacity = glowEnabled ? Math.min(0.22, opacity * 0.36) : 0;
+  shieldGlowMat.needsUpdate = true;
+  playerShieldGlow.scale.setScalar(radius * 1.04);
+  playerShieldGlow.visible = !!p.shieldVisible && glowEnabled;
+}
+
+applyShieldSettings();
+
 // ── Rebuild geometry at runtime ────────────────────────────────────────────────
 // The panel calls this after changing playerRadius or playerLength.
 export function rebuildPlayerGeo() {
@@ -80,6 +239,7 @@ export function rebuildPlayerGeo() {
   playerGeo = newGeo;
   playerMesh.position.y = p.playerRadius + p.playerLength / 2;
   applyPlayerContactShadow();
+  applyShieldSettings();
 }
 
 // ── Apply material from params ─────────────────────────────────────────────────
