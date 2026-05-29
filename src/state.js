@@ -56,6 +56,11 @@ export const state = {
       "playerRoughness": 0,
       "playerRadius": 0.4,
       "playerLength": 1.2,
+      "playerMaxHealth": 100,
+      "playerHealth": 100,
+      "playerMaxArmor": 100,
+      "playerArmor": 100,
+      "playerInvincible": false,
       "jumpEnabled": true,
       "jumpForce": 9.5,
       "jumpGravity": 26,
@@ -101,7 +106,15 @@ export const state = {
       "laserBloomIntensity": 0.55,
       "laserProjectileSpeed": 80,
       "laserRange": 42,
-      "laserFireRate": 5
+      "laserFireRate": 5,
+      "enemyType": "rusher",
+      "enemyCount": 6,
+      "enemyHealth": 100,
+      "enemyInvincible": false,
+      "enemyBehavior": "rush",
+      "enemyDamage": 10,
+      "enemyPlacement": "random",
+      "enemyWeaponType": "contact"
   },
 };
 

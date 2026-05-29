@@ -354,12 +354,12 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   border-radius: inherit;
 }
 .armor-fill {
-  width: 60%;
+  width: 100%;
   background: #4dff63;
   box-shadow: none;
 }
 .health-fill {
-  width: 50%;
+  width: 100%;
   background: #33ddff;
   box-shadow: none;
 }

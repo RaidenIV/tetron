@@ -353,6 +353,40 @@ const HUD_FONT_STYLES = {
   },
 };
 
+const ENEMY_TYPE_OPTIONS = [
+  ['rusher', 'Rusher'],
+  ['orbiter', 'Orbiter'],
+  ['tanker', 'Tanker'],
+  ['sniper', 'Sniper'],
+  ['teleporter', 'Teleporter'],
+  ['shielded', 'Shielded'],
+  ['splitter', 'Splitter'],
+  ['boss', 'Boss'],
+];
+
+const ENEMY_BEHAVIOR_OPTIONS = [
+  ['rush', 'Rush'],
+  ['orbit', 'Orbit'],
+  ['keepDistance', 'Keep Distance'],
+  ['teleport', 'Teleport'],
+  ['guard', 'Guard'],
+  ['split', 'Split'],
+  ['bossPhase', 'Boss Phase'],
+];
+
+const ENEMY_PLACEMENT_OPTIONS = [
+  ['random', 'Random'],
+  ['grouped', 'Grouped'],
+];
+
+const ENEMY_WEAPON_OPTIONS = [
+  ['contact', 'Contact'],
+  ['none', 'None'],
+  ['projectile', 'Projectile'],
+  ['laser', 'Laser'],
+  ['sniper', 'Sniper'],
+];
+
 
 // ── DOM helpers ────────────────────────────────────────────────────────────────
 
@@ -640,6 +674,7 @@ function buildCamera(body) {
 }
 
 function buildPlayer(body) {
+  body.appendChild(toggle('Invincible', 'playerInvincible'));
   body.appendChild(slider({
     key: 'playerSpeed', label: 'Speed', min: 1, max: 25, step: 0.5, dec: 1,
   }));
@@ -763,7 +798,14 @@ function buildHUD(body) {
 }
 
 function buildEnemies(body) {
-  body.appendChild(subhdr('Enemies'));
+  body.appendChild(select('Enemy Type', 'enemyType', ENEMY_TYPE_OPTIONS));
+  body.appendChild(slider({ key: 'enemyCount', label: 'Number of Enemies', min: 0, max: 50, step: 1, dec: 0 }));
+  body.appendChild(slider({ key: 'enemyHealth', label: 'Health Amount', min: 1, max: 1000, step: 1, dec: 0 }));
+  body.appendChild(toggle('Enemy Invincible', 'enemyInvincible'));
+  body.appendChild(select('Behavior', 'enemyBehavior', ENEMY_BEHAVIOR_OPTIONS));
+  body.appendChild(slider({ key: 'enemyDamage', label: 'Damage Amount', min: 0, max: 250, step: 1, dec: 0 }));
+  body.appendChild(select('Placement', 'enemyPlacement', ENEMY_PLACEMENT_OPTIONS));
+  body.appendChild(select('Weapon Type', 'enemyWeaponType', ENEMY_WEAPON_OPTIONS));
 }
 
 function buildWeapons(body) {
@@ -964,8 +1006,31 @@ function applyReticleSettings() {
   el.style.setProperty('--reticle-opacity', p.reticleOpacity);
 }
 
+function clampPercent(value, maxValue) {
+  const max = Math.max(1, Number(maxValue) || 1);
+  const current = Math.min(max, Math.max(0, Number(value) || 0));
+  return (current / max) * 100;
+}
+
+function syncHudStatus() {
+  const p = state.params;
+  const armorValue = document.querySelector('[data-hud-value="armor"]');
+  const healthValue = document.querySelector('[data-hud-value="health"]');
+  const armorFill = document.querySelector('[data-hud-fill="armor"]');
+  const healthFill = document.querySelector('[data-hud-fill="health"]');
+
+  const armor = Math.round(Number(p.playerArmor) || 0);
+  const health = Math.round(Number(p.playerHealth) || 0);
+
+  if (armorValue) armorValue.textContent = String(armor);
+  if (healthValue) healthValue.textContent = String(health);
+  if (armorFill) armorFill.style.width = `${clampPercent(p.playerArmor, p.playerMaxArmor)}%`;
+  if (healthFill) healthFill.style.width = `${clampPercent(p.playerHealth, p.playerMaxHealth)}%`;
+}
+
 function applyHudSettings() {
   const p = state.params;
+  syncHudStatus();
   const gameHudEl = document.getElementById('game-hud');
   if (gameHudEl) {
     gameHudEl.style.display = p.hudVisible ? '' : 'none';
