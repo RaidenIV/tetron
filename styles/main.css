@@ -109,9 +109,9 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
 }
 .sidebar.minimized .sb-header { justify-content: center; padding: 11px 0; }
 .sb-title { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; font-size: 11.5px; font-weight: 700; color: var(--sb-accent); letter-spacing: 0.14em; }
-.sb-title-icon { width: 18px; height: 18px; display: block; flex-shrink: 0; background: currentColor; -webkit-mask: url('../assets/cube.svg') center / contain no-repeat; mask: url('../assets/cube.svg') center / contain no-repeat; }
+.sb-title-icon { width: 18px; height: 18px; display: block; flex-shrink: 0; background: currentColor; -webkit-mask: url('../assets/hexagons.svg') center / contain no-repeat; mask: url('../assets/hexagons.svg') center / contain no-repeat; }
 .sb-title-text { display: inline-block; }
-.sb-logo { width: 24px; height: 24px; object-fit: contain; display: block; flex-shrink: 0; }
+.sb-logo { width: 72px; height: 72px; object-fit: contain; display: block; flex-shrink: 0; }
 .sb-footer-logo { margin-top: auto; padding: 12px 0 14px; display: flex; align-items: center; justify-content: center; border-top: 1px solid var(--sb-border); }
 .sidebar.minimized .sb-title-text { display: none; }
 .sidebar.minimized .sb-title { display: inline-flex; }
@@ -270,8 +270,7 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
 }
 .game-hud-row {
   --hud-color: #ffffff;
-  --hud-track-start: rgba(255,255,255,0.16);
-  --hud-track-end: rgba(255,255,255,0.10);
+  --hud-track-bg: rgba(255,255,255,0.12);
   --hud-track-border: rgba(255,255,255,0.22);
   display: grid;
   grid-template-columns: 30px 1fr;
@@ -280,14 +279,12 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
 }
 .game-hud-armor {
   --hud-color: #4dff63;
-  --hud-track-start: rgba(24,141,40,0.22);
-  --hud-track-end: rgba(77,255,99,0.14);
+  --hud-track-bg: rgba(77,255,99,0.18);
   --hud-track-border: rgba(77,255,99,0.32);
 }
 .game-hud-health {
   --hud-color: #33ddff;
-  --hud-track-start: rgba(7,118,216,0.22);
-  --hud-track-end: rgba(53,231,255,0.14);
+  --hud-track-bg: rgba(53,221,255,0.18);
   --hud-track-border: rgba(53,231,255,0.32);
   margin-left: 24px;
 }
@@ -346,10 +343,10 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   height: 9px;
   margin-top: 4px;
   overflow: hidden;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--hud-track-start), var(--hud-track-end));
+  border-radius: 6px;
+  background: var(--hud-track-bg);
   border: 1px solid var(--hud-track-border);
-  box-shadow: inset 0 1px 3px rgba(0,0,0,0.7), 0 1px 2px rgba(0,0,0,0.55);
+  box-shadow: none;
 }
 .game-hud-fill {
   display: block;
@@ -358,13 +355,13 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
 }
 .armor-fill {
   width: 60%;
-  background: linear-gradient(90deg, #188d28 0%, #4dff63 100%);
-  box-shadow: 0 0 8px rgba(77,255,99,0.45);
+  background: #4dff63;
+  box-shadow: none;
 }
 .health-fill {
   width: 50%;
-  background: linear-gradient(90deg, #0776d8 0%, #33ddff 100%);
-  box-shadow: 0 0 8px rgba(53,231,255,0.45);
+  background: #33ddff;
+  box-shadow: none;
 }
 
 #target-reticle {
