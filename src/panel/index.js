@@ -939,6 +939,17 @@ function buildWeapons(body) {
   }));
 }
 
+// Ambience audio element — created once, persists across panel rebuilds.
+let _ambienceEl = null;
+function getAmbienceEl() {
+  if (!_ambienceEl) {
+    _ambienceEl = new Audio('./assets/storm.mp3');
+    _ambienceEl.loop = true;
+    _ambienceEl.volume = Math.max(0, Math.min(1, Number(state.params.soundSfx_ambience) ?? 0.5));
+  }
+  return _ambienceEl;
+}
+
 function buildSound(body) {
   body.appendChild(subhdr('Master'));
   body.appendChild(slider({ key: 'soundMusicVolume', label: 'Music', min: 0, max: 1, step: 0.01, dec: 2 }));
@@ -947,7 +958,7 @@ function buildSound(body) {
 
   body.appendChild(subhdr('SFX Mixer'));
   const sfxKeys = [
-    ['Shoot',        'soundSfx_shoot'],
+    ['Player Shoot', 'soundSfx_shoot'],
     ['Dash',         'soundSfx_dash'],
     ['Player Hit',   'soundSfx_player_hit'],
     ['Standard Hit', 'soundSfx_standard_hit'],
@@ -963,6 +974,30 @@ function buildSound(body) {
     if (!(key in state.params)) state.params[key] = 1.0;
     body.appendChild(slider({ key, label, min: 0, max: 1, step: 0.05, dec: 2 }));
   });
+
+  // Ambience row — controls storm.wav loop volume
+  if (!('soundSfx_ambience' in state.params)) state.params.soundSfx_ambience = 0.5;
+  const ambienceRow = slider({
+    key: 'soundSfx_ambience',
+    label: 'Ambience',
+    min: 0, max: 1, step: 0.05, dec: 2,
+    onChange: (v) => {
+      const el = getAmbienceEl();
+      el.volume = Math.max(0, Math.min(1, v));
+      if (v > 0 && el.paused && !state.params.soundMuted) {
+        el.play().catch(() => {});
+      } else if (v <= 0) {
+        el.pause();
+      }
+    },
+  });
+  body.appendChild(ambienceRow);
+
+  // Start ambience if volume > 0
+  const ambEl = getAmbienceEl();
+  if (state.params.soundSfx_ambience > 0 && ambEl.paused && !state.params.soundMuted) {
+    ambEl.play().catch(() => {});
+  }
 }
 
 
