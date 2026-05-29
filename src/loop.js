@@ -10,10 +10,12 @@ import { updateSunPosition } from './lighting.js';
 import { updateChunks } from './terrain.js';
 import { playerGroup, updatePlayer, updateDashStreaks } from './player.js';
 import { updateLaserProjectiles } from './weapons.js';
-import { updateEnemies } from './enemies.js';
+import { updateEnemies, getEnemyMeshes } from './enemies.js';
 import { updateController } from './input.js';
 
 const clock = new THREE.Clock();
+const _reticleRaycaster = new THREE.Raycaster();
+const _reticleNdc = new THREE.Vector2();
 let _fpsEMA = 60;
 let _elapsed = 0;
 
@@ -84,6 +86,19 @@ export function tick() {
 
   // Poll controller every frame (including paused — Options button must work).
   updateController(delta);
+
+  // Reticle enemy hover: raycast from reticle aim point and toggle red class.
+  {
+    const reticleEl = document.getElementById('target-reticle');
+    if (reticleEl && reticleEl.style.display !== 'none' && !state.paused) {
+      _reticleNdc.set(state.pointerAimX, state.pointerAimY);
+      _reticleRaycaster.setFromCamera(_reticleNdc, camera);
+      const hits = _reticleRaycaster.intersectObjects(getEnemyMeshes(), false);
+      reticleEl.classList.toggle('reticle-enemy-hover', hits.length > 0);
+    } else if (reticleEl) {
+      reticleEl.classList.remove('reticle-enemy-hover');
+    }
+  }
 
   if (state.paused) {
     state.primaryFire = false;

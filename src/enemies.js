@@ -233,6 +233,11 @@ function getSpawnPosition(index, count) {
   };
 }
 
+// Returns all active enemy mesh objects for raycasting (e.g. reticle hover check).
+export function getEnemyMeshes() {
+  return enemies.map(e => e.mesh);
+}
+
 export function clearEnemies() {
   while (enemies.length) disposeEnemy(enemies.pop());
   while (enemyBullets.length) disposeEnemyBullet(enemyBullets.pop());

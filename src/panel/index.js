@@ -27,6 +27,7 @@ const ICON_HUD = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox=
 
 const ICON_CONTROLLER = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M189-186q-51 0-86-35t-35-86q0-8 .5-15t2.5-15l84-336q12-45 48-73t82-28h390q46 0 82 28t48 73l84 336q2 8 3 15.5t1 15.5q0 51-35.5 85.5T771-186q-35 0-64-18.5T662-254l-29-59q-8-17-24-25t-34-8H385q-18 0-34 8t-24 25l-29 59q-15 32-44.5 50T189-186Zm3-28q26 0 48-14t33-37l28-58q12-24 35-37.5t49-13.5h190q27 0 49.5 14.5T660-322l28 57q11 23 33 37t48 14q39 0 67-26.5t28-64.5q0-3-3-25l-84-335q-9-35-37.5-58T675-746H285q-37 0-65.5 23T183-665L99-330q-1 4-3 24 0 39 28.5 65.5T192-214Zm367.5-326.5Q568-549 568-560t-8.5-19.5Q551-588 540-588t-19.5 8.5Q512-571 512-560t8.5 19.5Q529-532 540-532t19.5-8.5Zm80-80Q648-629 648-640t-8.5-19.5Q631-668 620-668t-19.5 8.5Q592-651 592-640t8.5 19.5Q609-612 620-612t19.5-8.5Zm0 160Q648-469 648-480t-8.5-19.5Q631-508 620-508t-19.5 8.5Q592-491 592-480t8.5 19.5Q609-452 620-452t19.5-8.5Zm80-80Q728-549 728-560t-8.5-19.5Q711-588 700-588t-19.5 8.5Q672-571 672-560t8.5 19.5Q689-532 700-532t19.5-8.5ZM350-480q4-4 4-10v-56h56q6 0 10-4t4-10q0-6-4-10t-10-4h-56v-56q0-6-4-10t-10-4q-6 0-10 4t-4 10v56h-56q-6 0-10 4t-4 10q0 6 4 10t10 4h56v56q0 6 4 10t10 4q6 0 10-4Zm130 0Z"/></svg>`;
 
+const ICON_SOUND = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M564-195v-30q81-30 130.5-100T744-481q0-86-49.5-156T564-737v-30q92 33 150 111t58 175q0 97-58 175T564-195ZM188-412v-136h130l126-126v388L318-412H188Zm376 56v-250q30 22 45 55.5t15 70.5q0 37-15.5 69.5T564-356ZM416-606l-86 86H216v80h114l86 86v-252ZM316-480Z"/></svg>`;
 const PRESET_SETTINGS = [
   { key: 'g3', label: 'G3', path: './presets/G3.json', data: {
   "cameraMode": "third2",
@@ -938,6 +939,33 @@ function buildWeapons(body) {
   }));
 }
 
+function buildSound(body) {
+  body.appendChild(subhdr('Master'));
+  body.appendChild(slider({ key: 'soundMusicVolume', label: 'Music', min: 0, max: 1, step: 0.01, dec: 2 }));
+  body.appendChild(slider({ key: 'soundSfxVolume', label: 'SFX Master', min: 0, max: 1, step: 0.01, dec: 2 }));
+  body.appendChild(toggle('Muted', 'soundMuted'));
+
+  body.appendChild(subhdr('SFX Mixer'));
+  const sfxKeys = [
+    ['Shoot',        'soundSfx_shoot'],
+    ['Dash',         'soundSfx_dash'],
+    ['Player Hit',   'soundSfx_player_hit'],
+    ['Standard Hit', 'soundSfx_standard_hit'],
+    ['Elite Hit',    'soundSfx_elite_hit'],
+    ['Explode',      'soundSfx_explode'],
+    ['Coin',         'soundSfx_coin'],
+    ['Heal',         'soundSfx_heal'],
+    ['Level Up',     'soundSfx_levelup'],
+    ['Game Over',    'soundSfx_gameover'],
+    ['Victory',      'soundSfx_victory'],
+  ];
+  sfxKeys.forEach(([label, key]) => {
+    if (!(key in state.params)) state.params[key] = 1.0;
+    body.appendChild(slider({ key, label, min: 0, max: 1, step: 0.05, dec: 2 }));
+  });
+}
+
+
 function buildController(body) {
   // Live status indicator that updates every 2 seconds without rebuilding the panel.
   const statusRow = document.createElement('div');
@@ -977,20 +1005,29 @@ function buildController(body) {
 
   body.appendChild(subhdr('Mappings'));
   const mappings = [
-    ['Left Stick',   'Movement'],
-    ['Right Stick',  'Camera Look'],
-    ['R2 / R1',      'Fire Laser'],
-    ['Cross (×)',    'Jump'],
-    ['Circle (○)',   'Dash'],
-    ['L1 / L2',      'Bullet Time'],
-    ['Options',      'Toggle Sidebar'],
+    [null,           'Left Stick',   'Movement'],
+    [null,           'Right Stick',  'Camera Look'],
+    [null,           'R2 / R1',      'Fire Laser'],
+    ['<svg xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 -960 960 960" width="14px" fill="currentColor"><path d="m336-316 144-144 144 144 20-20-144-144 144-144-20-20-144 144-144-144-20 20 144 144-144 144 20 20Zm144.17 184q-72.17 0-135.73-27.39-63.56-27.39-110.57-74.35-47.02-46.96-74.44-110.43Q132-407.65 132-479.83q0-72.17 27.39-135.73 27.39-63.56 74.35-110.57 46.96-47.02 110.43-74.44Q407.65-828 479.83-828q72.17 0 135.73 27.39 63.56 27.39 110.57 74.35 47.02 46.96 74.44 110.43Q828-552.35 828-480.17q0 72.17-27.39 135.73-27.39 63.56-74.35 110.57-46.96 47.02-110.43 74.44Q552.35-132 480.17-132Zm-.17-28q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/></svg>', null,      'Jump'],
+    ['<svg xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 -960 960 960" width="14px" fill="currentColor"><path d="M479.88-345q-55.88 0-95.38-39.32-39.5-39.33-39.5-95.5Q345-536 384.32-575q39.33-39 95.5-39Q536-614 575-574.88q39 39.12 39 95t-39.12 95.38q-39.12 39.5-95 39.5ZM344.5-159q-63.5-27-111-74.5T159-344.41q-27-63.4-27-135.5 0-72.09 27-135.59T233.5-726q47.5-47 110.91-74.5 63.4-27.5 135.5-27.5 72.09 0 135.65 27.39t110.57 74.35q47.02 46.96 74.44 110.43Q828-552.35 828-480.17q0 72.17-27.5 135.67Q773-281 726-233.5T615.59-159q-63.4 27-135.5 27-72.09 0-135.59-27Zm135-1q133.5 0 227-93T800-479.5q0-133.5-93.5-227T480-800q-134 0-227 93.5T160-480q0 134 93 227t226.5 93Zm.5-320Zm115 115.5Q642-412 642-480t-47-115q-47-47-115-47t-115.5 47Q317-548 317-480t47.5 115.5Q412-317 480-317t115-47.5Z"/></svg>', null, 'Dash'],
+    [null,           'L1 / L2',      'Bullet Time'],
+    ['<svg xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 -960 960 960" width="14px" fill="currentColor"><path d="M336-336h288v-288H336v288Zm28-28v-232h232v232H364Zm-19.5 205q-63.5-27-111-74.5t-74.5-111Q132-408 132-480t27-135.5Q186-679 233.5-726t111-74.5Q408-828 480-828t135.5 27.5Q679-773 726-726t74.5 110.5Q828-552 828-480t-27.5 135.5Q773-281 726-233.5T615.5-159Q552-132 480-132t-135.5-27Zm135.5-1q133 0 226.5-93T800-480q0-133-93.5-226.5T480-800q-134 0-227 93.5T160-480q0 134 93 227t227 93Zm0-320Z"/></svg>', null, '—'],
+    ['<svg xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 -960 960 960" width="14px" fill="currentColor"><path d="M297-373h365L480-676 297-373Zm50-28 133-220 132 220H347Zm-2.5 242q-63.5-27-111-74.5t-74.5-111Q132-408 132-480t27-135.5Q186-679 233.5-726t111-74.5Q408-828 480-828t135.5 27.5Q679-773 726-726t74.5 110.5Q828-552 828-480t-27.5 135.5Q773-281 726-233.5T615.5-159Q552-132 480-132t-135.5-27Zm135.5-1q133 0 226.5-93T800-480q0-133-93.5-226.5T480-800q-134 0-227 93.5T160-480q0 134 93 227t227 93Zm0-320Z"/></svg>', null, '—'],
+    [null,           'Options',      'Toggle Sidebar'],
   ];
-  mappings.forEach(([btn, action]) => {
+  mappings.forEach(([iconHtml, btnText, action]) => {
     const r = document.createElement('div');
     r.className = 'sb-row';
     const l = document.createElement('label');
     l.className = 'sb-label';
-    l.textContent = btn;
+    if (iconHtml) {
+      const iconSpan = document.createElement('span');
+      iconSpan.innerHTML = iconHtml;
+      iconSpan.style.cssText = 'display:inline-flex;align-items:center;vertical-align:middle;margin-right:4px;';
+      l.appendChild(iconSpan);
+    } else if (btnText) {
+      l.appendChild(document.createTextNode(btnText));
+    }
     const v = document.createElement('span');
     v.className = 'sb-value';
     v.textContent = action;
@@ -1269,6 +1306,7 @@ function rebuildPanel() {
     [ICON_ENEMIES, 'Enemies', buildEnemies],
     [ICON_DESTRUCTION, 'Destruction', buildDestruction],
     [ICON_WEAPONS, 'Weapons', buildWeapons],
+    [ICON_SOUND, 'Sound', buildSound],
     [ICON_CONTROLLER, 'Controller', buildController],
   ];
 

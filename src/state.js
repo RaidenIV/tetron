@@ -149,6 +149,21 @@ export const state = {
       "controllerInvertY": false,
       "controllerFireThreshold": 0.5,
       "controllerVibration": true,
+      // Sound
+      "soundMuted": false,
+      "soundMusicVolume": 0.4,
+      "soundSfxVolume": 1.0,
+      "soundSfx_shoot": 1.0,
+      "soundSfx_dash": 1.0,
+      "soundSfx_player_hit": 1.0,
+      "soundSfx_standard_hit": 1.0,
+      "soundSfx_elite_hit": 1.0,
+      "soundSfx_explode": 1.0,
+      "soundSfx_coin": 1.0,
+      "soundSfx_heal": 1.0,
+      "soundSfx_levelup": 1.0,
+      "soundSfx_gameover": 1.0,
+      "soundSfx_victory": 1.0,
   },
 };
 
