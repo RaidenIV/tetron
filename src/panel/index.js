@@ -20,7 +20,7 @@ const ICON_SHIELD = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewB
 const ICON_LIGHT  = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M565-395q35-35 35-85t-35-85q-35-35-85-35t-85 35q-35 35-35 85t35 85q35 35 85 35t85-35Zm-198.42 28.42Q320-413.15 320-480t46.58-113.42Q413.15-640 480-640t113.42 46.58Q640-546.85 640-480t-46.58 113.42Q546.85-320 480-320t-113.42-46.58ZM80-460q-8.54 0-14.27-5.73T60-480q0-8.54 5.73-14.27T80-500h100q8.54 0 14.27 5.73T200-480q0 8.54-5.73 14.27T180-460H80Zm700 0q-8.54 0-14.27-5.73T760-480q0-8.54 5.73-14.27T780-500h100q8.54 0 14.27 5.73T900-480q0 8.54-5.73 14.27T880-460H780ZM465.73-765.73Q460-771.46 460-780v-100q0-8.54 5.73-14.27T480-900q8.54 0 14.27 5.73T500-880v100q0 8.54-5.73 14.27T480-760q-8.54 0-14.27-5.73Zm0 700Q460-71.46 460-80v-100q0-8.54 5.73-14.27T480-200q8.54 0 14.27 5.73T500-180v100q0 8.54-5.73 14.27T480-60q-8.54 0-14.27-5.73ZM254.46-678.77l-57.61-55.85q-5.85-5.61-5.73-13.76.11-8.16 5.73-14.77 6.61-6.62 14.38-6.62 7.77 0 14.15 6.62L282-706.31q6.38 6.62 6.38 14.16 0 7.53-6.38 14.15-5.62 6.62-13.27 6.12-7.65-.5-14.27-6.89Zm480.16 481.92L678-253.69q-6.38-6.62-6.38-14.27 0-7.66 6.38-14.04 5.62-6.62 13.27-6.12 7.65.5 14.27 6.89l57.61 55.85q5.85 5.61 5.73 13.76-.11 8.16-5.73 14.77-6.61 6.62-14.38 6.62-7.77 0-14.15-6.62ZM678-678q-6.62-5.62-6.12-13.27.5-7.65 6.89-14.27l55.85-57.61q5.61-5.85 13.76-5.73 8.16.11 14.77 5.73 6.62 6.61 6.62 14.38 0 7.77-6.62 14.15L706.31-678q-6.62 6.38-14.16 6.38-7.53 0-14.15-6.38ZM196.85-196.85q-6.62-6.61-6.62-14.38 0-7.77 6.62-14.15L253.69-282q6.62-6.38 14.27-6.38 7.66 0 14.04 6.38 5.85 5.62 5.35 13.27-.5 7.65-6.12 14.27l-55.85 57.61q-6.38 6.62-14.15 6.5-7.77-.11-14.38-6.5ZM480-480Z"/></svg>`;
 const ICON_SCENE  = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M340-148.42q-65.69-28.43-114.42-77.16-48.73-48.73-77.16-114.42Q120-405.69 120-480.12q0-74.42 28.42-140 28.43-65.57 77.16-114.3 48.73-48.73 114.42-77.16Q405.69-840 480.12-840q74.42 0 140 28.42 65.57 28.43 114.3 77.16 48.73 48.73 77.16 114.3 28.42 65.58 28.42 140 0 74.43-28.42 140.12-28.43 65.69-77.16 114.42-48.73 48.73-114.3 77.16-65.58 28.42-140 28.42-74.43 0-140.12-28.42Zm140-11.27q35.23-45.23 58.08-88.85 22.84-43.61 37.15-97.61H384.77q15.85 57.07 37.92 100.69 22.08 43.61 57.31 85.77Zm-50.92-6q-28-33-51.12-81.58-23.11-48.58-34.42-98.88H190.15q34.39 74.61 97.5 122.38 63.12 47.77 141.43 58.08Zm101.84 0q78.31-10.31 141.43-58.08 63.11-47.77 97.5-122.38H616.46q-15.15 51.07-38.27 99.65-23.11 48.58-47.27 80.81ZM173.85-386.15h161.38q-4.54-24.62-6.42-47.97-1.89-23.34-1.89-45.88 0-22.54 1.89-45.88 1.88-23.35 6.42-47.97H173.85q-6.54 20.77-10.2 45.27Q160-504.08 160-480t3.65 48.58q3.66 24.5 10.2 45.27Zm201.38 0h209.54q4.54-24.62 6.42-47.2 1.89-22.57 1.89-46.65t-1.89-46.65q-1.88-22.58-6.42-47.2H375.23q-4.54 24.62-6.42 47.2-1.89 22.57-1.89 46.65t1.89 46.65q1.88 22.58 6.42 47.2Zm249.54 0h161.38q6.54-20.77 10.2-45.27Q800-455.92 800-480t-3.65-48.58q-3.66-24.5-10.2-45.27H624.77q4.54 24.62 6.42 47.97 1.89 23.34 1.89 45.88 0 22.54-1.89 45.88-1.88 23.35-6.42 47.97Zm-8.31-227.7h153.39Q734.69-690 673.5-736.23q-61.19-46.23-142.58-58.85 28 36.85 50.35 84.27 22.35 47.43 35.19 96.96Zm-231.69 0h190.46q-15.85-56.3-39.08-101.84-23.23-45.54-56.15-84.62-32.92 39.08-56.15 84.62-23.23 45.54-39.08 101.84Zm-194.62 0h153.39q12.84-49.53 35.19-96.96 22.35-47.42 50.35-84.27-82.16 12.62-142.96 59.23-60.81 46.62-95.97 122Z"/></svg>`;
 
-const ICON_WEAPONS = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M450-80v-82q-128-14-218-104T128-484H46v-60h82q14-128 104-218t218-104v-82h60v82q128 14 218 104t104 218h82v60h-82q-14 128-104 218T510-162v82h-60Zm30-140q109 0 184.5-75.5T740-480q0-109-75.5-184.5T480-740q-109 0-184.5 75.5T220-480q0 109 75.5 184.5T480-220Zm0-120q-58 0-99-41t-41-99q0-58 41-99t99-41q58 0 99 41t41 99q0 58-41 99t-99 41Zm0-60q33 0 56.5-23.5T560-480q0-33-23.5-56.5T480-560q-33 0-56.5 23.5T400-480q0 33 23.5 56.5T480-400Z"/></svg>`;
+const ICON_WEAPONS = `<span class="sb-icon-mask" style="--icon-url: url('./assets/swords.svg')" aria-hidden="true"></span>`;
 const ICON_HUD = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M326-442v26q0 6.07 3.95 10.03 3.96 3.97 10 3.97 6.05 0 10.05-3.97 4-3.96 4-10.03v-80q0-6.07-3.95-10.03-3.96-3.97-10-3.97-6.05 0-10.05 3.97-4 3.96-4 10.03v26h-46q-6.07 0-10.03 3.95-3.97 3.96-3.97 10 0 6.05 3.97 10.05 3.96 4 10.03 4h46Zm82 0h272q6.07 0 10.03-3.95 3.97-3.96 3.97-10 0-6.05-3.97-10.05-3.96-4-10.03-4H408q-6.07 0-10.03 3.95-3.97 3.96-3.97 10 0 6.05 3.97 10.05 3.96 4 10.03 4Zm226-128h46q6.07 0 10.03-3.95 3.97-3.96 3.97-10 0-6.05-3.97-10.05-3.96-4-10.03-4h-46v-26q0-6.07-3.95-10.03-3.96-3.97-10-3.97-6.05 0-10.05 3.97-4 3.96-4 10.03v80q0 6.07 3.95 10.03 3.96 3.97 10 3.97 6.05 0 10.05-3.97 4-3.96 4-10.03v-26Zm-354 0h272q6.07 0 10.03-3.95 3.97-3.96 3.97-10 0-6.05-3.97-10.05-3.96-4-10.03-4H280q-6.07 0-10.03 3.95-3.97 3.96-3.97 10 0 6.05 3.97 10.05 3.96 4 10.03 4Zm-88 318q-26 0-43-17t-17-43v-416q0-26 17-43t43-17h576q26 0 43 17t17 43v416q0 26-17 43t-43 17H588v50q0 12.75-8.62 21.37Q570.75-172 558-172H402q-12.75 0-21.37-8.63Q372-189.25 372-202v-50H192Zm0-28h576q12 0 22-10t10-22v-416q0-12-10-22t-22-10H192q-12 0-22 10t-10 22v416q0 12 10 22t22 10Zm-32 0v-480 480Z"/></svg>`;
 
 const PRESET_SETTINGS = [
@@ -76,6 +76,7 @@ const PRESET_SETTINGS = [
   "showGrid": true,
   "showFps": false,
   "hudVisible": true,
+  "hudFont": "system",
   "reticleVisible": true,
   "reticleType": "dot",
   "reticleColor": "#ffffff",
@@ -143,6 +144,7 @@ const PRESET_SETTINGS = [
   "showGrid": true,
   "showFps": true,
   "hudVisible": true,
+  "hudFont": "system",
   "reticleVisible": true,
   "reticleType": "dot",
   "reticleColor": "#ffffff",
@@ -159,6 +161,68 @@ const PRESET_SETTINGS = [
   "laserFireRate": 5
 } },
 ];
+
+
+const HUD_FONT_OPTIONS = [
+  ['system', 'System Default'],
+  ['eurostile', 'Eurostile'],
+  ['fotRodinB', 'FOT-Rodin Pro B'],
+  ['fotRodinDB', 'FOT-Rodin Pro DB'],
+  ['juraBold', 'Jura Bold'],
+  ['juraMedium', 'Jura Medium'],
+  ['juraLight', 'Jura Light'],
+  ['michroma', 'Michroma'],
+  ['microgrammaD', 'Microgramma D'],
+  ['square721Extended', 'Square 721 Extended'],
+  ['square721ExtendedMedium', 'Square 721 Extended Medium'],
+];
+
+const HUD_FONT_STYLES = {
+  system: {
+    family: "'Segoe UI', system-ui, sans-serif",
+    weight: 800,
+  },
+  eurostile: {
+    family: "'Eurostile', 'Eurostile Extended', 'Microgramma D', 'Arial Narrow', sans-serif",
+    weight: 700,
+  },
+  fotRodinB: {
+    family: "'FOT-Rodin Pro B', 'FOT-Rodin Pro', 'Rodin Pro B', sans-serif",
+    weight: 700,
+  },
+  fotRodinDB: {
+    family: "'FOT-Rodin Pro DB', 'FOT-Rodin Pro', 'Rodin Pro DB', sans-serif",
+    weight: 800,
+  },
+  juraBold: {
+    family: "'Jura', 'Segoe UI', system-ui, sans-serif",
+    weight: 700,
+  },
+  juraMedium: {
+    family: "'Jura', 'Segoe UI', system-ui, sans-serif",
+    weight: 500,
+  },
+  juraLight: {
+    family: "'Jura', 'Segoe UI', system-ui, sans-serif",
+    weight: 300,
+  },
+  michroma: {
+    family: "'Michroma', 'Segoe UI', system-ui, sans-serif",
+    weight: 400,
+  },
+  microgrammaD: {
+    family: "'Microgramma D', 'Microgramma', 'Eurostile', 'Arial Narrow', sans-serif",
+    weight: 700,
+  },
+  square721Extended: {
+    family: "'Square 721 Extended', 'Square721 BT', 'Square 721', 'Arial Narrow', sans-serif",
+    weight: 700,
+  },
+  square721ExtendedMedium: {
+    family: "'Square 721 Extended Medium', 'Square 721 Extended', 'Square721 BT', 'Square 721', 'Arial Narrow', sans-serif",
+    weight: 500,
+  },
+};
 
 // ── DOM helpers ────────────────────────────────────────────────────────────────
 
@@ -531,6 +595,7 @@ function buildScene(body) {
 
 function buildHUD(body) {
   body.appendChild(toggle('HUD Enabled', 'hudVisible', () => applyHudSettings()));
+  body.appendChild(select('Font', 'hudFont', HUD_FONT_OPTIONS, () => applyHudSettings()));
 }
 
 function buildWeapons(body) {
@@ -734,7 +799,12 @@ function applyReticleSettings() {
 function applyHudSettings() {
   const p = state.params;
   const gameHudEl = document.getElementById('game-hud');
-  if (gameHudEl) gameHudEl.style.display = p.hudVisible ? '' : 'none';
+  if (gameHudEl) {
+    gameHudEl.style.display = p.hudVisible ? '' : 'none';
+    const hudFont = HUD_FONT_STYLES[p.hudFont] || HUD_FONT_STYLES.system;
+    gameHudEl.style.setProperty('--hud-font-family', hudFont.family);
+    gameHudEl.style.setProperty('--hud-font-weight', hudFont.weight);
+  }
 
   const instructionsEl = document.getElementById('instructions');
   if (instructionsEl) instructionsEl.style.display = p.hudVisible ? '' : 'none';
@@ -895,7 +965,7 @@ export function initPanel() {
   sidebar.innerHTML = `
     <div class="sb-resizer" id="sb-resizer" title="Resize sidebar" aria-hidden="true"></div>
     <div class="sb-header">
-      <span class="sb-title"><img class="sb-logo" src="https://images.squarespace-cdn.com/content/v1/681ea18dd168a935c26295bd/f173dc58-2856-4e84-b647-8cf46ca113ad/phonto-Photoroom.png?format=1000w" alt="" aria-hidden="true"><span class="sb-title-text">GAME LAB</span></span>
+      <span class="sb-title"><img class="sb-logo" src="https://images.squarespace-cdn.com/content/v1/681ea18dd168a935c26295bd/f173dc58-2856-4e84-b647-8cf46ca113ad/phonto-Photoroom.png?format=1000w" alt="" aria-hidden="true"></span>
       <button class="sb-close" id="sb-close-btn" title="Minimize sidebar" aria-label="Minimize sidebar">◀</button>
     </div>
     <div id="sb-body" class="sb-body"></div>
