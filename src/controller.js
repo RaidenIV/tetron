@@ -60,7 +60,7 @@ function buttonPressed(pad, index, threshold = 0.5) {
 
 function getActiveGamepad() {
   const pads = navigator.getGamepads?.() || [];
-  const connected = [...pads].filter(Boolean);
+  const connected = Array.from(pads || []).filter(Boolean);
   if (!connected.length) return null;
 
   const preferred = connected.find(pad => {

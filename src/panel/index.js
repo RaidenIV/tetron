@@ -1349,4 +1349,3 @@ export function togglePanel() {
   setPanelMinimized(!state.panelMinimized);
 }
 
-initPanel();

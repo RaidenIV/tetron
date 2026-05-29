@@ -8,6 +8,7 @@ import { playerGroup }           from './player.js';
 import { updateChunks }          from './terrain.js';
 
 window.addEventListener('resize', onResize);
+initPanel();
 initInput({ togglePanel });
 initController({ togglePanel });
 
