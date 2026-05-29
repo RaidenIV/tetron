@@ -165,16 +165,10 @@ const PRESET_SETTINGS = [
 
 const HUD_FONT_OPTIONS = [
   ['system', 'System Default'],
-  ['eurostile', 'Eurostile'],
-  ['fotRodinB', 'FOT-Rodin Pro B'],
-  ['fotRodinDB', 'FOT-Rodin Pro DB'],
   ['juraBold', 'Jura Bold'],
   ['juraMedium', 'Jura Medium'],
   ['juraLight', 'Jura Light'],
   ['michroma', 'Michroma'],
-  ['microgrammaD', 'Microgramma D'],
-  ['square721Extended', 'Square 721 Extended'],
-  ['square721ExtendedMedium', 'Square 721 Extended Medium'],
 ];
 
 const HUD_FONT_STYLES = {
@@ -184,27 +178,6 @@ const HUD_FONT_STYLES = {
     stretch: 'normal',
     letterSpacing: '0.24em',
     valueLetterSpacing: '0.12em',
-  },
-  eurostile: {
-    family: "'HUD Eurostile', 'Eurostile', 'Eurostile LT Std', 'Microgramma D', 'Arial Narrow', sans-serif",
-    weight: 700,
-    stretch: 'expanded',
-    letterSpacing: '0.22em',
-    valueLetterSpacing: '0.1em',
-  },
-  fotRodinB: {
-    family: "'HUD FOT-Rodin Pro B', 'FOT-Rodin ProN B', 'FOT-Rodin Pro B', 'FOT-Rodin ProN', sans-serif",
-    weight: 700,
-    stretch: 'normal',
-    letterSpacing: '0.16em',
-    valueLetterSpacing: '0.08em',
-  },
-  fotRodinDB: {
-    family: "'HUD FOT-Rodin Pro DB', 'FOT-Rodin ProN DB', 'FOT-Rodin Pro DB', 'FOT-Rodin ProN', sans-serif",
-    weight: 800,
-    stretch: 'normal',
-    letterSpacing: '0.16em',
-    valueLetterSpacing: '0.08em',
   },
   juraBold: {
     family: "'Jura', 'Segoe UI', system-ui, sans-serif",
@@ -233,27 +206,6 @@ const HUD_FONT_STYLES = {
     stretch: 'normal',
     letterSpacing: '0.12em',
     valueLetterSpacing: '0.06em',
-  },
-  microgrammaD: {
-    family: "'HUD Microgramma D', 'Microgramma D Extended', 'Microgramma D', 'Microgramma', 'Eurostile', 'Arial Narrow', sans-serif",
-    weight: 700,
-    stretch: 'expanded',
-    letterSpacing: '0.18em',
-    valueLetterSpacing: '0.08em',
-  },
-  square721Extended: {
-    family: "'HUD Square 721 Extended', 'Square 721 Extended', 'Square 721 Extended BT', 'Square721 BT', 'Square 721', 'Arial Narrow', sans-serif",
-    weight: 700,
-    stretch: 'expanded',
-    letterSpacing: '0.2em',
-    valueLetterSpacing: '0.1em',
-  },
-  square721ExtendedMedium: {
-    family: "'HUD Square 721 Extended Medium', 'Square 721 Extended Medium', 'Square 721 Extended BT Medium', 'Square 721 Extended', 'Square721 BT', 'Square 721', 'Arial Narrow', sans-serif",
-    weight: 500,
-    stretch: 'expanded',
-    letterSpacing: '0.2em',
-    valueLetterSpacing: '0.1em',
   },
 };
 
