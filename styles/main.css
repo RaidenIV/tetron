@@ -452,8 +452,10 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   position: fixed;
   inset: 0;
   z-index: 90;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 25vh;
   pointer-events: none;
   opacity: 0;
   color: rgba(255,255,255,0.94);
@@ -482,3 +484,16 @@ body.is-paused * {
 #target-reticle.reticle-enemy-hover .reticle-center-dot {
   background: #ff2020;
 }
+
+/* Controller section: unify all text to same muted color */
+[data-section-key="controller"] .sb-value {
+  color: var(--sb-muted);
+  font-size: 11px;
+}
+
+/* Controller button icons: 28x28 */
+[data-section-key="controller"] .sb-label svg {
+  width: 28px;
+  height: 28px;
+}
+

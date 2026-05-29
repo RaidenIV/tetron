@@ -103,6 +103,24 @@ function getAimDirection(target, spawnPos, range) {
   return target.normalize();
 }
 
+
+// Shoot sound — blaster1.wav, pooled single element with slight pitch variation.
+let _blasterEl = null;
+function playShootSound() {
+  const vol = Math.max(0, Math.min(1,
+    Number(state.params.soundSfxVolume ?? 1) * Number(state.params.soundSfx_shoot ?? 1)
+  ));
+  if (!vol || state.params.soundMuted) return;
+  if (!_blasterEl) {
+    _blasterEl = new Audio('./assets/blaster1.wav');
+  }
+  // Clone for overlapping shots; reuse element if already ended.
+  const audio = _blasterEl.paused ? _blasterEl : _blasterEl.cloneNode();
+  audio.volume = vol;
+  audio.playbackRate = 0.92 + Math.random() * 0.16;
+  audio.play().catch(() => {});
+}
+
 function fireLaser() {
   const p = state.params;
   const speed = Math.max(1, Number(p.laserProjectileSpeed) || 22);
@@ -132,6 +150,7 @@ function fireLaser() {
   laser.speed = speed;
 
   _activeLasers.push(laser);
+  playShootSound();
 }
 
 export function updateLaserProjectiles(delta, projectileDelta = delta) {
@@ -141,9 +160,7 @@ export function updateLaserProjectiles(delta, projectileDelta = delta) {
   const fireRate = Math.max(0.1, Number(p.laserFireRate) || 5);
   const interval = 1 / fireRate;
 
-  const firing = !!state.primaryFire || !!state.controllerPrimaryFire;
-
-  if (!p.laserEnabled || !firing) {
+  if (!p.laserEnabled || !state.primaryFire) {
     _laserCooldown = 0;
   } else {
     _laserCooldown -= delta;
