@@ -8,7 +8,7 @@ export const state = {
   slowTimer: 0,
   slowScale: 0.35,
   slowRequested: false,
-  activePreset: 'g3',
+  activePreset: 'g4',
   mouseLookActive: false,
   primaryFire: false,
   jumpQueued: false,
@@ -164,6 +164,7 @@ export const state = {
       "soundSfx_levelup": 1.0,
       "soundSfx_gameover": 1.0,
       "soundSfx_victory": 1.0,
+      "soundSfx_ambience": 0.5,
   },
 };
 
