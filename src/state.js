@@ -11,11 +11,6 @@ export const state = {
   activePreset: 'g3',
   mouseLookActive: false,
   primaryFire: false,
-  controllerPrimaryFire: false,
-  controllerMoveX: 0,
-  controllerMoveY: 0,
-  controllerConnected: false,
-  controllerName: 'None',
   jumpQueued: false,
   jumpVelocity: 0,
   jumpGrounded: true,
@@ -23,6 +18,11 @@ export const state = {
   pointerAimY: 0,
   keys: { w: false, a: false, s: false, d: false, space: false },
   sidebarWidth: 320,
+
+  // Controller runtime state
+  controllerConnected: false,
+  controllerMoveX: 0,   // left-stick X, post-deadzone, range [-1, 1]
+  controllerMoveZ: 0,   // left-stick Y, post-deadzone, range [-1, 1]
 
   // dash runtime
   dashTimer: 0, dashCooldown: 0,
@@ -79,14 +79,6 @@ export const state = {
       "bulletTimeDuration": 3,
       "bulletTimeCooldown": 8,
       "bulletTimeScale": 0.35,
-      "controllerEnabled": true,
-      "controllerMoveDeadzone": 0.18,
-      "controllerLookDeadzone": 0.16,
-      "controllerLookSensitivityX": 3.2,
-      "controllerLookSensitivityY": 2.6,
-      "controllerInvertY": false,
-      "controllerFireThreshold": 0.35,
-      "controllerVibration": true,
       "shieldVisible": false,
       "shieldColor": "#1e7bff",
       "shieldOpacity": 0.22,
@@ -140,11 +132,23 @@ export const state = {
       "enemyPlacement": "random",
       "enemyWeaponType": "contact",
       "enemyDestructionEnabled": true,
-      "enemyDestructionParticleCount": 40,
-      "enemyDestructionParticleSize": 0.32,
-      "enemyDestructionParticleSpeed": 1.25,
-      "enemyDestructionParticleGlow": 8,
-      "enemyDestructionPhysics": true
+      "enemyDestructionStandardCount": 10,
+      "enemyDestructionStandardSize": 0.25,
+      "enemyDestructionStandardSpeed": 1,
+      "enemyDestructionEliteCount": 100,
+      "enemyDestructionEliteSize": 0.5,
+      "enemyDestructionEliteSpeed": 1.75,
+      "enemyDestructionEliteGlow": 12,
+
+      // Controller
+      "controllerEnabled": true,
+      "controllerMoveDeadzone": 0.12,
+      "controllerLookDeadzone": 0.10,
+      "controllerLookSensX": 0.045,
+      "controllerLookSensY": 0.036,
+      "controllerInvertY": false,
+      "controllerFireThreshold": 0.5,
+      "controllerVibration": true,
   },
 };
 

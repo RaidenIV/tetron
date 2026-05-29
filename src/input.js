@@ -1,6 +1,7 @@
 // src/input.js
 // Keyboard state is stored on state.keys so movement code can poll it every
 // frame rather than reacting to events. Dash fires on keydown only.
+// Controller support: browser Gamepad API, polled every frame via updateController().
 import * as THREE from 'three';
 import { state } from './state.js';
 import { getMoveForward, getMoveRight, isThirdPersonCameraMode, renderer } from './renderer.js';
@@ -56,16 +57,11 @@ export function clearGameplayInput() {
   state.keys.d = false;
   state.keys.space = false;
   state.primaryFire = false;
-  state.controllerPrimaryFire = false;
-  state.controllerMoveX = 0;
-  state.controllerMoveY = 0;
   state.jumpQueued = false;
   _mouseDragActive = false;
-  state.mouseLookActive = false;
-  document.body.classList.remove('third-person-mouse-look');
-  if (document.pointerLockElement === renderer.domElement) {
-    document.exitPointerLock?.();
-  }
+  // clear analogue controller axes
+  state.controllerMoveX = 0;
+  state.controllerMoveZ = 0;
 }
 
 function updatePointerAimFromClient(clientX, clientY) {
@@ -161,7 +157,7 @@ window.addEventListener('pointerup', stopMouseDrag);
 window.addEventListener('pointercancel', stopMouseDrag);
 
 // Pointer-lock path: after clicking the game view, raw mouse movement rotates the
-// camera continuously, like a desktop third-person action shooter.
+// camera continuously, like a desktop third-person action shooter. ESC exits lock.
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === renderer.domElement;
   if (locked) setPointerAimCenter();
@@ -251,3 +247,201 @@ window.addEventListener('keyup', e => {
   if (k === 'd' || k === 'arrowright') state.keys.d = false;
   if (e.code === 'Space') state.keys.space = false;
 });
+
+// ── Gamepad / Controller support ───────────────────────────────────────────────
+// DualSense / DualShock button layout (standard mapping):
+//   0 = Cross    1 = Circle    2 = Square    3 = Triangle
+//   4 = L1       5 = R1        6 = L2        7 = R2
+//   8 = Share    9 = Options  10 = L3       11 = R3
+//  12 = D-Up    13 = D-Down  14 = D-Left   15 = D-Right
+// Axes: 0 = LS-X  1 = LS-Y  2 = RS-X  3 = RS-Y
+
+// Per-button edge-detection: track which were pressed last frame.
+const _prevButtons = new Map(); // gamepadIndex -> Uint8Array
+
+// Track which one-shot actions were already triggered this press to avoid repeats.
+const _jumpHeld     = new Map();
+const _dashHeld     = new Map();
+const _btHeld       = new Map();
+const _optionsHeld  = new Map();
+
+function applyDeadzone(value, deadzone) {
+  if (Math.abs(value) < deadzone) return 0;
+  // rescale so edge of deadzone maps to 0 and 1.0 stays at 1.0
+  return (value - Math.sign(value) * deadzone) / (1 - deadzone);
+}
+
+function rumble(pad, strongMagnitude, weakMagnitude, duration) {
+  if (!state.params.controllerVibration) return;
+  try {
+    pad.vibrationActuator?.playEffect?.('dual-rumble', {
+      startDelay: 0,
+      duration,
+      weakMagnitude,
+      strongMagnitude,
+    });
+  } catch (_) { /* unsupported — ignore */ }
+}
+
+// Called once per animation frame from loop.js.
+export function updateController(delta) {
+  if (!state.params.controllerEnabled) {
+    state.controllerMoveX = 0;
+    state.controllerMoveZ = 0;
+    state.controllerConnected = false;
+    return;
+  }
+
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  let pad = null;
+  for (const p of pads) {
+    if (p && p.connected) { pad = p; break; }
+  }
+
+  state.controllerConnected = !!pad;
+
+  if (!pad) {
+    state.controllerMoveX = 0;
+    state.controllerMoveZ = 0;
+    return;
+  }
+
+  const idx = pad.index;
+  const btnCount = pad.buttons.length;
+
+  // Initialise per-pad prev-button state on first encounter.
+  if (!_prevButtons.has(idx) || _prevButtons.get(idx).length !== btnCount) {
+    _prevButtons.set(idx, new Uint8Array(btnCount));
+    _jumpHeld.set(idx, false);
+    _dashHeld.set(idx, false);
+    _btHeld.set(idx, false);
+    _optionsHeld.set(idx, false);
+  }
+  const prev = _prevButtons.get(idx);
+
+  function pressed(i)  { return i < btnCount && pad.buttons[i].pressed; }
+  function justPressed(i) { return pressed(i) && !prev[i]; }
+
+  if (state.paused) {
+    // In paused state only allow Options toggle.
+    if (justPressed(9)) {
+      _togglePanel?.();
+      rumble(pad, 0, 0.3, 80);
+    }
+    // Update prev so we don't fire on un-pause.
+    for (let i = 0; i < btnCount; i++) prev[i] = pad.buttons[i].pressed ? 1 : 0;
+    return;
+  }
+
+  const moveDead = Math.max(0, Math.min(0.99, Number(state.params.controllerMoveDeadzone) ?? 0.12));
+  const lookDead = Math.max(0, Math.min(0.99, Number(state.params.controllerLookDeadzone) ?? 0.10));
+  const sensX    = Number(state.params.controllerLookSensX) || 0.045;
+  const sensY    = Number(state.params.controllerLookSensY) || 0.036;
+  const fireThresh = Math.max(0, Math.min(1, Number(state.params.controllerFireThreshold) ?? 0.5));
+  const invertY  = !!state.params.controllerInvertY;
+
+  // ── Left stick → movement (analogue) ──────────────────────────────────────
+  const lsX = applyDeadzone(pad.axes[0] ?? 0, moveDead);
+  const lsY = applyDeadzone(pad.axes[1] ?? 0, moveDead);
+  state.controllerMoveX = lsX;
+  state.controllerMoveZ = lsY;
+
+  // ── Right stick → camera look ──────────────────────────────────────────────
+  if (isThirdPersonCameraMode(state.params.cameraMode)) {
+    const rsX = applyDeadzone(pad.axes[2] ?? 0, lookDead);
+    const rsY = applyDeadzone(pad.axes[3] ?? 0, lookDead);
+    if (rsX !== 0 || rsY !== 0) {
+      state.params.thirdAzimuth = normalizeYaw(
+        (state.params.thirdAzimuth || 0) - rsX * sensX
+      );
+      const pitchDir = invertY ? -rsY : rsY;
+      state.params.thirdPitch = clamp(
+        (state.params.thirdPitch || 0) + pitchDir * sensY,
+        -1.1, 1.1
+      );
+    }
+  }
+
+  // ── R2 / R1 → primary fire ─────────────────────────────────────────────────
+  // R2 (axis-style trigger on some browsers) at index 6; also check R1 (5).
+  const r2Value = pad.buttons[7]?.value ?? 0;
+  const r1Value = pad.buttons[5]?.value ?? 0;
+  const firePressed = r2Value >= fireThresh || r1Value >= fireThresh;
+  if (firePressed && !state.primaryFire) {
+    rumble(pad, 0, 0.25, 60);
+  }
+  state.primaryFire = firePressed;
+
+  // ── Cross (0) → jump ───────────────────────────────────────────────────────
+  if (pressed(0)) {
+    if (!_jumpHeld.get(idx) && state.params.jumpEnabled) {
+      state.jumpQueued = true;
+      _jumpHeld.set(idx, true);
+      rumble(pad, 0.3, 0, 80);
+    }
+  } else {
+    _jumpHeld.set(idx, false);
+  }
+
+  // ── Circle (1) → dash ─────────────────────────────────────────────────────
+  if (pressed(1)) {
+    if (!_dashHeld.get(idx) && state.params.dashEnabled) {
+      _dashHeld.set(idx, true);
+      if (state.dashCooldown <= 0 && state.dashTimer <= 0) {
+        // Use analogue stick direction if available, else last move direction.
+        const forward = getMoveForward();
+        const right   = getMoveRight();
+        _dv.set(0, 0, 0);
+        if (Math.abs(lsX) > 0.01 || Math.abs(lsY) > 0.01) {
+          _dv.addScaledVector(forward, -lsY).addScaledVector(right, lsX);
+        } else {
+          _dv.x = state.lastMoveX;
+          _dv.z = state.lastMoveZ;
+        }
+        if (_dv.lengthSq() > 0) {
+          _dv.normalize();
+          state.lastMoveX = _dv.x;
+          state.lastMoveZ = _dv.z;
+        }
+        state.dashVX       = state.lastMoveX;
+        state.dashVZ       = state.lastMoveZ;
+        state.dashTimer    = state.params.dashDuration;
+        state.dashCooldown = state.params.dashCooldown;
+        state.dashGhostTimer = 0;
+        rumble(pad, 0.5, 0.3, 100);
+      }
+    }
+  } else {
+    _dashHeld.set(idx, false);
+  }
+
+  // ── L1 / L2 (4/6) → bullet time ───────────────────────────────────────────
+  const btPressed = pressed(4) || (pad.buttons[6]?.value ?? 0) >= fireThresh;
+  if (btPressed) {
+    if (!_btHeld.get(idx)) {
+      _btHeld.set(idx, true);
+      if (state.params.bulletTimeEnabled !== false) {
+        state.slowRequested = true;
+        rumble(pad, 0.2, 0.5, 120);
+      }
+    }
+  } else {
+    _btHeld.set(idx, false);
+  }
+
+  // ── Options (9) → toggle sidebar ──────────────────────────────────────────
+  if (pressed(9)) {
+    if (!_optionsHeld.get(idx)) {
+      _optionsHeld.set(idx, true);
+      _togglePanel?.();
+      rumble(pad, 0, 0.3, 80);
+    }
+  } else {
+    _optionsHeld.set(idx, false);
+  }
+
+  // Snapshot button state for edge detection next frame.
+  for (let i = 0; i < btnCount; i++) {
+    prev[i] = pad.buttons[i].pressed ? 1 : 0;
+  }
+}

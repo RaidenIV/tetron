@@ -523,27 +523,34 @@ export function updatePlayer(delta, moveForward, moveRight) {
   updateJump(delta);
   applyPlayerContactShadow();
 
-  // Walking — poll keyboard plus optional analog controller movement.
+  // Walking — poll state.keys each frame + analogue controller left stick
   _v.set(0, 0, 0);
   if (state.keys.w) _v.addScaledVector(moveForward,  1);
   if (state.keys.s) _v.addScaledVector(moveForward, -1);
   if (state.keys.a) _v.addScaledVector(moveRight,   -1);
   if (state.keys.d) _v.addScaledVector(moveRight,    1);
 
-  const controllerMoveX = Number(state.controllerMoveX) || 0;
-  const controllerMoveY = Number(state.controllerMoveY) || 0;
-  if (controllerMoveX || controllerMoveY) {
-    _v.addScaledVector(moveRight, controllerMoveX);
-    _v.addScaledVector(moveForward, -controllerMoveY);
+  // Blend analogue stick — the stick values are already post-deadzone in [-1,1].
+  // Keyboard wins if both are active; analogue adds on top for diagonal precision.
+  const ctrlX = state.controllerMoveX || 0;
+  const ctrlZ = state.controllerMoveZ || 0;
+  if (ctrlX !== 0 || ctrlZ !== 0) {
+    // ctrlZ is forward on the stick (negative Y axis = forward in 3-D)
+    _v.addScaledVector(moveForward, -ctrlZ);
+    _v.addScaledVector(moveRight,    ctrlX);
   }
 
-  const moveLength = _v.length();
-  if (moveLength > 0) {
-    if (moveLength > 1) _v.multiplyScalar(1 / moveLength);
-    const dashDir = _v.clone().normalize();
-    state.lastMoveX = dashDir.x;
-    state.lastMoveZ = dashDir.z;
-    playerGroup.position.addScaledVector(_v, p.playerSpeed * delta);
+  // Clamp analogue blend to unit length so diagonal isn't faster.
+  const lenSq = _v.lengthSq();
+  if (lenSq > 0) {
+    if (lenSq > 1) _v.normalize();
+    // Preserve analogue speed scaling when only controller is used.
+    const speed = (state.keys.w || state.keys.s || state.keys.a || state.keys.d)
+      ? p.playerSpeed
+      : p.playerSpeed * Math.min(1, Math.sqrt(ctrlX * ctrlX + ctrlZ * ctrlZ) || 1);
+    state.lastMoveX = _v.x;
+    state.lastMoveZ = _v.z;
+    playerGroup.position.addScaledVector(_v, speed * delta);
   }
 
   // Dash — shunts in a fixed direction at higher speed while dashTimer > 0
