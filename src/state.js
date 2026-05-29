@@ -2,7 +2,7 @@
 export const state = {
   panelOpen: true,
   panelMinimized: false,
-  activePreset: 'default',
+  activePreset: 'g1',
   mouseLookActive: false,
   primaryFire: false,
   pointerAimX: 0,
@@ -23,21 +23,21 @@ export const state = {
 
   params: {
     // camera
-    cameraMode: 'iso',    // 'iso' | 'third' | 'third2'
+    cameraMode: 'third2', // 'iso' | 'third' | 'third2'
     isoCamD: 12,
-    thirdDist: 14, thirdHeight: 7, thirdFov: 65,
-    thirdMinDist: 6, thirdPitchDistanceCompression: 0.75,
+    thirdDist: 5, thirdHeight: 3, thirdFov: 62,
+    thirdMinDist: 3, thirdPitchDistanceCompression: 0.75,
     third2PitchMin: -0.9, third2PitchMax: 0.85,
     third2BodyFrameStrength: 1.0, third2BodyFrameHeight: 1.35, third2BodyScreenY: 0.45, third2MinEyeHeight: 0.15,
-    thirdAzimuth: 2.36,   // radians, ~135° behind-right
-    thirdLookAhead: 2.0,
-    thirdSmoothPos: 8.0, thirdSmoothLook: 12.0,
+    thirdAzimuth: 0,      // radians
+    thirdLookAhead: 3.8,
+    thirdSmoothPos: 10.0, thirdSmoothLook: 12.0,
     thirdMouseLook: true,
     thirdMouseSensitivityX: 0.003,
     thirdMouseSensitivityY: 0.0024,
-    thirdPitch: -0.28,
+    thirdPitch: -0.22,
     thirdOffsetMode: 'parallel', // 'parallel' | 'pivot'
-    thirdOffsetX: 0.0, thirdOffsetY: 0.0, thirdOffsetZ: 0.0,
+    thirdOffsetX: 1.25, thirdOffsetY: -0.25, thirdOffsetZ: -0.25,
 
     // player
     playerSpeed: 7,
@@ -61,11 +61,12 @@ export const state = {
 
     // scene
     fogNear: 1, fogFar: 200,
-    bgColor: '#06080d', floorColor: '#0c1020', gridColor: '#1a2a4a',
-    showFloor: true, showGrid: true, showFps: false,
+    bgColor: '#142130', floorColor: '#0C1620', gridColor: '#000000',
+    showFloor: true, showGrid: true, showFps: true,
 
     // HUD
     hudVisible: true,
+    hudFont: 'system',
 
     // weapons / reticle
     reticleVisible: true,

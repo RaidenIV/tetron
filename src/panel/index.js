@@ -101,10 +101,10 @@ const PRESET_SETTINGS = [
   "laserFireRate": 5
 } },
   { key: 'g1', label: 'G1', path: './presets/testbed.json', data: {
-  "cameraMode": "third",
+  "cameraMode": "third2",
   "isoCamD": 12,
-  "thirdDist": 4,
-  "thirdHeight": 3.5,
+  "thirdDist": 5,
+  "thirdHeight": 3,
   "thirdFov": 62,
   "thirdMinDist": 3,
   "thirdPitchDistanceCompression": 0.75,
@@ -118,10 +118,6 @@ const PRESET_SETTINGS = [
   "thirdLookAhead": 3.8,
   "thirdSmoothPos": 10,
   "thirdSmoothLook": 12,
-  "thirdMouseLook": true,
-  "thirdMouseSensitivityX": 0.003,
-  "thirdMouseSensitivityY": 0.0024,
-  "thirdPitch": -0.22,
   "thirdOffsetMode": "parallel",
   "thirdOffsetX": 1.25,
   "thirdOffsetY": -0.25,
@@ -160,7 +156,6 @@ const PRESET_SETTINGS = [
   "showGrid": true,
   "showFps": true,
   "hudVisible": true,
-  "hudFont": "system",
   "reticleVisible": true,
   "reticleType": "dot",
   "reticleColor": "#ffffff",
@@ -174,7 +169,12 @@ const PRESET_SETTINGS = [
   "laserBloomIntensity": 0.55,
   "laserProjectileSpeed": 22,
   "laserRange": 42,
-  "laserFireRate": 5
+  "laserFireRate": 5,
+  "thirdMouseLook": true,
+  "thirdMouseSensitivityX": 0.003,
+  "thirdMouseSensitivityY": 0.0024,
+  "thirdPitch": -0.22,
+  "hudFont": "system"
 } },
 ];
 
@@ -185,6 +185,11 @@ const HUD_FONT_OPTIONS = [
   ['juraMedium', 'Jura Medium'],
   ['juraLight', 'Jura Light'],
   ['michroma', 'Michroma'],
+  ['eurostile', 'Eurostile'],
+  ['rodinDb', 'FOT-Rodin Pro DB'],
+  ['microgrammaExtendedBold', 'Microgramma D Extended Bold'],
+  ['square721TlBoldExtended', 'Square 721 TL Bold Extended'],
+  ['square721ExtendedBold', 'Square 721 Extended Bold'],
 ];
 
 const HUD_FONT_STYLES = {
@@ -223,7 +228,43 @@ const HUD_FONT_STYLES = {
     letterSpacing: '0.12em',
     valueLetterSpacing: '0.06em',
   },
+  eurostile: {
+    family: "'Eurostile Local', 'Eurostile', 'Jura', system-ui, sans-serif",
+    weight: 700,
+    stretch: 'normal',
+    letterSpacing: '0.18em',
+    valueLetterSpacing: '0.08em',
+  },
+  rodinDb: {
+    family: "'FOT-Rodin Pro DB Local', 'FOT-Rodin Pro DB', 'FOT Rodin Pro DB', 'Jura', system-ui, sans-serif",
+    weight: 700,
+    stretch: 'normal',
+    letterSpacing: '0.16em',
+    valueLetterSpacing: '0.08em',
+  },
+  microgrammaExtendedBold: {
+    family: "'Microgramma D Extended Bold Local', 'Microgramma D Extended Bold', 'Michroma', system-ui, sans-serif",
+    weight: 700,
+    stretch: 'expanded',
+    letterSpacing: '0.12em',
+    valueLetterSpacing: '0.06em',
+  },
+  square721TlBoldExtended: {
+    family: "'Square 721 TL Bold Extended Local', 'Square 721 TL Bold Extended', 'Michroma', system-ui, sans-serif",
+    weight: 700,
+    stretch: 'expanded',
+    letterSpacing: '0.12em',
+    valueLetterSpacing: '0.06em',
+  },
+  square721ExtendedBold: {
+    family: "'Square 721 Extended Bold Local', 'Square 721 Extended Bold', 'Michroma', system-ui, sans-serif",
+    weight: 700,
+    stretch: 'expanded',
+    letterSpacing: '0.12em',
+    valueLetterSpacing: '0.06em',
+  },
 };
+
 
 // ── DOM helpers ────────────────────────────────────────────────────────────────
 
@@ -727,7 +768,7 @@ function buildExportImport(container) {
 
   wrap.appendChild(btn('↩ Reset Defaults', 'sb-btn-muted', () => {
     applyParamObject(defaultParams);
-    state.activePreset = 'default';
+    state.activePreset = 'g1';
     applyAllParams();
     rebuildPanel();
     notify('Reset ✓');
@@ -998,10 +1039,11 @@ export function initPanel() {
   sidebar.innerHTML = `
     <div class="sb-resizer" id="sb-resizer" title="Resize sidebar" aria-hidden="true"></div>
     <div class="sb-header">
-      <span class="sb-title"><img class="sb-logo" src="https://images.squarespace-cdn.com/content/v1/681ea18dd168a935c26295bd/35b10b91-05cc-4428-8a49-f63c677b4e0a/white.png?format=1000w" alt="" aria-hidden="true"></span>
+      <span class="sb-title"><span class="sb-title-icon" aria-hidden="true"></span><span class="sb-title-text">TETRON</span></span>
       <button class="sb-close" id="sb-close-btn" title="Minimize sidebar" aria-label="Minimize sidebar">◀</button>
     </div>
     <div id="sb-body" class="sb-body"></div>
+    <div class="sb-footer-logo" aria-hidden="true"><img class="sb-logo" src="https://images.squarespace-cdn.com/content/v1/681ea18dd168a935c26295bd/35b10b91-05cc-4428-8a49-f63c677b4e0a/white.png?format=1000w" alt=""></div>
   `;
   document.getElementById('sb-close-btn')?.addEventListener('click', togglePanel);
   initSidebarResize();
