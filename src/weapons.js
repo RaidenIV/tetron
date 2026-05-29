@@ -80,12 +80,15 @@ function releaseLaser(laser) {
 }
 
 function getAimDirection(target, spawnPos, range) {
-  const x = Number.isFinite(state.pointerAimX) ? state.pointerAimX : 0;
-  const y = Number.isFinite(state.pointerAimY) ? state.pointerAimY : 0;
-
-  _aimNdc.set(x, y);
+  // The reticle is fixed at the exact centre of the viewport, especially during
+  // pointer-lock mouse look. Always fire through that centre ray rather than a
+  // stale/unlocked mouse cursor position so lasers line up with the visible HUD.
+  camera.updateMatrixWorld(true);
+  _aimNdc.set(0, 0);
   _raycaster.setFromCamera(_aimNdc, camera);
-  _aimPoint.copy(_raycaster.ray.origin).addScaledVector(_raycaster.ray.direction, Math.max(range, 100));
+
+  const targetDistance = Math.max(1, Number(range) || 1);
+  _aimPoint.copy(_raycaster.ray.origin).addScaledVector(_raycaster.ray.direction, targetDistance);
   target.copy(_aimPoint).sub(spawnPos);
 
   if (target.lengthSq() < 0.0001) {
@@ -111,6 +114,12 @@ function fireLaser() {
   const dir = getAimDirection(_aimDir, _spawnPos, range).clone();
   _spawnPos.addScaledVector(dir, Math.max(0.75, (Number(p.playerRadius) || 0.4) + 0.65));
 
+  // Re-aim after offsetting the spawn point so the projectile path still
+  // converges on the centre-reticle ray instead of drifting due to muzzle offset.
+  dir.copy(_aimPoint).sub(_spawnPos);
+  if (dir.lengthSq() < 0.0001) dir.copy(_raycaster.ray.direction);
+  dir.normalize();
+
   _tmpQuat.setFromUnitVectors(_up, dir);
   laser.group.position.copy(_spawnPos);
   laser.group.quaternion.copy(_tmpQuat);
@@ -118,7 +127,7 @@ function fireLaser() {
   laser.glow.visible = !!p.laserBloom;
   laser.dir.copy(dir);
   laser.distance = 0;
-  laser.maxRange = range;
+  laser.maxRange = Math.max(1, _spawnPos.distanceTo(_aimPoint));
   laser.speed = speed;
 
   _activeLasers.push(laser);
