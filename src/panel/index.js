@@ -123,13 +123,11 @@ const PRESET_SETTINGS = [
   "bulletTimeScale": 0.35,
   "enemyMoveSpeed": 2.2,
   "enemyDestructionEnabled": true,
-  "enemyDestructionStandardCount": 10,
-  "enemyDestructionStandardSize": 0.25,
-  "enemyDestructionStandardSpeed": 1,
-  "enemyDestructionEliteCount": 100,
-  "enemyDestructionEliteSize": 0.5,
-  "enemyDestructionEliteSpeed": 1.75,
-  "enemyDestructionEliteGlow": 12
+  "enemyDestructionParticleCount": 40,
+  "enemyDestructionParticleSize": 0.32,
+  "enemyDestructionParticleSpeed": 1.25,
+  "enemyDestructionParticleGlow": 8,
+  "enemyDestructionPhysics": true
 } },
   { key: 'default', label: 'Default', path: './presets/default.json', data: {
   "cameraMode": "iso",
@@ -295,6 +293,10 @@ const PRESET_SETTINGS = [
 
 const ICON_ENEMIES = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor" aria-hidden="true"><path d="M292-132v-152q-36-15-65.5-39T176-378q-21-31-32.5-67T132-520q0-136 97.42-222 97.41-86 250.5-86Q633-828 730.5-742T828-520q0 39-11.5 75T784-378q-21 31-50.5 55T668-283.82V-132H292Zm28-28h62v-56h56v56h84v-56h56v56h62v-142q36-12 65.5-33.5t50.65-50.05q21.15-28.54 32.5-63Q800-483 800-520q0-125-88.5-202.5T480-800q-143 0-231.5 77.5T160-520q0 37 11.35 71.45 11.35 34.46 32.5 63Q225-357 254.5-335.5 284-314 320-302v142Zm110-200h100l-50-100-50 100Zm-89.82-100q24.82 0 42.32-17.68 17.5-17.67 17.5-42.5 0-24.82-17.68-42.32-17.67-17.5-42.5-17.5-24.82 0-42.32 17.68-17.5 17.67-17.5 42.5 0 24.82 17.68 42.32 17.67 17.5 42.5 17.5Zm280 0q24.82 0 42.32-17.68 17.5-17.67 17.5-42.5 0-24.82-17.68-42.32-17.67-17.5-42.5-17.5-24.82 0-42.32 17.68-17.5 17.67-17.5 42.5 0 24.82 17.68 42.32 17.67 17.5 42.5 17.5ZM480-160Z"/></svg>`;
 
+
+const ICON_DESTRUCTION = `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M361.24-112Q258-112 185-184.68 112-257.35 112-360q0-105 75.5-176.5T369-608q8 0 16.5.5T402-606l23-41q9-17 27-21.5t35 4.5l25 14 5-8q20-34 57-44t71 10l12 7-14 24-12-7q-24-14-51-7t-40 31l-4 8 25 14q17 9 21.5 27t-4.5 35l-24 42q23 38 39 78.5t16 85.5q0 102-72.26 172-72.27 70-175.5 70Zm-.24-27q92 0 156-64.5T581-359q0-31-8.5-61T547-477l-26-41 29-51q5-8 2.5-18T542-602l-63-36q-8-5-18-2t-15 11l-29 50h-48q-94 0-161.5 63T140-361q0 92 64.5 157T361-139Zm387-475v-28h68v28h-68ZM586-788v-68h28v68h-28Zm162 40-19-19 48-49 19 20-48 48ZM361-359Z"/></svg>`;
+const ICON_ABILITIES = `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="m642-477-79 128q-5 8-15.5 7T535-353l-32-131-301 302q-4 4-9.5 4.5T182-182q-5-5-5-10t5-10l302-302-130-32q-10-2-11.5-12t6.5-15l128-79-11-150q-1-10 7.5-15t16.5 2l115 97 139-57q9-4 16.5 3.5T764-745l-56 139 97 115q7 8 2.5 17t-14.5 8l-151-11ZM183-734q-5-5-5-11t5-11l21-21q5-5 11-5t11 5l21 21q5 5 5 11t-5 11l-21 21q-5 5-11 5t-11-5l-21-21Zm372 344 72-116 136 10-88-105 51-126-126 51-105-88 10 136-115 72 132 33 33 133Zm179 207-21-21q-5-5-5-11t5-11l21-21q5-5 11-5t11 5l21 21q5 5 5 11t-5 11l-21 21q-5 5-11 5t-11-5ZM577-577Z"/></svg>`;
+
 const HUD_FONT_OPTIONS = [
   ['system', 'System Default'],
   ['juraBold', 'Jura Bold'],
@@ -438,10 +440,19 @@ function subhdr(text) {
   return d;
 }
 
+function sectionKey(title) {
+  return String(title || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-');
+}
+
 // Each section is a header + hidden body. Clicking the header toggles a CSS class.
 function section(icon, title, buildFn) {
   const wrap = document.createElement('div');
   wrap.className = 'sb-section';
+  wrap.dataset.sectionKey = sectionKey(title);
+  wrap.dataset.sectionTitle = title;
 
   const hdr = document.createElement('div');
   hdr.className = 'sb-section-hdr';
@@ -453,6 +464,7 @@ function section(icon, title, buildFn) {
   hdr.appendChild(iconWrap);
 
   const titleSpan = document.createElement('span');
+  titleSpan.className = 'sb-section-title';
   titleSpan.textContent = title;
   hdr.appendChild(titleSpan);
 
@@ -478,7 +490,17 @@ function section(icon, title, buildFn) {
 
   wrap.appendChild(hdr);
   wrap.appendChild(body);
-  buildFn(body);
+
+  try {
+    buildFn(body);
+  } catch (err) {
+    console.error(`Failed to build sidebar section: ${title}`, err);
+    const fallback = document.createElement('div');
+    fallback.className = 'sb-section-error';
+    fallback.textContent = `${title} controls could not be built.`;
+    body.appendChild(fallback);
+  }
+
   return { el: wrap, body, hdr };
 }
 
@@ -836,16 +858,6 @@ function buildEnemies(body) {
   body.appendChild(select('Placement', 'enemyPlacement', ENEMY_PLACEMENT_OPTIONS));
   body.appendChild(select('Weapon Type', 'enemyWeaponType', ENEMY_WEAPON_OPTIONS));
 
-  body.appendChild(subhdr('Destruction'));
-  body.appendChild(toggle('Destruction FX', 'enemyDestructionEnabled'));
-  body.appendChild(slider({ key: 'enemyDestructionStandardCount', label: 'Standard Count', min: 0, max: 80, step: 1, dec: 0 }));
-  body.appendChild(slider({ key: 'enemyDestructionStandardSize', label: 'Standard Size', min: 0.05, max: 1.5, step: 0.05, dec: 2 }));
-  body.appendChild(slider({ key: 'enemyDestructionStandardSpeed', label: 'Standard Speed', min: 0.1, max: 5, step: 0.05, dec: 2 }));
-  body.appendChild(slider({ key: 'enemyDestructionEliteCount', label: 'Elite Count', min: 0, max: 200, step: 1, dec: 0 }));
-  body.appendChild(slider({ key: 'enemyDestructionEliteSize', label: 'Elite Size', min: 0.05, max: 2, step: 0.05, dec: 2 }));
-  body.appendChild(slider({ key: 'enemyDestructionEliteSpeed', label: 'Elite Speed', min: 0.1, max: 6, step: 0.05, dec: 2 }));
-  body.appendChild(slider({ key: 'enemyDestructionEliteGlow', label: 'Elite Glow', min: 0, max: 24, step: 0.5, dec: 1 }));
-
   body.appendChild(btn('Spawn / Apply Enemies', 'sb-btn-accent', () => {
     const count = spawnEnemiesFromSettings();
     notify(`${count} enemies spawned ✓`);
@@ -854,6 +866,23 @@ function buildEnemies(body) {
     clearEnemies();
     notify('Enemies cleared ✓');
   }));
+}
+
+function buildDestruction(body) {
+  body.appendChild(toggle('Destruction FX', 'enemyDestructionEnabled'));
+  body.appendChild(slider({ key: 'enemyDestructionParticleCount', label: 'Particle Count', min: 0, max: 200, step: 1, dec: 0 }));
+  body.appendChild(slider({ key: 'enemyDestructionParticleSize', label: 'Particle Size', min: 0.05, max: 2, step: 0.05, dec: 2 }));
+  body.appendChild(slider({ key: 'enemyDestructionParticleSpeed', label: 'Particle Speed', min: 0.1, max: 6, step: 0.05, dec: 2 }));
+  body.appendChild(slider({ key: 'enemyDestructionParticleGlow', label: 'Particle Glow', min: 0, max: 24, step: 0.5, dec: 1 }));
+  body.appendChild(toggle('Physics', 'enemyDestructionPhysics'));
+}
+
+function buildAbilities(body) {
+  body.appendChild(subhdr('Bullet Time'));
+  body.appendChild(toggle('Bullet Time Enabled', 'bulletTimeEnabled'));
+  body.appendChild(slider({ key: 'bulletTimeDuration', label: 'Duration', min: 0.1, max: 30, step: 0.1, dec: 1 }));
+  body.appendChild(slider({ key: 'bulletTimeCooldown', label: 'Cooldown', min: 0, max: 120, step: 0.5, dec: 1 }));
+  body.appendChild(slider({ key: 'bulletTimeScale', label: 'World Scale', min: 0.05, max: 1, step: 0.05, dec: 2 }));
 }
 
 function buildWeapons(body) {
@@ -1156,19 +1185,35 @@ function rebuildPanel() {
   if (!body) return;
   body.innerHTML = '';
 
-  const sections = [
-    section(ICON_CAMERA,  'Camera',   buildCamera),
-    section(ICON_PLAYER,  'Player',   buildPlayer),
-    section(ICON_SHIELD,  'Shield',   buildShield),
-    section(ICON_LIGHT,   'Lighting', buildLighting),
-    section(ICON_SCENE,   'Scene',    buildScene),
-    section(ICON_HUD,     'HUD',      buildHUD),
-    section(ICON_ENEMIES, 'Enemies',  buildEnemies),
-    section(ICON_WEAPONS, 'Weapons',  buildWeapons),
+  const sectionDefs = [
+    [ICON_CAMERA, 'Camera', buildCamera],
+    [ICON_PLAYER, 'Player', buildPlayer],
+    [ICON_ABILITIES, 'Abilities', buildAbilities],
+    [ICON_SHIELD, 'Shield', buildShield],
+    [ICON_LIGHT, 'Lighting', buildLighting],
+    [ICON_SCENE, 'Scene', buildScene],
+    [ICON_HUD, 'HUD', buildHUD],
+    [ICON_ENEMIES, 'Enemies', buildEnemies],
+    [ICON_DESTRUCTION, 'Destruction', buildDestruction],
+    [ICON_WEAPONS, 'Weapons', buildWeapons],
   ];
 
-  sections.forEach(({ el }) => {
-    body.appendChild(el);
+  sectionDefs.forEach(([icon, title, buildFn]) => {
+    body.appendChild(section(icon, title, buildFn).el);
+  });
+
+  // Required gameplay-test sections. This failsafe keeps these controls visible
+  // even if a future edit accidentally removes them from the main section list.
+  const requiredSections = [
+    [ICON_ABILITIES, 'Abilities', buildAbilities, 'Shield'],
+    [ICON_DESTRUCTION, 'Destruction', buildDestruction, 'Weapons'],
+  ];
+
+  requiredSections.forEach(([icon, title, buildFn, beforeTitle]) => {
+    if (body.querySelector(`[data-section-key="${sectionKey(title)}"]`)) return;
+    const fallbackSection = section(icon, title, buildFn).el;
+    const beforeEl = body.querySelector(`[data-section-key="${sectionKey(beforeTitle)}"]`);
+    body.insertBefore(fallbackSection, beforeEl || null);
   });
 
   buildExportImport(body);
