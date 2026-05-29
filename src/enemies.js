@@ -58,6 +58,7 @@ const BASE_SPEED = 2.2;
 const CONTACT_COOLDOWN = 1.0;
 const ENEMY_BULLET_SPEED = 11;
 const ENEMY_BULLET_LIFETIME = 4.5;
+const PARTICLE_GRAVITY = 9;
 const FIRE_RATE_SECONDS = {
   projectile: 1.6,
   laser: 1.0,
@@ -66,12 +67,15 @@ const FIRE_RATE_SECONDS = {
 
 const enemies = [];
 const enemyBullets = [];
+const destructionParticles = [];
+const particlePool = [];
 
 const _enemyGeoCache = new Map();
 const _tmpVec = new THREE.Vector3();
 const _tmpVec2 = new THREE.Vector3();
 const _bulletDir = new THREE.Vector3();
 const _enemyBulletGeo = new THREE.CapsuleGeometry(0.065, 0.44, 5, 10);
+const _particleGeo = new THREE.SphereGeometry(1, 6, 4);
 const _enemyBulletMatCache = new Map();
 const _up = new THREE.Vector3(0, 1, 0);
 const _quat = new THREE.Quaternion();
@@ -103,6 +107,36 @@ function getBulletMaterial(color) {
     _enemyBulletMatCache.set(key, mat);
   }
   return mat;
+}
+
+function acquireParticle(color) {
+  const mesh = particlePool.pop() || new THREE.Mesh(
+    _particleGeo,
+    new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 0,
+      transparent: true,
+      opacity: 1,
+      roughness: 0.45,
+      metalness: 0.0,
+      depthWrite: false,
+    }),
+  );
+
+  mesh.material.color.set(color);
+  mesh.material.emissive.set(color);
+  mesh.material.opacity = 1;
+  mesh.material.emissiveIntensity = 0;
+  mesh.visible = true;
+  scene.add(mesh);
+  return mesh;
+}
+
+function releaseParticle(particle) {
+  scene.remove(particle.mesh);
+  particle.mesh.visible = false;
+  particlePool.push(particle.mesh);
 }
 
 function randomRange(min, max) {
@@ -202,6 +236,99 @@ function getSpawnPosition(index, count) {
 export function clearEnemies() {
   while (enemies.length) disposeEnemy(enemies.pop());
   while (enemyBullets.length) disposeEnemyBullet(enemyBullets.pop());
+  while (destructionParticles.length) releaseParticle(destructionParticles.pop());
+}
+
+function getDestructionConfig(enemy) {
+  const p = state.params;
+  const elite = enemy.type === ENEMY_TYPE.SPLITTER || enemy.type === ENEMY_TYPE.BOSS;
+
+  if (elite) {
+    return {
+      elite,
+      count: Math.max(0, Math.round(Number(p.enemyDestructionEliteCount) || 0)),
+      size: Math.max(0.01, Number(p.enemyDestructionEliteSize) || 0.5),
+      speed: Math.max(0.01, Number(p.enemyDestructionEliteSpeed) || 1.75),
+      glow: Math.max(0, Number(p.enemyDestructionEliteGlow) || 0),
+      colors: [enemy.def.color, enemy.def.color, enemy.def.color, 0xffffff, 0xffee88],
+    };
+  }
+
+  return {
+    elite,
+    count: Math.max(0, Math.round(Number(p.enemyDestructionStandardCount) || 0)),
+    size: Math.max(0.01, Number(p.enemyDestructionStandardSize) || 0.25),
+    speed: Math.max(0.01, Number(p.enemyDestructionStandardSpeed) || 1),
+    glow: 0,
+    colors: [0xcc0000, 0xaa0000, 0xdd0000, 0x880000, 0xff1111, 0xbb0000],
+  };
+}
+
+function spawnDestructionParticles(enemy) {
+  if (state.params.enemyDestructionEnabled === false) return;
+
+  const cfg = getDestructionConfig(enemy);
+  if (cfg.count <= 0) return;
+
+  for (let i = 0; i < cfg.count; i++) {
+    const color = cfg.colors[Math.floor(Math.random() * cfg.colors.length)];
+    const mesh = acquireParticle(color);
+    const baseRadius = (0.06 + Math.random() * 0.12) * cfg.size;
+    const yaw = Math.random() * Math.PI * 2;
+    const pitch = (Math.random() - 0.5) * Math.PI;
+    const speed = (4 + Math.random() * 8) * cfg.speed;
+    const maxLife = 0.5 + Math.random() * 0.6;
+
+    mesh.position.copy(enemy.group.position);
+    mesh.position.y = Math.max(0.55, enemy.mesh.position.y);
+    mesh.scale.setScalar(baseRadius);
+
+    destructionParticles.push({
+      mesh,
+      baseRadius,
+      vx: Math.cos(yaw) * Math.cos(pitch) * speed,
+      vy: Math.sin(pitch) * speed + 2 * cfg.speed,
+      vz: Math.sin(yaw) * Math.cos(pitch) * speed,
+      life: maxLife,
+      maxLife,
+      glowCap: cfg.glow,
+    });
+  }
+}
+
+function updateDestructionParticles(delta) {
+  for (let i = destructionParticles.length - 1; i >= 0; i--) {
+    const particle = destructionParticles[i];
+    particle.life -= delta;
+
+    if (particle.life <= 0) {
+      destructionParticles.splice(i, 1);
+      releaseParticle(particle);
+      continue;
+    }
+
+    particle.mesh.position.x += particle.vx * delta;
+    particle.mesh.position.y += particle.vy * delta;
+    particle.mesh.position.z += particle.vz * delta;
+    particle.vy -= PARTICLE_GRAVITY * delta;
+
+    const t = clamp(particle.life / particle.maxLife, 0, 1);
+    particle.mesh.scale.setScalar(Math.max(0.001, t * 1.2 * particle.baseRadius));
+    particle.mesh.material.opacity = t;
+    particle.mesh.material.emissiveIntensity = Math.min(t * 5, particle.glowCap);
+  }
+}
+
+function destroyEnemy(enemy) {
+  spawnDestructionParticles(enemy);
+
+  if (enemy.type === ENEMY_TYPE.SPLITTER) {
+    spawnSplitChildren(enemy);
+  }
+
+  const idx = enemies.indexOf(enemy);
+  if (idx !== -1) enemies.splice(idx, 1);
+  disposeEnemy(enemy);
 }
 
 export function spawnEnemiesFromSettings() {
@@ -273,12 +400,7 @@ function damageEnemy(enemy, amount) {
   }
 
   if (enemy.hp <= 0) {
-    if (enemy.type === ENEMY_TYPE.SPLITTER) {
-      spawnSplitChildren(enemy);
-    }
-    const idx = enemies.indexOf(enemy);
-    if (idx !== -1) enemies.splice(idx, 1);
-    disposeEnemy(enemy);
+    destroyEnemy(enemy);
   }
 }
 
@@ -361,7 +483,9 @@ function updateEnemyMovement(enemy, delta) {
 
   if (move.lengthSq() > 0.0001) {
     normalizeXZ(move);
-    enemy.group.position.addScaledVector(move, BASE_SPEED * speedMult * delta);
+    const configuredSpeed = Number(state.params.enemyMoveSpeed);
+    const baseSpeed = Math.max(0, Number.isFinite(configuredSpeed) ? configuredSpeed : BASE_SPEED);
+    enemy.group.position.addScaledVector(move, baseSpeed * speedMult * delta);
   }
 }
 
@@ -495,4 +619,5 @@ export function updateEnemies(delta, elapsedTime = 0) {
   }
 
   updateEnemyBullets(delta);
+  updateDestructionParticles(delta);
 }

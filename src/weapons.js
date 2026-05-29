@@ -134,7 +134,7 @@ function fireLaser() {
   _activeLasers.push(laser);
 }
 
-export function updateLaserProjectiles(delta) {
+export function updateLaserProjectiles(delta, projectileDelta = delta) {
   const p = state.params;
   applyLaserMaterials();
 
@@ -153,7 +153,7 @@ export function updateLaserProjectiles(delta) {
 
   for (let i = _activeLasers.length - 1; i >= 0; i--) {
     const laser = _activeLasers[i];
-    const step = laser.speed * delta;
+    const step = laser.speed * projectileDelta;
     laser.group.position.addScaledVector(laser.dir, step);
     laser.distance += step;
     laser.glow.visible = !!p.laserBloom;

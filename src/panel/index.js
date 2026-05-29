@@ -11,6 +11,7 @@ import {
 } from '../player.js';
 import { setFloorVisible, setGridVisible, setFloorColor, setGridColor } from '../terrain.js';
 import { spawnEnemiesFromSettings, clearEnemies } from '../enemies.js';
+import { clearGameplayInput } from '../input.js';
 
 const sidebar = document.getElementById('sidebar');
 
@@ -57,6 +58,11 @@ const PRESET_SETTINGS = [
   "playerRoughness": 0,
   "playerRadius": 0.4,
   "playerLength": 1.2,
+  "playerMaxHealth": 100,
+  "playerHealth": 100,
+  "playerMaxArmor": 100,
+  "playerArmor": 100,
+  "playerInvincible": false,
   "jumpEnabled": true,
   "jumpForce": 9.5,
   "jumpGravity": 26,
@@ -102,7 +108,28 @@ const PRESET_SETTINGS = [
   "laserBloomIntensity": 0.55,
   "laserProjectileSpeed": 80,
   "laserRange": 42,
-  "laserFireRate": 5
+  "laserFireRate": 5,
+  "enemyType": "rusher",
+  "enemyCount": 6,
+  "enemyHealth": 100,
+  "enemyInvincible": false,
+  "enemyBehavior": "rush",
+  "enemyDamage": 10,
+  "enemyPlacement": "random",
+  "enemyWeaponType": "contact",
+  "bulletTimeEnabled": true,
+  "bulletTimeDuration": 3,
+  "bulletTimeCooldown": 8,
+  "bulletTimeScale": 0.35,
+  "enemyMoveSpeed": 2.2,
+  "enemyDestructionEnabled": true,
+  "enemyDestructionStandardCount": 10,
+  "enemyDestructionStandardSize": 0.25,
+  "enemyDestructionStandardSpeed": 1,
+  "enemyDestructionEliteCount": 100,
+  "enemyDestructionEliteSize": 0.5,
+  "enemyDestructionEliteSpeed": 1.75,
+  "enemyDestructionEliteGlow": 12
 } },
   { key: 'default', label: 'Default', path: './presets/default.json', data: {
   "cameraMode": "iso",
@@ -804,9 +831,21 @@ function buildEnemies(body) {
   body.appendChild(slider({ key: 'enemyHealth', label: 'Health Amount', min: 1, max: 1000, step: 1, dec: 0 }));
   body.appendChild(toggle('Enemy Invincible', 'enemyInvincible'));
   body.appendChild(select('Behavior', 'enemyBehavior', ENEMY_BEHAVIOR_OPTIONS));
+  body.appendChild(slider({ key: 'enemyMoveSpeed', label: 'Movement Speed', min: 0, max: 12, step: 0.1, dec: 1 }));
   body.appendChild(slider({ key: 'enemyDamage', label: 'Damage Amount', min: 0, max: 250, step: 1, dec: 0 }));
   body.appendChild(select('Placement', 'enemyPlacement', ENEMY_PLACEMENT_OPTIONS));
   body.appendChild(select('Weapon Type', 'enemyWeaponType', ENEMY_WEAPON_OPTIONS));
+
+  body.appendChild(subhdr('Destruction'));
+  body.appendChild(toggle('Destruction FX', 'enemyDestructionEnabled'));
+  body.appendChild(slider({ key: 'enemyDestructionStandardCount', label: 'Standard Count', min: 0, max: 80, step: 1, dec: 0 }));
+  body.appendChild(slider({ key: 'enemyDestructionStandardSize', label: 'Standard Size', min: 0.05, max: 1.5, step: 0.05, dec: 2 }));
+  body.appendChild(slider({ key: 'enemyDestructionStandardSpeed', label: 'Standard Speed', min: 0.1, max: 5, step: 0.05, dec: 2 }));
+  body.appendChild(slider({ key: 'enemyDestructionEliteCount', label: 'Elite Count', min: 0, max: 200, step: 1, dec: 0 }));
+  body.appendChild(slider({ key: 'enemyDestructionEliteSize', label: 'Elite Size', min: 0.05, max: 2, step: 0.05, dec: 2 }));
+  body.appendChild(slider({ key: 'enemyDestructionEliteSpeed', label: 'Elite Speed', min: 0.1, max: 6, step: 0.05, dec: 2 }));
+  body.appendChild(slider({ key: 'enemyDestructionEliteGlow', label: 'Elite Glow', min: 0, max: 24, step: 0.5, dec: 1 }));
+
   body.appendChild(btn('Spawn / Apply Enemies', 'sb-btn-accent', () => {
     const count = spawnEnemiesFromSettings();
     notify(`${count} enemies spawned ✓`);
@@ -1199,11 +1238,18 @@ function updatePanelChrome() {
   }
 }
 
+function syncPauseToSidebar() {
+  state.paused = !state.panelMinimized;
+  document.body.classList.toggle('is-paused', state.paused);
+  clearGameplayInput();
+}
+
 function setPanelMinimized(minimized) {
   state.panelMinimized = minimized;
   state.panelOpen = true;
   if (sidebar) sidebar.style.display = '';
   updatePanelChrome();
+  syncPauseToSidebar();
 }
 
 export function initPanel() {
@@ -1222,6 +1268,7 @@ export function initPanel() {
   applyAllParams();
   rebuildPanel();
   updatePanelChrome();
+  syncPauseToSidebar();
 }
 
 export function togglePanel() {

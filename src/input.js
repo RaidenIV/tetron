@@ -49,6 +49,17 @@ function setPointerAimCenter() {
   state.pointerAimY = 0;
 }
 
+export function clearGameplayInput() {
+  state.keys.w = false;
+  state.keys.a = false;
+  state.keys.s = false;
+  state.keys.d = false;
+  state.keys.space = false;
+  state.primaryFire = false;
+  state.jumpQueued = false;
+  _mouseDragActive = false;
+}
+
 function updatePointerAimFromClient(clientX, clientY) {
   const rect = renderer.domElement.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
@@ -81,6 +92,11 @@ function requestMouseLook(target) {
 renderer.domElement.addEventListener('contextmenu', event => event.preventDefault());
 
 renderer.domElement.addEventListener('pointerdown', event => {
+  if (state.paused) {
+    state.primaryFire = false;
+    return;
+  }
+
   if (isViewportTarget(event.target)) {
     updatePointerAimFromClient(event.clientX, event.clientY);
   }
@@ -146,12 +162,14 @@ document.addEventListener('pointerlockchange', () => {
 });
 
 document.addEventListener('mousemove', event => {
+  if (state.paused) return;
   if (document.pointerLockElement !== renderer.domElement) return;
   setPointerAimCenter();
   applyMouseLookDelta(event.movementX || 0, event.movementY || 0);
 });
 
 document.addEventListener('mousedown', event => {
+  if (state.paused) return;
   if (document.pointerLockElement !== renderer.domElement) return;
   if (event.button === 0) state.primaryFire = true;
 });
@@ -170,11 +188,18 @@ window.addEventListener('keydown', e => {
   if (e.key === 'Tab') { e.preventDefault(); _togglePanel?.(); return; }
   if (isTypingTarget(e.target)) return;
 
+  if (state.paused) return;
+
   const k = e.key.toLowerCase();
   if (k === 'w' || k === 'arrowup')    state.keys.w = true;
   if (k === 's' || k === 'arrowdown')  state.keys.s = true;
   if (k === 'a' || k === 'arrowleft')  state.keys.a = true;
   if (k === 'd' || k === 'arrowright') state.keys.d = true;
+
+  if (k === 'q' && state.params.bulletTimeEnabled !== false) {
+    e.preventDefault();
+    if (!e.repeat) state.slowRequested = true;
+  }
 
   if (e.code === 'Space') {
     e.preventDefault();

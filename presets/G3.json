@@ -88,5 +88,18 @@
   "enemyBehavior": "rush",
   "enemyDamage": 10,
   "enemyPlacement": "random",
-  "enemyWeaponType": "contact"
+  "enemyWeaponType": "contact",
+  "bulletTimeEnabled": true,
+  "bulletTimeDuration": 3,
+  "bulletTimeCooldown": 8,
+  "bulletTimeScale": 0.35,
+  "enemyMoveSpeed": 2.2,
+  "enemyDestructionEnabled": true,
+  "enemyDestructionStandardCount": 10,
+  "enemyDestructionStandardSize": 0.25,
+  "enemyDestructionStandardSpeed": 1,
+  "enemyDestructionEliteCount": 100,
+  "enemyDestructionEliteSize": 0.5,
+  "enemyDestructionEliteSpeed": 1.75,
+  "enemyDestructionEliteGlow": 12
 }

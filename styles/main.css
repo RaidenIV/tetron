@@ -340,12 +340,12 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
 }
 .game-hud-track {
   width: 100%;
-  height: 9px;
+  height: 10px;
   margin-top: 4px;
   overflow: hidden;
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--hud-track-bg);
-  border: 1px solid var(--hud-track-border);
+  border: none;
   box-shadow: none;
 }
 .game-hud-fill {

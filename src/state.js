@@ -2,6 +2,12 @@
 export const state = {
   panelOpen: true,
   panelMinimized: false,
+  paused: true,
+  worldScale: 1.0,
+  slowCooldown: 0,
+  slowTimer: 0,
+  slowScale: 0.35,
+  slowRequested: false,
   activePreset: 'g3',
   mouseLookActive: false,
   primaryFire: false,
@@ -64,6 +70,10 @@ export const state = {
       "jumpEnabled": true,
       "jumpForce": 9.5,
       "jumpGravity": 26,
+      "bulletTimeEnabled": true,
+      "bulletTimeDuration": 3,
+      "bulletTimeCooldown": 8,
+      "bulletTimeScale": 0.35,
       "shieldVisible": false,
       "shieldColor": "#1e7bff",
       "shieldOpacity": 0.22,
@@ -112,9 +122,18 @@ export const state = {
       "enemyHealth": 100,
       "enemyInvincible": false,
       "enemyBehavior": "rush",
+      "enemyMoveSpeed": 2.2,
       "enemyDamage": 10,
       "enemyPlacement": "random",
-      "enemyWeaponType": "contact"
+      "enemyWeaponType": "contact",
+      "enemyDestructionEnabled": true,
+      "enemyDestructionStandardCount": 10,
+      "enemyDestructionStandardSize": 0.25,
+      "enemyDestructionStandardSpeed": 1,
+      "enemyDestructionEliteCount": 100,
+      "enemyDestructionEliteSize": 0.5,
+      "enemyDestructionEliteSpeed": 1.75,
+      "enemyDestructionEliteGlow": 12
   },
 };
 
