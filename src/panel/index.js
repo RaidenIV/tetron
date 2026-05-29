@@ -965,7 +965,7 @@ export function initPanel() {
   sidebar.innerHTML = `
     <div class="sb-resizer" id="sb-resizer" title="Resize sidebar" aria-hidden="true"></div>
     <div class="sb-header">
-      <span class="sb-title"><img class="sb-logo" src="https://images.squarespace-cdn.com/content/v1/681ea18dd168a935c26295bd/f173dc58-2856-4e84-b647-8cf46ca113ad/phonto-Photoroom.png?format=1000w" alt="" aria-hidden="true"></span>
+      <span class="sb-title"><img class="sb-logo" src="https://images.squarespace-cdn.com/content/v1/681ea18dd168a935c26295bd/35b10b91-05cc-4428-8a49-f63c677b4e0a/white.png?format=1000w" alt="" aria-hidden="true"></span>
       <button class="sb-close" id="sb-close-btn" title="Minimize sidebar" aria-label="Minimize sidebar">◀</button>
     </div>
     <div id="sb-body" class="sb-body"></div>
