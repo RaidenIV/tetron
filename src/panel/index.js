@@ -181,46 +181,79 @@ const HUD_FONT_STYLES = {
   system: {
     family: "'Segoe UI', system-ui, sans-serif",
     weight: 800,
+    stretch: 'normal',
+    letterSpacing: '0.24em',
+    valueLetterSpacing: '0.12em',
   },
   eurostile: {
-    family: "'Eurostile', 'Eurostile Extended', 'Microgramma D', 'Arial Narrow', sans-serif",
+    family: "'HUD Eurostile', 'Eurostile', 'Eurostile LT Std', 'Microgramma D', 'Arial Narrow', sans-serif",
     weight: 700,
+    stretch: 'expanded',
+    letterSpacing: '0.22em',
+    valueLetterSpacing: '0.1em',
   },
   fotRodinB: {
-    family: "'FOT-Rodin Pro B', 'FOT-Rodin Pro', 'Rodin Pro B', sans-serif",
+    family: "'HUD FOT-Rodin Pro B', 'FOT-Rodin ProN B', 'FOT-Rodin Pro B', 'FOT-Rodin ProN', sans-serif",
     weight: 700,
+    stretch: 'normal',
+    letterSpacing: '0.16em',
+    valueLetterSpacing: '0.08em',
   },
   fotRodinDB: {
-    family: "'FOT-Rodin Pro DB', 'FOT-Rodin Pro', 'Rodin Pro DB', sans-serif",
+    family: "'HUD FOT-Rodin Pro DB', 'FOT-Rodin ProN DB', 'FOT-Rodin Pro DB', 'FOT-Rodin ProN', sans-serif",
     weight: 800,
+    stretch: 'normal',
+    letterSpacing: '0.16em',
+    valueLetterSpacing: '0.08em',
   },
   juraBold: {
     family: "'Jura', 'Segoe UI', system-ui, sans-serif",
     weight: 700,
+    stretch: 'normal',
+    letterSpacing: '0.2em',
+    valueLetterSpacing: '0.1em',
   },
   juraMedium: {
     family: "'Jura', 'Segoe UI', system-ui, sans-serif",
     weight: 500,
+    stretch: 'normal',
+    letterSpacing: '0.2em',
+    valueLetterSpacing: '0.1em',
   },
   juraLight: {
     family: "'Jura', 'Segoe UI', system-ui, sans-serif",
     weight: 300,
+    stretch: 'normal',
+    letterSpacing: '0.2em',
+    valueLetterSpacing: '0.1em',
   },
   michroma: {
     family: "'Michroma', 'Segoe UI', system-ui, sans-serif",
     weight: 400,
+    stretch: 'normal',
+    letterSpacing: '0.12em',
+    valueLetterSpacing: '0.06em',
   },
   microgrammaD: {
-    family: "'Microgramma D', 'Microgramma', 'Eurostile', 'Arial Narrow', sans-serif",
+    family: "'HUD Microgramma D', 'Microgramma D Extended', 'Microgramma D', 'Microgramma', 'Eurostile', 'Arial Narrow', sans-serif",
     weight: 700,
+    stretch: 'expanded',
+    letterSpacing: '0.18em',
+    valueLetterSpacing: '0.08em',
   },
   square721Extended: {
-    family: "'Square 721 Extended', 'Square721 BT', 'Square 721', 'Arial Narrow', sans-serif",
+    family: "'HUD Square 721 Extended', 'Square 721 Extended', 'Square 721 Extended BT', 'Square721 BT', 'Square 721', 'Arial Narrow', sans-serif",
     weight: 700,
+    stretch: 'expanded',
+    letterSpacing: '0.2em',
+    valueLetterSpacing: '0.1em',
   },
   square721ExtendedMedium: {
-    family: "'Square 721 Extended Medium', 'Square 721 Extended', 'Square721 BT', 'Square 721', 'Arial Narrow', sans-serif",
+    family: "'HUD Square 721 Extended Medium', 'Square 721 Extended Medium', 'Square 721 Extended BT Medium', 'Square 721 Extended', 'Square721 BT', 'Square 721', 'Arial Narrow', sans-serif",
     weight: 500,
+    stretch: 'expanded',
+    letterSpacing: '0.2em',
+    valueLetterSpacing: '0.1em',
   },
 };
 
@@ -804,6 +837,9 @@ function applyHudSettings() {
     const hudFont = HUD_FONT_STYLES[p.hudFont] || HUD_FONT_STYLES.system;
     gameHudEl.style.setProperty('--hud-font-family', hudFont.family);
     gameHudEl.style.setProperty('--hud-font-weight', hudFont.weight);
+    gameHudEl.style.setProperty('--hud-font-stretch', hudFont.stretch || 'normal');
+    gameHudEl.style.setProperty('--hud-letter-spacing', hudFont.letterSpacing || '0.24em');
+    gameHudEl.style.setProperty('--hud-value-letter-spacing', hudFont.valueLetterSpacing || '0.12em');
   }
 
   const instructionsEl = document.getElementById('instructions');
