@@ -1784,12 +1784,18 @@ function clampSidebarWidth(width) {
   return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width));
 }
 
+const SIDEBAR_MINIMIZED_WIDTH = 56;
+
 function applySidebarWidth() {
   if (!sidebar) return;
-  const width = clampSidebarWidth(state.sidebarWidth || SIDEBAR_DEFAULT_WIDTH);
-  state.sidebarWidth = width;
-  sidebar.style.setProperty('--sb-width', `${width}px`);
-  document.documentElement.style.setProperty('--sb-width', `${width}px`);
+  const fullWidth = clampSidebarWidth(state.sidebarWidth || SIDEBAR_DEFAULT_WIDTH);
+  state.sidebarWidth = fullWidth;
+  // Use the actual visual width: minimized sidebar is 56px, full sidebar is state.sidebarWidth.
+  // This keeps --sb-width in sync with the real sidebar edge so positioned elements
+  // like the radar stay correctly anchored to the right of the visible sidebar.
+  const visualWidth = state.panelMinimized ? SIDEBAR_MINIMIZED_WIDTH : fullWidth;
+  sidebar.style.setProperty('--sb-width', `${fullWidth}px`);
+  document.documentElement.style.setProperty('--sb-width', `${visualWidth}px`);
 }
 
 function initSidebarResize() {
