@@ -502,6 +502,11 @@ body.is-paused * {
 /* ── Radar ──────────────────────────────────────────────────────────────────── */
 #radar-canvas {
   position: fixed;
+  /* Override the generic `canvas { top:0; left:0; width:100%; height:100% }` rule */
+  top: unset;
+  left: unset;
+  width: unset;
+  height: unset;
   bottom: 28px;
   right: calc(var(--sb-width, 320px) + 28px);
   z-index: 24;
