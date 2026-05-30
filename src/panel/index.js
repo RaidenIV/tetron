@@ -1882,34 +1882,20 @@ function applyParamObject(params) {
   );
 }
 
-async function applyPreset(key) {
+function applyPreset(key) {
   const preset = PRESET_SETTINGS.find(item => item.key === key);
   if (!preset) return;
 
-  try {
-    // Start with the complete inline data (always up to date).
-    // If the server has a newer JSON, merge it on top — but inline wins for any
-    // key the server file is missing (avoids stale deployed JSON wiping new params).
-    let presetData = { ...preset.data };
-    try {
-      const response = await fetch(preset.path, { cache: 'no-store' });
-      if (response.ok) {
-        const serverData = await response.json();
-        // Server data takes priority only for keys it actually contains.
-        presetData = { ...preset.data, ...serverData };
-      }
-    } catch {
-      // Fall back to the embedded preset so local file previews still work.
-    }
-
-    applyParamObject(presetData);
-    state.activePreset = preset.key;
-    applyAllParams();
-    rebuildPanel();
-    notify(`${preset.label} loaded ✓`);
-  } catch {
-    notify(`⚠ Could not load ${preset.label}`);
-  }
+  // Use the inline data exclusively — it is always kept in sync with the
+  // JSON files and is the authoritative source of truth for each preset.
+  // Fetching the JSON from the server was causing silent divergence: cached
+  // or stale server responses would override inline values, making preset
+  // loading behave differently from importing the same file via the file picker.
+  applyParamObject(preset.data);
+  state.activePreset = preset.key;
+  applyAllParams();
+  rebuildPanel();
+  notify(`${preset.label} loaded ✓`);
 }
 
 function notify(msg) {
