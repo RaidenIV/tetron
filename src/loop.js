@@ -12,7 +12,6 @@ import { playerGroup, updatePlayer, updateDashStreaks } from './player.js';
 import { updateLaserProjectiles, resolveAimTarget, aimResult } from './weapons.js';
 import { updateEnemies, getEnemyMeshes, tagEnemy, getEnemies } from './enemies.js';
 import { updatePlacer } from './placer.js';
-import { updatePlacer } from './placer.js';
 import { updateController } from './input.js';
 
 const clock = new THREE.Clock();
@@ -197,7 +196,6 @@ export function tick() {
   // Poll controller every frame (including paused — Options button must work).
   updateController(delta);
   updateRadar();
-  updatePlacer(delta);
   updatePlacer(delta);
 
   // Stage 1 aim resolve — runs every frame so reticle hover and firing share
