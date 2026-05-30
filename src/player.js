@@ -84,24 +84,61 @@ const shieldGroup = new THREE.Group();
 shieldGroup.name = 'PlayerHexShield';
 playerGroup.add(shieldGroup);
 
+// Shield fill — front-side only so back hemisphere doesn't render through.
+// We use a small positive depth offset so the fill sits just behind the lines.
 const shieldPanelMat = new THREE.MeshBasicMaterial({
   color: 0x1e7bff,
   transparent: true,
   opacity: 0.22,
   depthWrite: false,
-  side: THREE.DoubleSide,
+  side: THREE.FrontSide,
   blending: THREE.AdditiveBlending,
   toneMapped: false,
+  polygonOffset: true,
+  polygonOffsetFactor: 1,
+  polygonOffsetUnits: 1,
 });
 
-const shieldLineMat = new THREE.MeshBasicMaterial({
-  color: 0x1e7bff,
+// Shield lines — ShaderMaterial that fades out back-facing fragments using the
+// dot product of the surface normal with the view direction.
+// Only front-facing normals (dot > 0) remain visible, eliminating the rear
+// hemisphere lines that created the overlapping diamond pattern.
+const shieldLineMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uColor:   { value: new THREE.Color(0x1e7bff) },
+    uOpacity: { value: 0.72 },
+    uEdgeFade: { value: 0.15 }, // fraction of sphere edge to fade at silhouette
+  },
+  vertexShader: /* glsl */\`
+    varying vec3 vNormal;
+    varying vec3 vViewDir;
+    void main() {
+      vec4 worldPos = modelMatrix * vec4(position, 1.0);
+      vNormal  = normalize(normalMatrix * normal);
+      vViewDir = normalize(cameraPosition - worldPos.xyz);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  \`,
+  fragmentShader: /* glsl */\`
+    uniform vec3  uColor;
+    uniform float uOpacity;
+    uniform float uEdgeFade;
+    varying vec3 vNormal;
+    varying vec3 vViewDir;
+    void main() {
+      float ndotv = dot(normalize(vNormal), normalize(vViewDir));
+      // Discard back-facing fragments entirely
+      if (ndotv <= 0.0) discard;
+      // Soft fade at grazing angles (silhouette edge)
+      float alpha = uOpacity * smoothstep(0.0, uEdgeFade, ndotv);
+      gl_FragColor = vec4(uColor * alpha, alpha);
+    }
+  \`,
   transparent: true,
-  opacity: 0.72,
   depthWrite: false,
-  side: THREE.DoubleSide,
   blending: THREE.AdditiveBlending,
   toneMapped: false,
+  side: THREE.FrontSide,
   polygonOffset: true,
   polygonOffsetFactor: -1,
   polygonOffsetUnits: -1,
@@ -112,7 +149,7 @@ const shieldGlowMat = new THREE.MeshBasicMaterial({
   transparent: true,
   opacity: 0.08,
   depthWrite: false,
-  side: THREE.DoubleSide,
+  side: THREE.FrontSide,
   blending: THREE.AdditiveBlending,
   toneMapped: false,
 });
@@ -122,7 +159,7 @@ const shieldBloomMat = new THREE.MeshBasicMaterial({
   transparent: true,
   opacity: 0.0,
   depthWrite: false,
-  side: THREE.DoubleSide,
+  side: THREE.FrontSide,
   blending: THREE.AdditiveBlending,
   toneMapped: false,
 });
@@ -336,8 +373,10 @@ export function applyShieldSettings() {
   shieldPanelMat.opacity = opacity;
   shieldPanelMat.needsUpdate = true;
 
-  shieldLineMat.color.set(color);
-  shieldLineMat.opacity = glowEnabled ? Math.min(1, opacity * 3.2) : Math.min(1, opacity * 1.9);
+  shieldLineMat.uniforms.uColor.value.set(color);
+  shieldLineMat.uniforms.uOpacity.value = glowEnabled
+    ? Math.min(1, opacity * 3.2)
+    : Math.min(1, opacity * 1.9);
   shieldLineMat.needsUpdate = true;
 
   shieldGlowMat.color.set(color);
