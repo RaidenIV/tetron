@@ -141,5 +141,6 @@
   "radarOpacity": 0.82,
   "shieldBloomIntensity": 0.12,
   "shieldBloomRadius": 1.18,
-  "shieldFresnelPower": 3.0
+  "shieldFresnelPower": 3.0,
+  "radarTaggedColor": "#ffee44"
 }

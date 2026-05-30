@@ -517,3 +517,40 @@ body.is-paused * {
   box-shadow: 0 0 8px rgba(0,0,0,0.6);
 }
 
+/* ── 1920×1200 (16:10) display optimizations ─────────────────────────────── */
+/* Target screens that are at least 1900px wide AND 1150px tall.              */
+/* This hits 1920×1200 without affecting standard 1920×1080 (16:9) displays. */
+@media (min-width: 1900px) and (min-height: 1150px) {
+  :root {
+    --sb-width: 360px;
+    --sb-label-w: 148px;
+  }
+
+  /* HUD — more breathing room at the bottom */
+  #game-hud {
+    bottom: 38px;
+    left: 26px;
+  }
+
+  .game-hud-content { width: 240px; }
+
+  .game-hud-label,
+  .game-hud-value { font-size: 13px; }
+
+  .game-hud-track { height: 11px; margin-top: 5px; }
+
+  /* Radar — stays bottom-right, slightly more padding */
+  #radar-canvas {
+    bottom: 38px;
+  }
+
+  /* Sidebar body — more comfortable padding */
+  .sb-section-body { padding: 8px 12px 12px; }
+
+  /* Pause overlay — nudge up a touch for taller screen */
+  #pause-overlay { padding-top: 27vh; }
+
+  /* Instructions — more bottom breathing room */
+  #instructions { bottom: 20px; }
+}
+

@@ -18,6 +18,27 @@ const clock = new THREE.Clock();
 const _radarCanvas = document.getElementById('radar-canvas');
 const _radarCtx = _radarCanvas ? _radarCanvas.getContext('2d') : null;
 
+// Tag icon path for canvas (from tag.svg, viewBox 0 -960 960 960, upside-down triangle)
+// Pre-built as Path2D for performance. The SVG coords are in 960-unit space.
+const _tagIconPath = new Path2D(
+  'M228-212q-18 0-26-15.5t1-30.5l252-403q9-14 25-14t25 14l252 403q9 15 1 30.5T732-212H228Z'
+);
+// Centre of the SVG triangle in its own coordinate space
+const _tagIconCx = 480, _tagIconCy = -431, _tagIconW = 504, _tagIconH = 438;
+
+function drawTagIcon(ctx, x, y, iconSize, color) {
+  const sc = iconSize / Math.max(_tagIconW, _tagIconH);
+  ctx.save();
+  // Rotate 180deg (upside-down = pointing down toward enemy)
+  ctx.translate(x, y);
+  ctx.rotate(Math.PI);
+  ctx.scale(sc, sc);
+  ctx.translate(-_tagIconCx, -_tagIconCy);
+  ctx.fillStyle = color;
+  ctx.fill(_tagIconPath);
+  ctx.restore();
+}
+
 function updateRadar() {
   if (!_radarCtx || !_radarCanvas) return;
   const p = state.params;
@@ -28,9 +49,10 @@ function updateRadar() {
   const radius = Math.max(20, Number(p.radarRadius) || 60);
   const range  = Math.max(1,  Number(p.radarRange)  || 60);
   const size   = radius * 2;
-  const opacity = Math.max(0, Math.min(1, Number(p.radarOpacity) ?? 0.82));
-  const bgColor     = p.radarBgColor     || '#0a1628';
-  const enemyColor  = p.radarEnemyColor  || '#ff3030';
+  const opacity    = Math.max(0, Math.min(1, Number(p.radarOpacity) ?? 0.82));
+  const bgColor    = p.radarBgColor      || '#0a1628';
+  const enemyColor = p.radarEnemyColor   || '#ff3030';
+  const tagColor   = p.radarTaggedColor  || '#ffee44';
 
   // Resize canvas if needed
   if (_radarCanvas.width !== size || _radarCanvas.height !== size) {
@@ -55,32 +77,14 @@ function updateRadar() {
   ctx.fillStyle = bgColor;
   ctx.fillRect(0, 0, size, size);
 
-  // Concentric rings
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-  ctx.lineWidth = 1;
-  for (let r = radius * 0.33; r < radius; r += radius * 0.33) {
-    ctx.beginPath();
-    ctx.arc(radius, radius, r, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  // Cross hairs
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-  ctx.beginPath();
-  ctx.moveTo(radius, 0); ctx.lineTo(radius, size);
-  ctx.moveTo(0, radius); ctx.lineTo(size, radius);
-  ctx.stroke();
-
-  // Player dot (centre)
+  // Player dot (centre) — no rings or crosshairs
   ctx.fillStyle = '#4daaff';
   ctx.beginPath();
   ctx.arc(radius, radius, 3.5, 0, Math.PI * 2);
   ctx.fill();
 
-  // Get camera yaw for rotation (north = camera forward)
+  // Camera yaw for rotation (camera forward = up on radar)
   const camAzimuth = state.params.thirdAzimuth || 0;
-
-  // Enemy dots
   const px = playerGroup.position.x;
   const pz = playerGroup.position.z;
 
@@ -91,25 +95,20 @@ function updateRadar() {
     const dist = Math.hypot(dx, dz);
     if (dist > range) continue;
 
-    // Rotate relative to camera azimuth so forward is always up
     const angle = Math.atan2(dx, dz) - camAzimuth;
-    const scale = (dist / range) * (radius - 4);
-    const ex = radius + Math.sin(angle) * scale;
-    const ey = radius - Math.cos(angle) * scale;
+    const sc = (dist / range) * (radius - 6);
+    const ex = radius + Math.sin(angle) * sc;
+    const ey = radius - Math.cos(angle) * sc;
 
-    const dotR = enemy.tagged ? 4 : 2.5;
-    ctx.fillStyle = enemy.tagged ? '#ffee44' : enemyColor;
-    ctx.beginPath();
-    ctx.arc(ex, ey, dotR, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Ring for tagged enemies
     if (enemy.tagged) {
-      ctx.strokeStyle = '#ffee44';
-      ctx.lineWidth = 1;
+      // Tagged: draw the tag icon (upside-down triangle pointing at enemy)
+      drawTagIcon(ctx, ex, ey, 10, tagColor);
+    } else {
+      // Untagged: simple red blip
+      ctx.fillStyle = enemyColor;
       ctx.beginPath();
-      ctx.arc(ex, ey, dotR + 2, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.arc(ex, ey, 2.5, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 

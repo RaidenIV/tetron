@@ -169,6 +169,7 @@ export const state = {
       "radarBgColor": "#0a1628",
       "radarEnemyColor": "#ff3030",
       "radarOpacity": 0.82,
+      "radarTaggedColor": "#ffee44",
 
       // Sound
       "soundMuted": false,

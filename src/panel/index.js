@@ -174,7 +174,8 @@ const PRESET_SETTINGS = [
   "soundSfx_levelup": 1,
   "soundSfx_gameover": 1,
   "soundSfx_victory": 1,
-  "soundSfx_ambience": 0.5
+  "soundSfx_ambience": 0.5,
+  "radarTaggedColor": "#ffee44",
 } },
   { key: 'g4', label: 'G4', path: './presets/G4.json', data: {
   "cameraMode": "third2",
@@ -320,6 +321,7 @@ const PRESET_SETTINGS = [
   "shieldBloomIntensity": 0.12,
   "shieldBloomRadius": 1.18,
   "shieldFresnelPower": 3.0,
+  "radarTaggedColor": "#ffee44",
 } },
   { key: 'g3', label: 'G3', path: './presets/G3.json', data: {
   "cameraMode": "third2",
@@ -470,6 +472,7 @@ const PRESET_SETTINGS = [
   "shieldBloomIntensity": 0.12,
   "shieldBloomRadius": 1.18,
   "shieldFresnelPower": 3.0,
+  "radarTaggedColor": "#ffee44",
 } },
   { key: 'default', label: 'Default', path: './presets/default.json', data: {
   "cameraMode": "iso",
@@ -1213,6 +1216,7 @@ function buildHUD(body) {
   body.appendChild(slider({ key: 'radarRange', label: 'World Range', min: 10, max: 200, step: 1, dec: 0 }));
   body.appendChild(colorPicker('Radar BG', 'radarBgColor'));
   body.appendChild(colorPicker('Enemy Dot', 'radarEnemyColor'));
+  body.appendChild(colorPicker('Tagged Icon', 'radarTaggedColor'));
   body.appendChild(slider({ key: 'radarOpacity', label: 'Opacity', min: 0, max: 1, step: 0.05, dec: 2 }));
 }
 

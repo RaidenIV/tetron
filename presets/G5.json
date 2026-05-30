@@ -141,5 +141,6 @@
   "soundSfx_levelup": 1,
   "soundSfx_gameover": 1,
   "soundSfx_victory": 1,
-  "soundSfx_ambience": 0.5
+  "soundSfx_ambience": 0.5,
+  "radarTaggedColor": "#ffee44"
 }
