@@ -408,7 +408,7 @@ function makeEnemyMaterial(def) {
 }
 
 // ── MGSV-style tag marker — hidden until the player tags the enemy ────────────
-const TAG_DWELL_SECONDS = 1.2; // seconds of continuous aim needed to tag
+export const TAG_DWELL_SECONDS = 1.2; // seconds of continuous aim needed to tag
 
 function makeTagMarker(enemy) {
   const el = document.createElement('div');
