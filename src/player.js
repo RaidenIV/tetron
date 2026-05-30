@@ -109,7 +109,7 @@ const shieldLineMat = new THREE.ShaderMaterial({
     uOpacity: { value: 0.72 },
     uEdgeFade: { value: 0.15 }, // fraction of sphere edge to fade at silhouette
   },
-  vertexShader: /* glsl */\`
+  vertexShader: /* glsl */`
     varying vec3 vNormal;
     varying vec3 vViewDir;
     void main() {
@@ -118,8 +118,8 @@ const shieldLineMat = new THREE.ShaderMaterial({
       vViewDir = normalize(cameraPosition - worldPos.xyz);
       gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }
-  \`,
-  fragmentShader: /* glsl */\`
+  `,
+  fragmentShader: /* glsl */`
     uniform vec3  uColor;
     uniform float uOpacity;
     uniform float uEdgeFade;
@@ -133,7 +133,7 @@ const shieldLineMat = new THREE.ShaderMaterial({
       float alpha = uOpacity * smoothstep(0.0, uEdgeFade, ndotv);
       gl_FragColor = vec4(uColor * alpha, alpha);
     }
-  \`,
+  `,
   transparent: true,
   depthWrite: false,
   blending: THREE.AdditiveBlending,
