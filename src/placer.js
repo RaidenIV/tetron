@@ -1,5 +1,5 @@
 // src/placer.js
-// Object placer system: ghost preview, grid-snapping, place-on-fire, F-key modal.
+// Object placer system: ghost preview, footprint-aware grid-snapping, placement.
 // Slot 0 = laser, Slot 1 = placer. Scroll wheel switches slots.
 // R key rotates ghost 90°. Placed objects store rotation in serialised state.
 
@@ -37,32 +37,90 @@ function makeGeo(assetId) {
   return (_geoFactories[assetId] || _geoFactories.box)();
 }
 
-// ── Grid helpers ──────────────────────────────────────────────────────────────
-// Snap to cell CENTRE: each cell is 1×1, centred at (n+0.5, m+0.5).
-// Math.floor(v) + 0.5 always lands in the centre of whichever cell v falls in.
-function snapToCell(v) {
-  return Math.floor(v) + 0.5;
+function getAsset(id) {
+  return ASSET_CATALOGUE.find(a => a.id === id) || ASSET_CATALOGUE[0];
 }
 
-// Unique cell key for collision detection
-function cellKey(x, z) {
-  return `${Math.floor(x)},${Math.floor(z)}`;
+// ── Footprint-aware grid snapping ─────────────────────────────────────────────
+// Each asset has a footprintW × footprintH base measured in grid cells.
+// Rotation (multiples of π/2) swaps W↔H for odd rotations.
+//
+// Snapping rule:
+//   • Odd footprint dimension (1 cell wide) → snap origin to cell centre: floor(v)+0.5
+//   • Even footprint dimension (e.g. 4 cells wide) → snap origin to grid line
+//     multiple of W: round(v/W)*W  so base edges land exactly on grid lines
+//
+// This places the object's centre at the midpoint of its W×H cell block, with
+// all base edges flush with grid lines.
+
+function snapAxis(v, footprintDim) {
+  if (footprintDim % 2 === 1) {
+    // Odd-width: centre inside the middle cell
+    return Math.floor(v) + 0.5;
+  } else {
+    // Even-width: align to multiples of footprintDim
+    return Math.round(v / footprintDim) * footprintDim;
+  }
 }
 
-function isCellOccupied(cx, cz) {
-  const key = cellKey(cx, cz);
+function getEffectiveFootprint(assetId, ry) {
+  const asset = getAsset(assetId);
+  const fw = asset.footprintW ?? 1;
+  const fh = asset.footprintH ?? 1;
+  // 90° or 270° rotation swaps X and Z footprint dimensions
+  const rotSteps = Math.round(((ry % (Math.PI * 2)) + Math.PI * 2) / (Math.PI / 2)) % 4;
+  if (rotSteps === 1 || rotSteps === 3) return { fw: fh, fh: fw };
+  return { fw, fh };
+}
+
+function snapToFootprint(worldX, worldZ, assetId, ry) {
+  const { fw, fh } = getEffectiveFootprint(assetId, ry);
+  return {
+    sx: snapAxis(worldX, fw),
+    sz: snapAxis(worldZ, fh),
+    fw, fh,
+  };
+}
+
+// ── Footprint collision cells ─────────────────────────────────────────────────
+// Returns array of integer cell keys covered by an object at (cx, cz) with footprint fw×fh.
+// Origin (cx, cz) is the centre of the footprint block.
+function footprintCells(cx, cz, fw, fh) {
+  const cells = [];
+  // Number of cells on each side of origin
+  const halfW = fw / 2;
+  const halfH = fh / 2;
+  for (let dx = 0; dx < fw; dx++) {
+    for (let dz = 0; dz < fh; dz++) {
+      const cellX = Math.floor(cx - halfW + dx);
+      const cellZ = Math.floor(cz - halfH + dz);
+      cells.push(`${cellX},${cellZ}`);
+    }
+  }
+  return cells;
+}
+
+function isFootprintOccupied(sx, sz, fw, fh) {
+  const newCells = new Set(footprintCells(sx, sz, fw, fh));
   const list = state.params.placedObjects || [];
-  return list.some(obj => cellKey(obj.x, obj.z) === key);
+  for (const obj of list) {
+    const asset = getAsset(obj.assetId);
+    const { fw: ofw, fh: ofh } = getEffectiveFootprint(obj.assetId, obj.ry ?? 0);
+    for (const cell of footprintCells(obj.x, obj.z, ofw, ofh)) {
+      if (newCells.has(cell)) return true;
+    }
+  }
+  return false;
 }
 
-// ── Ghost preview mesh ─────────────────────────────────────────────────────────
+// ── Ghost preview materials ────────────────────────────────────────────────────
 const _ghostMat = new THREE.MeshBasicMaterial({
   color: 0x44aaff, transparent: true, opacity: 0.45,
-  depthWrite: false, wireframe: false,
+  depthWrite: false,
 });
 const _ghostBlockedMat = new THREE.MeshBasicMaterial({
   color: 0xff4444, transparent: true, opacity: 0.45,
-  depthWrite: false, wireframe: false,
+  depthWrite: false,
 });
 const _ghostWireMat = new THREE.MeshBasicMaterial({
   color: 0x88ddff, transparent: true, opacity: 0.8,
@@ -76,10 +134,6 @@ const _floorPlane   = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const _raycaster    = new THREE.Raycaster();
 const _ndc          = new THREE.Vector2(0, 0);
 const _hitPoint     = new THREE.Vector3();
-
-function getAsset(id) {
-  return ASSET_CATALOGUE.find(a => a.id === id) || ASSET_CATALOGUE[0];
-}
 
 function rebuildGhost(assetId) {
   if (_ghostMesh) { scene.remove(_ghostMesh); _ghostMesh.geometry.dispose(); _ghostMesh = null; }
@@ -118,7 +172,7 @@ export function rebuildPlacedObjects() {
     const asset = getAsset(obj.assetId);
     const mesh  = new THREE.Mesh(makeGeo(asset.id), materialForAsset(asset));
     mesh.position.set(obj.x, obj.y, obj.z);
-    mesh.rotation.y = obj.ry ?? 0;
+    mesh.rotation.y    = obj.ry ?? 0;
     mesh.castShadow    = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
@@ -180,6 +234,9 @@ export function updatePlacer() {
   const placerOn = slot === 1;
   const assetId  = state.params.placerSelectedAsset || 'box';
 
+  // ADS is disabled while placer is active
+  if (placerOn) state.isAiming = false;
+
   // Slot HUD
   const slotEl = getSlotEl();
   slotEl.style.display = state.paused ? 'none' : '';
@@ -212,22 +269,20 @@ export function updatePlacer() {
   const hit = _raycaster.ray.intersectPlane(_floorPlane, _hitPoint);
 
   if (hit) {
-    const asset  = getAsset(assetId);
-    const yOff   = asset.yOffset ?? 0.5;
-    // Snap to cell centre (not vertex)
-    const sx = snapToCell(_hitPoint.x);
-    const sz = snapToCell(_hitPoint.z);
+    const asset = getAsset(assetId);
+    const yOff  = asset.yOffset ?? 0.5;
+
+    // Footprint-aware snap: aligns base edges to grid lines
+    const { sx, sz, fw, fh } = snapToFootprint(_hitPoint.x, _hitPoint.z, assetId, ry);
 
     _ghostMesh.position.set(sx, yOff, sz);
     _ghostWire.position.copy(_ghostMesh.position);
 
-    // Red ghost when cell is occupied
-    const occupied = isCellOccupied(sx, sz);
+    const occupied = isFootprintOccupied(sx, sz, fw, fh);
     _ghostMesh.material = occupied ? _ghostBlockedMat : _ghostMat;
     _ghostMesh.visible  = true;
     _ghostWire.visible  = true;
 
-    // Place on fire edge-trigger, only if cell is free
     if (state.primaryFire && !_firePrev && !occupied) {
       placeObject(sx, sz);
     }

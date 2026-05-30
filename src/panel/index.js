@@ -2578,6 +2578,7 @@ export function initPanel() {
       'display:none', 'position:fixed', 'inset:0', 'z-index:200',
       'align-items:center', 'justify-content:center',
       'background:rgba(0,0,0,0.65)', 'backdrop-filter:blur(4px)',
+      'cursor:default',
     ].join(';');
 
     const box = document.createElement('div');
