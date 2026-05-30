@@ -28,11 +28,11 @@ const _geoFactories = {
     ]);
     g.setAttribute('position', new THREE.BufferAttribute(v, 3));
     g.setIndex([
-      0, 3, 1,  0, 2, 3,       // bottom
-      0, 1, 5,  0, 5, 4,       // sloped walkable face
-      0, 4, 2,                 // left triangular side
-      1, 3, 5,                 // right triangular side
-      2, 4, 5,  2, 5, 3,       // high vertical face
+      0, 1, 3,  0, 3, 2,       // bottom (faces downward; avoids floor z-fighting)
+      0, 5, 1,  0, 4, 5,       // sloped walkable face (faces upward)
+      0, 2, 4,                 // left triangular side
+      1, 5, 3,                 // right triangular side
+      2, 3, 5,  2, 5, 4,       // high vertical face
     ]);
     g.computeVertexNormals();
     return g;

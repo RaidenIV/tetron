@@ -322,5 +322,7 @@
   "placerScaleX": 1,
   "placerScaleY": 1,
   "placerScaleZ": 1,
-  "placerRotationDeg": 0
+  "placerRotationDeg": 0,
+  "placerTransformModalX": 22,
+  "placerTransformModalY": 22
 }

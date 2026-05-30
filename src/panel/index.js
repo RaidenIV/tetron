@@ -359,7 +359,9 @@ const PRESET_SETTINGS = [
   "placerScaleX": 1,
   "placerScaleY": 1,
   "placerScaleZ": 1,
-  "placerRotationDeg": 0
+  "placerRotationDeg": 0,
+  "placerTransformModalX": 22,
+  "placerTransformModalY": 22
 } },
   { key: 'g9', label: 'G9', path: './presets/G9.json', data: {
   "cameraMode": "third2",
@@ -2761,6 +2763,9 @@ function applyAllParams() {
   p.placerScaleX = snapScale(p.placerScaleX);
   p.placerScaleY = snapScale(p.placerScaleY);
   p.placerScaleZ = snapScale(p.placerScaleZ);
+  const modalCoord = value => Math.max(22, Math.round(Number(value) || 22));
+  p.placerTransformModalX = modalCoord(p.placerTransformModalX);
+  p.placerTransformModalY = modalCoord(p.placerTransformModalY);
   state.placerRotation = THREE.MathUtils.degToRad(rotationDeg);
   applyHudSettings();
   applyTagSettings();
@@ -3007,11 +3012,11 @@ export function initPanel() {
     modal.id = 'placer-transform-modal';
     modal.style.cssText = [
       'display:none', 'position:fixed', 'inset:0', 'z-index:201',
-      'align-items:center', 'justify-content:center',
       'background:rgba(0,0,0,0.65)', 'backdrop-filter:blur(4px)',
       'cursor:default',
     ].join(';');
 
+    const MODAL_PADDING = 22;
     const clampScale = value => Math.min(6, Math.max(0.5, Math.round((Number(value) || 1) * 2) / 2));
     const normalizeDeg = value => ((Math.round((Number(value) || 0) / 90) * 90) % 360 + 360) % 360;
     const syncRotation = deg => {
@@ -3019,6 +3024,25 @@ export function initPanel() {
       state.params.placerRotationDeg = normalized;
       state.placerRotation = THREE.MathUtils.degToRad(normalized);
       return normalized;
+    };
+    const clampModalPosition = (x, y) => {
+      const boxWidth = box?.offsetWidth || 460;
+      const boxHeight = box?.offsetHeight || 320;
+      const maxX = Math.max(MODAL_PADDING, window.innerWidth - boxWidth - MODAL_PADDING);
+      const maxY = Math.max(MODAL_PADDING, window.innerHeight - boxHeight - MODAL_PADDING);
+      return {
+        x: Math.min(maxX, Math.max(MODAL_PADDING, Number(x) || MODAL_PADDING)),
+        y: Math.min(maxY, Math.max(MODAL_PADDING, Number(y) || MODAL_PADDING)),
+      };
+    };
+    const setModalPosition = (x, y, persist = true) => {
+      const pos = clampModalPosition(x, y);
+      box.style.left = `${pos.x}px`;
+      box.style.top = `${pos.y}px`;
+      if (persist) {
+        state.params.placerTransformModalX = Math.round(pos.x);
+        state.params.placerTransformModalY = Math.round(pos.y);
+      }
     };
 
     const openModal = () => {
@@ -3028,7 +3052,14 @@ export function initPanel() {
       document.exitPointerLock?.();
       document.body.classList.remove('third-person-mouse-look');
       syncFields();
-      modal.style.display = 'flex';
+      modal.style.display = 'block';
+      requestAnimationFrame(() => {
+        setModalPosition(
+          state.params.placerTransformModalX ?? MODAL_PADDING,
+          state.params.placerTransformModalY ?? MODAL_PADDING,
+          true
+        );
+      });
     };
     const closeModal = () => {
       state.secondaryFire = false;
@@ -3039,15 +3070,49 @@ export function initPanel() {
 
     const box = document.createElement('div');
     box.style.cssText = [
+      'position:absolute', `left:${MODAL_PADDING}px`, `top:${MODAL_PADDING}px`,
       'background:#0d1117', 'border:1px solid #21262d', 'border-radius:10px',
-      'padding:20px', 'max-width:460px', 'width:90%',
+      'padding:20px', 'max-width:460px', 'width:min(90vw,460px)',
+      'box-sizing:border-box', 'box-shadow:0 18px 42px rgba(0,0,0,0.35)',
       'font-family:var(--hud-font-family,system-ui)', 'color:#c9d1d9',
     ].join(';');
 
     const title = document.createElement('div');
     title.textContent = 'SHAPE TRANSFORM';
-    title.style.cssText = 'font-size:11px;font-weight:700;letter-spacing:0.18em;color:#58a6ff;margin-bottom:14px;';
+    title.style.cssText = 'font-size:11px;font-weight:700;letter-spacing:0.18em;color:#58a6ff;margin-bottom:14px;cursor:move;user-select:none;';
     box.appendChild(title);
+
+    let draggingTransformModal = false;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+    title.addEventListener('pointerdown', event => {
+      if (event.button !== 0) return;
+      draggingTransformModal = true;
+      dragOffsetX = event.clientX - box.offsetLeft;
+      dragOffsetY = event.clientY - box.offsetTop;
+      title.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+    });
+    title.addEventListener('pointermove', event => {
+      if (!draggingTransformModal) return;
+      setModalPosition(event.clientX - dragOffsetX, event.clientY - dragOffsetY, true);
+    });
+    title.addEventListener('pointerup', event => {
+      draggingTransformModal = false;
+      title.releasePointerCapture?.(event.pointerId);
+    });
+    title.addEventListener('pointercancel', event => {
+      draggingTransformModal = false;
+      title.releasePointerCapture?.(event.pointerId);
+    });
+    window.addEventListener('resize', () => {
+      if (modal.style.display === 'none') return;
+      setModalPosition(
+        state.params.placerTransformModalX ?? MODAL_PADDING,
+        state.params.placerTransformModalY ?? MODAL_PADDING,
+        true
+      );
+    });
 
     const hint = document.createElement('div');
     hint.textContent = 'Resize and rotate the next object placed.';
