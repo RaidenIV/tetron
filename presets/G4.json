@@ -142,5 +142,10 @@
   "shieldBloomIntensity": 0.12,
   "shieldBloomRadius": 1.18,
   "shieldFresnelPower": 3.0,
-  "radarTaggedColor": "#ffee44"
+  "radarTaggedColor": "#ffee44",
+  "aimEnabled": true,
+  "aimFovDelta": -18,
+  "aimDistDelta": -1.5,
+  "aimSpeedMult": 0.55,
+  "aimSmooth": 10
 }

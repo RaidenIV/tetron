@@ -58,6 +58,7 @@ export function clearGameplayInput() {
   state.keys.space = false;
   state.primaryFire = false;
   state.jumpQueued = false;
+  state.isAiming = false;
   _mouseDragActive = false;
   // clear analogue controller axes
   state.controllerMoveX = 0;
@@ -109,6 +110,11 @@ renderer.domElement.addEventListener('pointerdown', event => {
     state.primaryFire = true;
   }
 
+  // Right-click on viewport → enter aim (ADS) mode
+  if (event.button === 2 && isViewportTarget(event.target) && state.params.aimEnabled !== false) {
+    state.isAiming = true;
+  }
+
   if (!canUseMouseLook(event.target)) return;
   if (event.button !== 0 && event.button !== 2) return;
 
@@ -138,6 +144,9 @@ window.addEventListener('pointermove', event => {
 function stopMouseDrag(event) {
   if (!event || event.button === 0) {
     state.primaryFire = false;
+  }
+  if (!event || event.button === 2) {
+    state.isAiming = false;
   }
 
   _mouseDragActive = false;
@@ -212,6 +221,11 @@ window.addEventListener('keydown', e => {
     if (!e.repeat && state.params.jumpEnabled) {
       state.jumpQueued = true;
     }
+  }
+
+  // V key → shoulder swap (flip lateral camera offset)
+  if (k === 'v' && !e.repeat) {
+    state.params.thirdOffsetX = -(state.params.thirdOffsetX || 1.25);
   }
 
   if (e.key === 'Shift' && state.params.dashEnabled) {
@@ -364,7 +378,6 @@ export function updateController(delta) {
   }
 
   // ── R2 / R1 → primary fire ─────────────────────────────────────────────────
-  // R2 (axis-style trigger on some browsers) at index 6; also check R1 (5).
   const r2Value = pad.buttons[7]?.value ?? 0;
   const r1Value = pad.buttons[5]?.value ?? 0;
   const firePressed = r2Value >= fireThresh || r1Value >= fireThresh;
@@ -372,6 +385,10 @@ export function updateController(delta) {
     rumble(pad, 0, 0.25, 60);
   }
   state.primaryFire = firePressed;
+
+  // ── L2 (button 6) → aim (ADS) mode ──────────────────────────────────────
+  const l2Value = pad.buttons[6]?.value ?? 0;
+  state.isAiming = state.params.aimEnabled !== false && l2Value >= fireThresh;
 
   // ── Cross (0) → jump ───────────────────────────────────────────────────────
   if (pressed(0)) {

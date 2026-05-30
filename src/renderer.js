@@ -116,6 +116,9 @@ export function getThirdPitchRange() {
   return { min, max: Math.max(max, min + 0.05) };
 }
 
+// ── Aim (ADS) camera state ────────────────────────────────────────────────────
+let _aimBlend = 0; // 0 = hip, 1 = full ADS — smoothly interpolated each frame
+
 export function updateThirdCamera(playerPos, delta) {
   const p = state.params;
   const az = Number(p.thirdAzimuth) || 0;
@@ -220,9 +223,26 @@ export function updateThirdCamera(playerPos, delta) {
   thirdCamera.position.set(state._camPos.x, state._camPos.y, state._camPos.z);
   thirdCamera.lookAt(state._camTarget.x, state._camTarget.y, state._camTarget.z);
 
-  // sync FOV from params
-  if (thirdCamera.fov !== p.thirdFov) {
-    thirdCamera.fov = p.thirdFov;
+  // ── ADS (aim-down-sights) blend ──────────────────────────────────────────
+  // Smoothly zoom FOV and pull camera closer when state.isAiming is true.
+  const aimEnabled = state.params.aimEnabled !== false;
+  const aimTarget  = aimEnabled && state.isAiming ? 1 : 0;
+  const aimSmooth  = Math.min(1, (Number(state.params.aimSmooth) || 10) * delta);
+  _aimBlend += (aimTarget - _aimBlend) * aimSmooth;
+
+  const aimFovDelta  = Number(state.params.aimFovDelta)  || -18;
+  const aimDistDelta = Number(state.params.aimDistDelta) || -1.5;
+  const targetFov = (Number(p.thirdFov) || 62) + aimFovDelta  * _aimBlend;
+  const aimDistOff = aimDistDelta * _aimBlend;
+
+  // Apply ADS camera pull-in along the current view direction
+  if (aimDistOff !== 0) {
+    const fwd = thirdCamera.getWorldDirection(new THREE.Vector3());
+    thirdCamera.position.addScaledVector(fwd, -aimDistOff);
+  }
+
+  if (thirdCamera.fov !== targetFov) {
+    thirdCamera.fov = targetFov;
     thirdCamera.updateProjectionMatrix();
   }
 }

@@ -176,6 +176,11 @@ const PRESET_SETTINGS = [
   "soundSfx_victory": 1,
   "soundSfx_ambience": 0.5,
   "radarTaggedColor": "#ffee44",
+  "aimDistDelta": -1.5,
+  "aimEnabled": true,
+  "aimFovDelta": -18,
+  "aimSmooth": 10,
+  "aimSpeedMult": 0.55,
 } },
   { key: 'g4', label: 'G4', path: './presets/G4.json', data: {
   "cameraMode": "third2",
@@ -322,6 +327,11 @@ const PRESET_SETTINGS = [
   "shieldBloomRadius": 1.18,
   "shieldFresnelPower": 3.0,
   "radarTaggedColor": "#ffee44",
+  "aimDistDelta": -1.5,
+  "aimEnabled": true,
+  "aimFovDelta": -18,
+  "aimSmooth": 10,
+  "aimSpeedMult": 0.55,
 } },
   { key: 'g3', label: 'G3', path: './presets/G3.json', data: {
   "cameraMode": "third2",
@@ -473,6 +483,11 @@ const PRESET_SETTINGS = [
   "shieldBloomRadius": 1.18,
   "shieldFresnelPower": 3.0,
   "radarTaggedColor": "#ffee44",
+  "aimDistDelta": -1.5,
+  "aimEnabled": true,
+  "aimFovDelta": -18,
+  "aimSmooth": 10,
+  "aimSpeedMult": 0.55,
 } },
   { key: 'default', label: 'Default', path: './presets/default.json', data: {
   "cameraMode": "iso",
@@ -1036,6 +1051,13 @@ function buildCamera(body) {
   thirdGroup.appendChild(slider({
     key: 'thirdPitch', label: 'Pitch', min: -1.1, max: 1.1, step: 0.01, dec: 2,
   }));
+
+  thirdGroup.appendChild(subhdr('Aim (ADS)'));
+  thirdGroup.appendChild(toggle('ADS Enabled', 'aimEnabled'));
+  thirdGroup.appendChild(slider({ key: 'aimFovDelta',  label: 'FOV Zoom',      min: -40, max: 0,   step: 1,    dec: 0 }));
+  thirdGroup.appendChild(slider({ key: 'aimDistDelta', label: 'Dist. Pull-in', min: -6,  max: 0,   step: 0.25, dec: 2 }));
+  thirdGroup.appendChild(slider({ key: 'aimSpeedMult', label: 'Speed Mult.',   min: 0.1, max: 1,   step: 0.05, dec: 2 }));
+  thirdGroup.appendChild(slider({ key: 'aimSmooth',    label: 'Zoom Smooth',   min: 1,   max: 30,  step: 0.5,  dec: 1 }));
 
   thirdGroup.appendChild(subhdr('Offset'));
   thirdGroup.appendChild(select('Offset Mode', 'thirdOffsetMode', [

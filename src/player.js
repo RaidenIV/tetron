@@ -579,7 +579,11 @@ export function updatePlayer(delta, moveForward, moveRight) {
       : p.playerSpeed * Math.min(1, Math.sqrt(ctrlX * ctrlX + ctrlZ * ctrlZ) || 1);
     state.lastMoveX = _v.x;
     state.lastMoveZ = _v.z;
-    playerGroup.position.addScaledVector(_v, speed * delta);
+    // Reduce movement speed when aiming (ADS) — forces tactical positioning
+    const aimMult = (state.isAiming && state.params.aimEnabled !== false)
+      ? Math.max(0.1, Math.min(1, Number(state.params.aimSpeedMult) || 0.55))
+      : 1;
+    playerGroup.position.addScaledVector(_v, speed * aimMult * delta);
   }
 
   // Dash — shunts in a fixed direction at higher speed while dashTimer > 0

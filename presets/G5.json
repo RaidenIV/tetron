@@ -142,5 +142,10 @@
   "soundSfx_gameover": 1,
   "soundSfx_victory": 1,
   "soundSfx_ambience": 0.5,
-  "radarTaggedColor": "#ffee44"
+  "radarTaggedColor": "#ffee44",
+  "aimEnabled": true,
+  "aimFovDelta": -18,
+  "aimDistDelta": -1.5,
+  "aimSpeedMult": 0.55,
+  "aimSmooth": 10
 }
