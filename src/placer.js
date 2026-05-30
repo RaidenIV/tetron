@@ -5,65 +5,38 @@
 import * as THREE from 'three';
 import { scene, camera } from './renderer.js';
 import { state } from './state.js';
+import { ASSET_CATALOGUE } from './assets-catalogue.js';
 
-// ── Asset catalogue ────────────────────────────────────────────────────────────
-export const ASSET_CATALOGUE = [
-  {
-    id: 'box',
-    label: 'Crate',
-    geo: () => new THREE.BoxGeometry(1, 1, 1),
-    color: 0x8b6914,
+
+
+// ── Geometry factories (Three.js — kept here, not in catalogue) ───────────────
+const _geoFactories = {
+  box:      () => new THREE.BoxGeometry(1, 1, 1),
+  tall_box: () => new THREE.BoxGeometry(1, 2, 1),
+  cylinder: () => new THREE.CylinderGeometry(0.4, 0.4, 1.2, 12),
+  sphere:   () => new THREE.SphereGeometry(0.5, 16, 12),
+  wall:     () => new THREE.BoxGeometry(4, 2, 0.25),
+  ramp: () => {
+    const g = new THREE.BufferGeometry();
+    const v = new Float32Array([
+      -2,0,-1,  2,0,-1,  2,0,1,
+      -2,0,-1,  2,0,1,  -2,0,1,
+      -2,0,-1,  -2,2,1,  2,2,1,
+      -2,0,-1,   2,2,1,  2,0,-1,
+      -2,0,-1,  -2,0,1, -2,2,1,
+       2,0,-1,   2,2,1,  2,0,1,
+      -2,0,1,   2,0,1,   2,2,1,
+      -2,0,1,   2,2,1,  -2,2,1,
+    ]);
+    g.setAttribute('position', new THREE.BufferAttribute(v, 3));
+    g.computeVertexNormals();
+    return g;
   },
-  {
-    id: 'tall_box',
-    label: 'Tall Crate',
-    geo: () => new THREE.BoxGeometry(1, 2, 1),
-    color: 0x6b4f10,
-    yOffset: 1,
-  },
-  {
-    id: 'cylinder',
-    label: 'Barrel',
-    geo: () => new THREE.CylinderGeometry(0.4, 0.4, 1.2, 12),
-    color: 0x3a5a3a,
-    yOffset: 0.6,
-  },
-  {
-    id: 'sphere',
-    label: 'Orb',
-    geo: () => new THREE.SphereGeometry(0.5, 16, 12),
-    color: 0x4488cc,
-    yOffset: 0.5,
-  },
-  {
-    id: 'wall',
-    label: 'Wall',
-    geo: () => new THREE.BoxGeometry(4, 2, 0.25),
-    color: 0x556677,
-    yOffset: 1,
-  },
-  {
-    id: 'ramp',
-    label: 'Ramp',
-    geo: () => {
-      const g = new THREE.BufferGeometry();
-      const v = new Float32Array([
-        -2,0,-1,  2,0,-1,  2,0,1,
-        -2,0,-1,  2,0,1,  -2,0,1,
-        -2,0,-1,  -2,2,1,  2,2,1,
-        -2,0,-1,  2,2,1,   2,0,-1,
-        -2,0,-1,  -2,0,1,  -2,2,1,
-         2,0,-1,   2,2,1,   2,0,1,
-        -2,0,1,   2,0,1,   2,2,1,
-        -2,0,1,   2,2,1,  -2,2,1,
-      ]);
-      g.setAttribute('position', new THREE.BufferAttribute(v, 3));
-      g.computeVertexNormals();
-      return g;
-    },
-    color: 0x445566,
-  },
-];
+};
+
+function makeGeo(assetId) {
+  return (_geoFactories[assetId] || _geoFactories.box)();
+}
 
 // ── Ghost preview mesh ─────────────────────────────────────────────────────────
 const _ghostMat = new THREE.MeshBasicMaterial({
@@ -99,7 +72,7 @@ function rebuildGhost(assetId) {
   if (_ghostWire) { scene.remove(_ghostWire); _ghostWire.geometry.dispose(); _ghostWire = null; }
 
   const asset = getAsset(assetId);
-  const geo   = asset.geo();
+  const geo   = makeGeo(assetId);
   _ghostMesh  = new THREE.Mesh(geo, _ghostMat);
   _ghostWire  = new THREE.Mesh(geo, _ghostWireMat);
   _ghostMesh.frustumCulled = false;
@@ -134,7 +107,7 @@ export function rebuildPlacedObjects() {
   const list = state.params.placedObjects || [];
   for (const obj of list) {
     const asset = getAsset(obj.assetId);
-    const mesh  = new THREE.Mesh(asset.geo(), materialForAsset(asset));
+    const mesh  = new THREE.Mesh(makeGeo(asset.id), materialForAsset(asset));
     mesh.position.set(obj.x, obj.y, obj.z);
     mesh.castShadow    = true;
     mesh.receiveShadow = true;
@@ -163,7 +136,7 @@ function placeObject() {
   state.params.placedObjects = list;
 
   // Spawn a solid mesh immediately
-  const mesh = new THREE.Mesh(asset.geo(), materialForAsset(asset));
+  const mesh = new THREE.Mesh(makeGeo(asset.id), materialForAsset(asset));
   mesh.position.set(x, y, z);
   mesh.castShadow    = true;
   mesh.receiveShadow = true;

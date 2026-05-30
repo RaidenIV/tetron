@@ -12,6 +12,8 @@ import {
 import { setFloorVisible, setGridVisible, setFloorColor, setGridColor } from '../terrain.js';
 import { spawnEnemiesFromSettings, clearEnemies, applyTagSettings } from '../enemies.js';
 import { clearGameplayInput } from '../input.js';
+import { ASSET_CATALOGUE } from '../assets-catalogue.js';
+import { clearPlacedObjects, rebuildPlacedObjects } from '../placer.js';
 
 const sidebar = document.getElementById('sidebar');
 
