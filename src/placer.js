@@ -303,20 +303,29 @@ function isInsideLocalFootprint(local, asset, padding = 0, scaleSource = null) {
     && local.z <=  fh / 2 + padding;
 }
 
-function rampSurfaceHeightAt(obj, asset, worldX, worldZ, padding = 0) {
+function rampSurfaceHeightAt(obj, asset, worldX, worldZ, padding = 0, options = {}) {
   if (obj.assetId !== 'ramp' && asset.walkable !== true) return null;
   const local = localPointForObject(obj, worldX, worldZ);
   const { fw, fh } = getLocalFootprint(asset, obj);
 
   const p = Math.max(0, Number(padding) || 0);
-  const sidePadding = Math.min(p, 0.12);
-  const lowEndPadding = Math.min(p, 0.08);
-  const highEndPadding = 0.02;
+  const sidePadding = Math.min(
+    p,
+    Math.max(0, Number(options.sidePadding ?? 0.12) || 0)
+  );
+  const lowEndPadding = Math.min(
+    Math.max(0, Number(options.lowEndPadding ?? p) || 0),
+    Math.max(0, Number(options.maxLowEndPadding ?? 0.5) || 0)
+  );
+  const highEndPadding = Math.min(
+    Math.max(0, Number(options.highEndPadding ?? 0.02) || 0),
+    Math.max(0, Number(options.maxHighEndPadding ?? 0.08) || 0)
+  );
 
-  // Do not let the capsule radius turn the vertical back/side faces into
-  // walkable terrain. The player must be on the slope body itself; otherwise the
-  // ramp remains a blocker and contact from the non-ramp side cannot pop the
-  // player onto the top.
+  // The ramp needs enough tolerance on the low/front edge for the capsule centre
+  // to enter before the AABB blocker rejects it. Keep the high/back edge and the
+  // left/right sides tight so touching a vertical non-ramp face cannot pop the
+  // player onto the sloped surface.
   if (local.x < -fw / 2 - sidePadding || local.x > fw / 2 + sidePadding) return null;
   if (local.z < -fh / 2 - lowEndPadding || local.z > fh / 2 + highEndPadding) return null;
 
@@ -352,7 +361,11 @@ export function getWalkablePlacedObjectHeight(position, radius = 0.35, options =
     const asset = getAsset(obj.assetId);
     if (asset.clip === false) continue;
 
-    const rampY = rampSurfaceHeightAt(obj, asset, position.x, position.z, Math.max(r, 0.12));
+    const rampY = rampSurfaceHeightAt(obj, asset, position.x, position.z, Math.max(r, 0.12), {
+      lowEndPadding: r + 0.03,
+      sidePadding: 0.12,
+      highEndPadding: 0.02,
+    });
     if (rampY !== null
       && rampY > height
       && canStandOnObjectTop(currentY, rampY, stepUp, stepDown)) {
@@ -425,7 +438,11 @@ export function resolveCircleAgainstPlacedObjects(position, radius = 0.45, passe
       if (options.walkableRamps === true && bounds.asset.walkable === true) {
         const footY = Number(options.footY);
         if (Number.isFinite(footY)) {
-          const rampY = rampSurfaceHeightAt(obj, bounds.asset, position.x, position.z, Math.min(r, 0.12));
+          const rampY = rampSurfaceHeightAt(obj, bounds.asset, position.x, position.z, r, {
+            lowEndPadding: r + 0.03,
+            sidePadding: 0.12,
+            highEndPadding: 0.02,
+          });
           if (rampY !== null && canStandOnObjectTop(footY, rampY, options.stepUp, options.stepDown)) {
             continue;
           }
