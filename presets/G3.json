@@ -123,5 +123,20 @@
   "soundSfx_heal": 1.0,
   "soundSfx_levelup": 1.0,
   "soundSfx_gameover": 1.0,
-  "soundSfx_victory": 1.0
+  "soundSfx_victory": 1.0,
+  "tagHeight": 18,
+  "tagSize": 20,
+  "tagBloom": 1,
+  "tagColor": "#ff2828",
+  "tagEnabled": true,
+  "tagThickness": 0,
+  "tagDwellTime": 2,
+  "soundSfx_ambience": 0.5,
+  "tagShadow": 10,
+  "radarEnabled": true,
+  "radarRadius": 60,
+  "radarRange": 60,
+  "radarBgColor": "#0a1628",
+  "radarEnemyColor": "#ff3030",
+  "radarOpacity": 0.82
 }

@@ -466,7 +466,8 @@ function getTagShadow() {
 }
 
 function getTagHeight() {
-  return Math.max(0, Math.min(10, Number(state.params.tagHeight) ?? 0.55));
+  // Returns pixels for screen-space offset above the enemy head anchor
+  return Math.max(0, Math.min(500, Number(state.params.tagHeight) ?? 18));
 }
 
 function buildTagFilter(color) {
@@ -518,9 +519,14 @@ function makeTagMarker(enemy) {
   el.innerHTML = `<img src="./icons/tag.svg" width="${size}" height="${size}" aria-hidden="true"`
     + ` style="display:block;transform:rotate(180deg);filter:${imgFilter};">`;
   const obj = new CSS2DObject(el);
-  obj.center.set(0.5, 0);
-  const topY = (enemy.radius * 2 + enemy.sizeMult * 1.2) + getTagHeight();
-  obj.position.set(0, topY, 0);
+  // center=(0.5,1) anchors the BOTTOM of the DOM element to the world point,
+  // so the element hangs above. The world point is at enemy visual top.
+  obj.center.set(0.5, 1);
+  const enemyVisualTop = (enemy.radius * 2 + enemy.sizeMult * 1.2);
+  obj.position.set(0, enemyVisualTop, 0);
+  // Screen-space gap: negative margin-bottom pushes element further up in pixels,
+  // making the offset look the same regardless of camera distance.
+  el.style.marginBottom = `${getTagHeight()}px`;
   enemy.group.add(obj);
   enemy._tagEl  = el;
   enemy._tagObj = obj;
@@ -554,9 +560,8 @@ export function applyTagSettings() {
       img.height = size;
       img.style.filter = imgFilter;
     }
-    // Reposition based on current height setting
-    const topY = (enemy.radius * 2 + enemy.sizeMult * 1.2) + getTagHeight();
-    enemy._tagObj.position.set(0, topY, 0);
+    // Update screen-space offset (margin-bottom in pixels)
+    enemy._tagEl.style.marginBottom = `${getTagHeight()}px`;
     // Show/hide based on tag state and enabled setting
     if (enemy.tagged) {
       enemy._tagEl.style.opacity = state.params.tagEnabled === false ? '0' : '1';

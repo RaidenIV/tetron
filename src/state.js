@@ -157,7 +157,15 @@ export const state = {
       "tagThickness": 2,
       "tagBloom": 3,
       "tagShadow": 4,
-      "tagHeight": 0.55,
+      "tagHeight": 18,
+
+      // Radar
+      "radarEnabled": true,
+      "radarRadius": 60,
+      "radarRange": 60,
+      "radarBgColor": "#0a1628",
+      "radarEnemyColor": "#ff3030",
+      "radarOpacity": 0.82,
 
       // Sound
       "soundMuted": false,

@@ -164,7 +164,13 @@ const PRESET_SETTINGS = [
   "soundSfx_gameover": 1,
   "soundSfx_victory": 1,
   "soundSfx_ambience": 0.5,
-  "tagHeight": 0.55
+  "tagHeight": 18
+  "radarBgColor": "#0a1628",
+  "radarEnabled": true,
+  "radarEnemyColor": "#ff3030",
+  "radarOpacity": 0.82,
+  "radarRadius": 60,
+  "radarRange": 60,
 } },
   { key: 'g4', label: 'G4', path: './presets/G4.json', data: {
   "cameraMode": "third2",
@@ -293,6 +299,20 @@ const PRESET_SETTINGS = [
   "soundSfx_gameover": 1,
   "soundSfx_victory": 1,
   "soundSfx_ambience": 0.75
+  "tagBloom": 1,
+  "tagColor": "#ff2828",
+  "tagDwellTime": 2,
+  "tagEnabled": true,
+  "tagHeight": 18,
+  "tagShadow": 10,
+  "tagSize": 20,
+  "tagThickness": 0,
+  "radarBgColor": "#0a1628",
+  "radarEnabled": true,
+  "radarEnemyColor": "#ff3030",
+  "radarOpacity": 0.82,
+  "radarRadius": 60,
+  "radarRange": 60,
 } },
   { key: 'g3', label: 'G3', path: './presets/G3.json', data: {
   "cameraMode": "third2",
@@ -404,6 +424,42 @@ const PRESET_SETTINGS = [
   "controllerInvertY": false,
   "controllerFireThreshold": 0.5,
   "controllerVibration": true
+  "enemyDestructionEliteCount": 100,
+  "enemyDestructionEliteGlow": 12,
+  "enemyDestructionEliteSize": 0.5,
+  "enemyDestructionEliteSpeed": 1.75,
+  "enemyDestructionStandardCount": 10,
+  "enemyDestructionStandardSize": 0.25,
+  "enemyDestructionStandardSpeed": 1,
+  "soundMusicVolume": 0.4,
+  "soundMuted": false,
+  "soundSfxVolume": 1,
+  "soundSfx_ambience": 0.5,
+  "soundSfx_coin": 1,
+  "soundSfx_dash": 1,
+  "soundSfx_elite_hit": 1,
+  "soundSfx_explode": 1,
+  "soundSfx_gameover": 1,
+  "soundSfx_heal": 1,
+  "soundSfx_levelup": 1,
+  "soundSfx_player_hit": 1,
+  "soundSfx_shoot": 1,
+  "soundSfx_standard_hit": 1,
+  "soundSfx_victory": 1,
+  "tagBloom": 1,
+  "tagColor": "#ff2828",
+  "tagDwellTime": 2,
+  "tagEnabled": true,
+  "tagHeight": 18,
+  "tagShadow": 10,
+  "tagSize": 20,
+  "tagThickness": 0,
+  "radarBgColor": "#0a1628",
+  "radarEnabled": true,
+  "radarEnemyColor": "#ff3030",
+  "radarOpacity": 0.82,
+  "radarRadius": 60,
+  "radarRange": 60,
 } },
   { key: 'default', label: 'Default', path: './presets/default.json', data: {
   "cameraMode": "iso",
@@ -807,8 +863,14 @@ function slider({ key, label, min, max, step = 0.01, dec = 2, onChange }) {
   }
 
   inp.addEventListener('input', () => commit(parseFloat(inp.value)));
-  num.addEventListener('input', () => commit(parseFloat(num.value)));
+  // Number input: update slider position on every keystroke for visual feedback,
+  // but only write to state.params on change/blur so the user can type freely.
+  num.addEventListener('input', () => {
+    const v = parseFloat(num.value);
+    if (Number.isFinite(v)) inp.value = v; // move slider thumb live
+  });
   num.addEventListener('change', () => commit(parseFloat(num.value), { clampValue: true }));
+  num.addEventListener('blur',   () => commit(parseFloat(num.value), { clampValue: true }));
 
   const wrap = document.createElement('div');
   wrap.className = 'sb-slider-wrap';
@@ -1130,7 +1192,15 @@ function buildHUD(body) {
   body.appendChild(slider({ key: 'tagThickness', label: 'Thickness', min: 0, max: 12, step: 0.5, dec: 1, onChange: () => applyTagSettings() }));
   body.appendChild(slider({ key: 'tagBloom', label: 'Bloom', min: 0, max: 20, step: 0.5, dec: 1, onChange: () => applyTagSettings() }));
   body.appendChild(slider({ key: 'tagShadow', label: 'Shadow', min: 0, max: 30, step: 0.5, dec: 1, onChange: () => applyTagSettings() }));
-  body.appendChild(slider({ key: 'tagHeight', label: 'Height Offset', min: 0, max: 5, step: 0.05, dec: 2, onChange: () => applyTagSettings() }));
+  body.appendChild(slider({ key: 'tagHeight', label: 'Height Offset', min: 0, max: 500, step: 1, dec: 0, onChange: () => applyTagSettings() }));
+
+  body.appendChild(subhdr('Radar'));
+  body.appendChild(toggle('Radar Enabled', 'radarEnabled'));
+  body.appendChild(slider({ key: 'radarRadius', label: 'Radar Radius', min: 20, max: 100, step: 1, dec: 0 }));
+  body.appendChild(slider({ key: 'radarRange', label: 'World Range', min: 10, max: 200, step: 1, dec: 0 }));
+  body.appendChild(colorPicker('Radar BG', 'radarBgColor'));
+  body.appendChild(colorPicker('Enemy Dot', 'radarEnemyColor'));
+  body.appendChild(slider({ key: 'radarOpacity', label: 'Opacity', min: 0, max: 1, step: 0.05, dec: 2 }));
 }
 
 function buildEnemies(body) {
