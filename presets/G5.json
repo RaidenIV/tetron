@@ -138,5 +138,7 @@
   "radarRange": 60,
   "radarBgColor": "#0a1628",
   "radarEnemyColor": "#ff3030",
-  "radarOpacity": 0.82
+  "radarOpacity": 0.82,
+  "shieldBloomIntensity": 0.12,
+  "shieldBloomRadius": 1.18
 }

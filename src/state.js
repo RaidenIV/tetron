@@ -86,6 +86,8 @@ export const state = {
       "shieldHexSize": 0.22,
       "shieldLineThickness": 0.012,
       "shieldGlow": true,
+      "shieldBloomIntensity": 0.12,
+      "shieldBloomRadius": 1.18,
       "dashEnabled": true,
       "dashSpeed": 28,
       "dashDuration": 0.18,

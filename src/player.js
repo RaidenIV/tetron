@@ -73,10 +73,11 @@ applyPlayerContactShadow();
 
 
 // ── Hex shield ────────────────────────────────────────────────────────────────
-// A player-attached Goldberg-style shield. It is generated as the dual of a
-// subdivided icosahedron, so the cells share edges and fit together cleanly.
-// A closed spherical tiling cannot be made from only hexagons; this creates
-// mostly hexagons with the required pentagon cells at the geodesic seams.
+// Flat-top hex grid mapped onto a sphere.
+// Flat-top means each hexagon's top/bottom edges are horizontal (parallel to the
+// horizon), with vertices pointing left and right.
+// The grid is parameterised in (longitude, latitude) UV space, then projected
+// onto the sphere surface. Every cell is a hexagon — no pentagons.
 let _shieldGeometryKey = '';
 
 const shieldGroup = new THREE.Group();
@@ -116,6 +117,16 @@ const shieldGlowMat = new THREE.MeshBasicMaterial({
   toneMapped: false,
 });
 
+const shieldBloomMat = new THREE.MeshBasicMaterial({
+  color: 0x1e7bff,
+  transparent: true,
+  opacity: 0.0,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+  blending: THREE.AdditiveBlending,
+  toneMapped: false,
+});
+
 export const playerShield = new THREE.Mesh(
   new THREE.BufferGeometry(),
   shieldPanelMat
@@ -140,238 +151,149 @@ playerShieldGlow.frustumCulled = false;
 playerShieldGlow.renderOrder = 5;
 shieldGroup.add(playerShieldGlow);
 
-function shieldDetailFromHexSize(radius, hexSize) {
-  const ratio = hexSize / Math.max(0.2, radius);
-  if (ratio <= 0.09) return 3;
-  if (ratio <= 0.22) return 2;
-  return 1;
+// Extra bloom shell (larger sphere, very low opacity additive)
+export const playerShieldBloom = new THREE.Mesh(
+  new THREE.SphereGeometry(1, 32, 16),
+  shieldBloomMat
+);
+playerShieldBloom.frustumCulled = false;
+playerShieldBloom.renderOrder = 4;
+shieldGroup.add(playerShieldBloom);
+
+// ── Flat-top hex grid on sphere ────────────────────────────────────────────────
+// Flat-top hex: pointy sides on top and bottom (left/right vertices).
+// Hex size r = circumradius. For flat-top:
+//   width  w = sqrt(3) * r   (horizontal distance between hex centres in same row)
+//   height h = 2 * r         (vertical distance, where rows offset by r * sqrt(3)/2)
+// We tile in angular space then project to sphere.
+
+function lonLatToSphere(lon, lat, radius) {
+  const cosLat = Math.cos(lat);
+  return new THREE.Vector3(
+    cosLat * Math.sin(lon),
+    Math.sin(lat),
+    cosLat * Math.cos(lon),
+  ).multiplyScalar(radius);
 }
 
-function vectorKey(v, precision = 100000) {
-  return `${Math.round(v.x * precision)},${Math.round(v.y * precision)},${Math.round(v.z * precision)}`;
+// Flat-top hex corners (in 2-D UV/angle space), centred at origin.
+// angle 0 = right, going counter-clockwise. Flat-top: corners at 0°, 60°, 120°, 180°, 240°, 300°.
+function flatTopHexCorners(cx, cy, r) {
+  const corners = [];
+  for (let i = 0; i < 6; i++) {
+    const a = (Math.PI / 180) * (60 * i); // flat-top: start at 0°
+    corners.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+  }
+  return corners;
 }
 
-function edgeKey(a, b) {
-  return a < b ? `${a}|${b}` : `${b}|${a}`;
-}
+function buildFlatTopHexShieldGeometry(radius, hexAngularSize, lineThickness) {
+  // hexAngularSize: angular radius of each hex in radians.
+  // Flat-top grid: step in longitude = sqrt(3) * hexAngularSize, in latitude = 1.5 * hexAngularSize.
+  const r = hexAngularSize;
+  const lonStep = Math.sqrt(3) * r;
+  const latStep = 1.5 * r;
 
-function pushVector(target, v) {
-  target.push(v.x, v.y, v.z);
-}
+  const panelVerts = [];
+  const panelIdx   = [];
+  const lineVerts  = [];
+  const lineIdx    = [];
+  const seenEdges  = new Set();
 
-function getTriangleData(radius, detail) {
-  const source = new THREE.IcosahedronGeometry(radius, detail);
-  const pos = source.getAttribute('position');
-  const index = source.index;
-  const vertices = [];
-  const vertexLookup = new Map();
-  const faces = [];
-  const vertexFaces = [];
+  // How many latitude rows fit (-PI/2 to PI/2)
+  const latRows = Math.ceil(Math.PI / latStep) + 1;
 
-  function getVertexIndex(sourceIndex) {
-    const v = new THREE.Vector3().fromBufferAttribute(pos, sourceIndex).normalize().multiplyScalar(radius);
-    const key = vectorKey(v);
-    let uniqueIndex = vertexLookup.get(key);
-    if (uniqueIndex === undefined) {
-      uniqueIndex = vertices.length;
-      vertexLookup.set(key, uniqueIndex);
-      vertices.push(v);
-      vertexFaces.push([]);
+  function addFilledHex(cx, cy) {
+    // Triangulate hex as fan from centre. All 6 triangles.
+    const corners = flatTopHexCorners(cx, cy, r * 0.98); // slight inset so panels don't overlap lines
+    const base = panelVerts.length / 3;
+    // Centre point
+    const cPt = lonLatToSphere(cx, cy, radius);
+    panelVerts.push(cPt.x, cPt.y, cPt.z);
+    for (let i = 0; i < 6; i++) {
+      const [lon, lat] = corners[i];
+      const pt = lonLatToSphere(lon, Math.max(-Math.PI / 2, Math.min(Math.PI / 2, lat)), radius);
+      panelVerts.push(pt.x, pt.y, pt.z);
     }
-    return uniqueIndex;
-  }
-
-  const triangleCount = index ? index.count / 3 : pos.count / 3;
-  for (let i = 0; i < triangleCount; i++) {
-    const a = getVertexIndex(index ? index.getX(i * 3) : i * 3);
-    const b = getVertexIndex(index ? index.getX(i * 3 + 1) : i * 3 + 1);
-    const c = getVertexIndex(index ? index.getX(i * 3 + 2) : i * 3 + 2);
-    if (a === b || b === c || c === a) continue;
-
-    const faceIndex = faces.length;
-    faces.push([a, b, c]);
-    vertexFaces[a].push(faceIndex);
-    vertexFaces[b].push(faceIndex);
-    vertexFaces[c].push(faceIndex);
-  }
-
-  const faceCenters = faces.map(([a, b, c]) => (
-    new THREE.Vector3()
-      .add(vertices[a])
-      .add(vertices[b])
-      .add(vertices[c])
-      .multiplyScalar(1 / 3)
-      .normalize()
-      .multiplyScalar(radius)
-  ));
-
-  source.dispose();
-  return { vertices, vertexFaces, faceCenters };
-}
-
-function sortCellCorners(normal, corners) {
-  const tangentA = new THREE.Vector3(0, 1, 0).cross(normal);
-  if (tangentA.lengthSq() < 0.0001) {
-    tangentA.set(1, 0, 0).cross(normal);
-  }
-  tangentA.normalize();
-
-  const tangentB = new THREE.Vector3().crossVectors(normal, tangentA).normalize();
-
-  corners.sort((a, b) => {
-    const angleA = Math.atan2(a.dot(tangentB), a.dot(tangentA));
-    const angleB = Math.atan2(b.dot(tangentB), b.dot(tangentA));
-    return angleA - angleB;
-  });
-}
-
-function sphericalLerp(a, b, t, radius) {
-  const start = a.clone().normalize();
-  const end = b.clone().normalize();
-  const dot = Math.max(-1, Math.min(1, start.dot(end)));
-  const theta = Math.acos(dot);
-
-  if (theta < 0.000001) {
-    return start.lerp(end, t).normalize().multiplyScalar(radius);
-  }
-
-  const sinTheta = Math.sin(theta);
-  return start
-    .multiplyScalar(Math.sin((1 - t) * theta) / sinTheta)
-    .add(end.multiplyScalar(Math.sin(t * theta) / sinTheta))
-    .normalize()
-    .multiplyScalar(radius);
-}
-
-function sphericalTrianglePoint(a, b, c, u, v, radius) {
-  return new THREE.Vector3()
-    .addScaledVector(a, 1 - u - v)
-    .addScaledVector(b, u)
-    .addScaledVector(c, v)
-    .normalize()
-    .multiplyScalar(radius);
-}
-
-function addCurvedShieldTriangle(targetVertices, targetIndices, a, b, c, radius, subdivisions) {
-  const rows = [];
-
-  for (let i = 0; i <= subdivisions; i++) {
-    const row = [];
-    for (let j = 0; j <= subdivisions - i; j++) {
-      const u = i / subdivisions;
-      const v = j / subdivisions;
-      const point = sphericalTrianglePoint(a, b, c, u, v, radius);
-      const index = targetVertices.length / 3;
-      pushVector(targetVertices, point);
-      row.push(index);
-    }
-    rows.push(row);
-  }
-
-  for (let i = 0; i < subdivisions; i++) {
-    for (let j = 0; j < subdivisions - i; j++) {
-      const a0 = rows[i][j];
-      const b0 = rows[i + 1][j];
-      const c0 = rows[i][j + 1];
-      targetIndices.push(a0, b0, c0);
-
-      if (j < subdivisions - i - 1) {
-        const d0 = rows[i + 1][j + 1];
-        targetIndices.push(b0, d0, c0);
-      }
+    for (let i = 0; i < 6; i++) {
+      panelIdx.push(base, base + 1 + i, base + 1 + ((i + 1) % 6));
     }
   }
-}
 
-function addCurvedShieldLine(targetVertices, targetIndices, start, end, radius, thickness) {
-  const angle = start.clone().normalize().angleTo(end.clone().normalize());
-  const segments = Math.max(4, Math.min(14, Math.ceil(angle / 0.045)));
-  const halfThickness = Math.max(0.001, thickness) / 2;
-  const samples = [];
+  function addHexEdge(ax, ay, bx, by) {
+    // Deduplicate edges using sorted key
+    const key = ax < bx || (ax === bx && ay <= by)
+      ? `${ax.toFixed(6)},${ay.toFixed(6)}|${bx.toFixed(6)},${by.toFixed(6)}`
+      : `${bx.toFixed(6)},${by.toFixed(6)}|${ax.toFixed(6)},${ay.toFixed(6)}`;
+    if (seenEdges.has(key)) return;
+    seenEdges.add(key);
 
-  for (let i = 0; i <= segments; i++) {
-    samples.push(sphericalLerp(start, end, i / segments, radius));
+    const startPt = lonLatToSphere(ax, Math.max(-Math.PI/2, Math.min(Math.PI/2, ay)), radius);
+    const endPt   = lonLatToSphere(bx, Math.max(-Math.PI/2, Math.min(Math.PI/2, by)), radius);
+
+    const angleSpan = startPt.clone().normalize().angleTo(endPt.clone().normalize());
+    const segments  = Math.max(2, Math.ceil(angleSpan / 0.04));
+    const half = Math.max(0.001, lineThickness) / 2;
+    const baseLV = lineVerts.length / 3;
+
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      // Spherical interpolation
+      const pt = startPt.clone().lerp(endPt, t).normalize().multiplyScalar(radius);
+      const prev = i > 0 ? startPt.clone().lerp(endPt, (i-1)/segments).normalize().multiplyScalar(radius) : pt;
+      const next = i < segments ? startPt.clone().lerp(endPt, (i+1)/segments).normalize().multiplyScalar(radius) : pt;
+      const tangent = next.clone().sub(prev).normalize();
+      let side = new THREE.Vector3().crossVectors(pt.clone().normalize(), tangent);
+      if (side.lengthSq() < 0.000001) side.set(1, 0, 0);
+      side.normalize();
+      const L = pt.clone().addScaledVector(side,  half).normalize().multiplyScalar(radius);
+      const R = pt.clone().addScaledVector(side, -half).normalize().multiplyScalar(radius);
+      lineVerts.push(L.x, L.y, L.z, R.x, R.y, R.z);
+    }
+    for (let i = 0; i < segments; i++) {
+      const l0 = baseLV + i * 2, r0 = l0 + 1;
+      const l1 = baseLV + (i+1) * 2, r1 = l1 + 1;
+      lineIdx.push(l0, l1, r0, r0, l1, r1);
+    }
   }
 
-  const baseIndex = targetVertices.length / 3;
-
-  for (let i = 0; i <= segments; i++) {
-    const point = samples[i];
-    const prev = samples[Math.max(0, i - 1)];
-    const next = samples[Math.min(segments, i + 1)];
-    const tangent = next.clone().sub(prev).normalize();
-    let side = new THREE.Vector3().crossVectors(point.clone().normalize(), tangent);
-
-    if (side.lengthSq() < 0.000001) side = new THREE.Vector3(1, 0, 0);
-    side.normalize();
-
-    const left = point.clone().addScaledVector(side, halfThickness).normalize().multiplyScalar(radius);
-    const right = point.clone().addScaledVector(side, -halfThickness).normalize().multiplyScalar(radius);
-    pushVector(targetVertices, left);
-    pushVector(targetVertices, right);
+  function addHexLines(cx, cy) {
+    const corners = flatTopHexCorners(cx, cy, r);
+    for (let i = 0; i < 6; i++) {
+      const [ax, ay] = corners[i];
+      const [bx, by] = corners[(i + 1) % 6];
+      addHexEdge(ax, ay, bx, by);
+    }
   }
 
-  for (let i = 0; i < segments; i++) {
-    const left0 = baseIndex + i * 2;
-    const right0 = left0 + 1;
-    const left1 = baseIndex + (i + 1) * 2;
-    const right1 = left1 + 1;
-    targetIndices.push(left0, left1, right0);
-    targetIndices.push(right0, left1, right1);
-  }
-}
+  for (let row = -latRows; row <= latRows; row++) {
+    const cy = row * latStep;
+    if (cy < -Math.PI / 2 - r || cy > Math.PI / 2 + r) continue;
 
-function buildGoldbergShieldGeometry(radius, detail, lineThickness) {
-  const { vertices, vertexFaces, faceCenters } = getTriangleData(radius, detail);
-  const panelVertices = [];
-  const panelIndices = [];
-  const lineVertices = [];
-  const lineIndices = [];
-  const lineLookup = new Map();
-  const panelSubdivisions = Math.max(3, 6 - detail);
+    // Flat-top grid: even rows offset by lonStep/2
+    const offset = (row % 2 === 0) ? 0 : lonStep / 2;
 
-  for (let i = 0; i < vertices.length; i++) {
-    const adjacentFaces = vertexFaces[i];
-    if (adjacentFaces.length < 3) continue;
+    // How many columns fit around the full longitude circle at this latitude
+    const cosLat = Math.max(0.01, Math.cos(cy));
+    const lonCols = Math.ceil((2 * Math.PI) / lonStep * cosLat) + 2;
 
-    const normal = vertices[i].clone().normalize();
-    const corners = adjacentFaces.map(faceIndex => faceCenters[faceIndex].clone().normalize().multiplyScalar(radius));
-    sortCellCorners(normal, corners);
-
-    const cellCenter = vertices[i].clone().normalize().multiplyScalar(radius);
-
-    for (let j = 0; j < corners.length; j++) {
-      const currentCorner = corners[j];
-      const nextCorner = corners[(j + 1) % corners.length];
-      addCurvedShieldTriangle(
-        panelVertices,
-        panelIndices,
-        cellCenter,
-        currentCorner,
-        nextCorner,
-        radius,
-        panelSubdivisions
-      );
-
-      const ka = vectorKey(currentCorner);
-      const kb = vectorKey(nextCorner);
-      const key = edgeKey(ka, kb);
-      if (!lineLookup.has(key)) {
-        lineLookup.set(key, true);
-        addCurvedShieldLine(lineVertices, lineIndices, currentCorner, nextCorner, radius, lineThickness);
-      }
+    for (let col = -lonCols; col <= lonCols; col++) {
+      const cx = col * lonStep + offset;
+      const wrappedCx = cx % (2 * Math.PI);
+      addFilledHex(wrappedCx, cy);
+      addHexLines(wrappedCx, cy);
     }
   }
 
   const panelGeometry = new THREE.BufferGeometry();
-  panelGeometry.setAttribute('position', new THREE.Float32BufferAttribute(panelVertices, 3));
-  panelGeometry.setIndex(panelIndices);
+  panelGeometry.setAttribute('position', new THREE.Float32BufferAttribute(panelVerts, 3));
+  panelGeometry.setIndex(panelIdx);
   panelGeometry.computeVertexNormals();
   panelGeometry.computeBoundingSphere();
 
   const lineGeometry = new THREE.BufferGeometry();
-  lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(lineVertices, 3));
-  lineGeometry.setIndex(lineIndices);
+  lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(lineVerts, 3));
+  lineGeometry.setIndex(lineIdx);
   lineGeometry.computeVertexNormals();
   lineGeometry.computeBoundingSphere();
 
@@ -379,16 +301,16 @@ function buildGoldbergShieldGeometry(radius, detail, lineThickness) {
 }
 
 function rebuildShieldCells(radius, hexSize, lineThickness) {
-  const detail = shieldDetailFromHexSize(radius, hexSize);
-  const key = `${radius.toFixed(4)}:${hexSize.toFixed(4)}:${lineThickness.toFixed(4)}:${detail}`;
+  // hexSize is stored in world units; convert to angular size for the sphere
+  const hexAngularSize = Math.max(0.05, Math.min(1.2, hexSize / Math.max(0.1, radius)));
+  const key = `${radius.toFixed(4)}:${hexSize.toFixed(4)}:${lineThickness.toFixed(4)}`;
   if (_shieldGeometryKey === key) return;
   _shieldGeometryKey = key;
 
-  const { panelGeometry, lineGeometry } = buildGoldbergShieldGeometry(radius, detail, lineThickness);
+  const { panelGeometry, lineGeometry } = buildFlatTopHexShieldGeometry(radius, hexAngularSize, lineThickness);
 
   playerShield.geometry.dispose();
   playerShield.geometry = panelGeometry;
-
   playerShieldLines.geometry.dispose();
   playerShieldLines.geometry = lineGeometry;
 }
@@ -396,12 +318,14 @@ function rebuildShieldCells(radius, hexSize, lineThickness) {
 // ── Apply shield from params ──────────────────────────────────────────────────
 export function applyShieldSettings() {
   const p = state.params;
-  const radius = Math.max(0.2, Number(p.shieldRadius) || 1.35);
-  const hexSize = Math.max(0.03, Number(p.shieldHexSize) || 0.22);
-  const opacity = Math.max(0, Math.min(1, Number(p.shieldOpacity) || 0.22));
+  const radius        = Math.max(0.2, Number(p.shieldRadius) || 1.35);
+  const hexSize       = Math.max(0.03, Number(p.shieldHexSize) || 0.22);
+  const opacity       = Math.max(0, Math.min(1, Number(p.shieldOpacity) || 0.22));
   const lineThickness = Math.max(0.001, Number(p.shieldLineThickness) || 0.012);
-  const color = p.shieldColor || '#1e7bff';
-  const glowEnabled = !!p.shieldGlow;
+  const color         = p.shieldColor || '#1e7bff';
+  const glowEnabled   = !!p.shieldGlow;
+  const bloomIntensity = Math.max(0, Math.min(1, Number(p.shieldBloomIntensity) ?? 0.12));
+  const bloomRadius    = Math.max(1.0, Math.min(3.0, Number(p.shieldBloomRadius) ?? 1.18));
 
   rebuildShieldCells(radius, hexSize, lineThickness);
 
@@ -421,6 +345,13 @@ export function applyShieldSettings() {
   shieldGlowMat.needsUpdate = true;
   playerShieldGlow.scale.setScalar(radius);
   playerShieldGlow.visible = !!p.shieldVisible && glowEnabled;
+
+  // Bloom shell: a slightly larger sphere with very low additive opacity
+  shieldBloomMat.color.set(color);
+  shieldBloomMat.opacity = glowEnabled ? bloomIntensity * opacity * 0.6 : 0;
+  shieldBloomMat.needsUpdate = true;
+  playerShieldBloom.scale.setScalar(radius * bloomRadius);
+  playerShieldBloom.visible = !!p.shieldVisible && glowEnabled && bloomIntensity > 0;
 }
 
 applyShieldSettings();
