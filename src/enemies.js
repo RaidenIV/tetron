@@ -550,9 +550,10 @@ export function applyTagSettings() {
       img.height = size;
       img.style.filter = imgFilter;
     }
-    // Hide if tag disabled
-    if (!enemy.tagged) return;
-    enemy._tagEl.style.opacity = state.params.tagEnabled === false ? '0' : '1';
+    // Show/hide based on tag state and enabled setting
+    if (enemy.tagged) {
+      enemy._tagEl.style.opacity = state.params.tagEnabled === false ? '0' : '1';
+    }
   }
 }
 
