@@ -1642,10 +1642,15 @@ function syncHudStatus() {
 function applyHudSettings() {
   const p = state.params;
   syncHudStatus();
+  const hudFont = HUD_FONT_STYLES[p.hudFont] || HUD_FONT_STYLES.system;
+  // Apply font CSS vars on <html> so #pause-overlay and any other HUD element
+  // outside #game-hud (which is a child of body, not game-hud) also inherits them.
+  document.documentElement.style.setProperty('--hud-font-family', hudFont.family);
+  document.documentElement.style.setProperty('--hud-font-weight', hudFont.weight);
+  document.documentElement.style.setProperty('--hud-letter-spacing', hudFont.letterSpacing || '0.18em');
   const gameHudEl = document.getElementById('game-hud');
   if (gameHudEl) {
     gameHudEl.style.display = p.hudVisible ? '' : 'none';
-    const hudFont = HUD_FONT_STYLES[p.hudFont] || HUD_FONT_STYLES.system;
     gameHudEl.style.setProperty('--hud-font-family', hudFont.family);
     gameHudEl.style.setProperty('--hud-font-weight', hudFont.weight);
     gameHudEl.style.setProperty('--hud-font-stretch', hudFont.stretch || 'normal');

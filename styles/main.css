@@ -459,10 +459,10 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   pointer-events: none;
   opacity: 0;
   color: rgba(255,255,255,0.94);
-  font-family: 'Square 721 Extended Bold Local', 'Michroma', 'Arial Black', sans-serif;
+  font-family: var(--hud-font-family, 'Square 721 Extended Bold Local', 'Michroma', 'Arial Black', sans-serif);
   font-size: clamp(11px, 1.75vw, 28px);
-  font-weight: 700;
-  letter-spacing: 0.18em;
+  font-weight: var(--hud-font-weight, 700);
+  letter-spacing: var(--hud-letter-spacing, 0.18em);
   line-height: 1;
   text-shadow: none;
   transition: opacity 0.12s ease;
@@ -503,7 +503,7 @@ body.is-paused * {
 #radar-canvas {
   position: fixed;
   bottom: 28px;
-  right: 28px;
+  right: calc(var(--sb-width, 320px) + 28px);
   z-index: 24;
   pointer-events: none;
   border-radius: 50%;
