@@ -243,6 +243,26 @@ function togglePlacerAssetModal() {
   else modal.style.display = 'flex';
 }
 
+function togglePlacerTransformModal() {
+  const modal = document.getElementById('placer-transform-modal');
+  if (!modal) return;
+
+  const visible = modal.style.display !== 'none' && modal.style.display !== '';
+  if (visible) {
+    if (window.__closePlacerTransformModal) window.__closePlacerTransformModal();
+    else modal.style.display = 'none';
+    return;
+  }
+
+  state.primaryFire = false;
+  state.secondaryFire = false;
+  state.isAiming = false;
+  document.exitPointerLock?.();
+  document.body.classList.remove('third-person-mouse-look');
+  if (window.__openPlacerTransformModal) window.__openPlacerTransformModal();
+  else modal.style.display = 'flex';
+}
+
 window.addEventListener('keydown', e => {
   if (e.key === 'Tab') { e.preventDefault(); _togglePanel?.(); return; }
   if (e.key === 'Escape') { e.preventDefault(); _togglePanel?.(); return; }
@@ -278,10 +298,10 @@ window.addEventListener('keydown', e => {
   }
 
 
-  // R key → rotate placed object 90° (placer slot only)
+  // R key → open transform modal for the current placer shape
   if (k === 'r' && !e.repeat && (state.activeSlot ?? 0) === 1) {
     e.preventDefault();
-    state.placerRotation = ((state.placerRotation ?? 0) + Math.PI / 2) % (Math.PI * 2);
+    togglePlacerTransformModal();
     return;
   }
 

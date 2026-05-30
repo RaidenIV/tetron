@@ -133,112 +133,160 @@
       "x": -9.5,
       "y": 0.6,
       "z": 7.5,
-      "ry": 0
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
     },
     {
       "assetId": "ramp",
       "x": -8,
       "y": 0,
       "z": 4,
-      "ry": 0
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
     },
     {
       "assetId": "tall_box",
       "x": -6.5,
       "y": 1,
       "z": 5.5,
-      "ry": 0
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
     },
     {
       "assetId": "tall_box",
       "x": -7.5,
       "y": 1,
       "z": 5.5,
-      "ry": 0
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
     },
     {
       "assetId": "tall_box",
       "x": -8.5,
       "y": 1,
       "z": 5.5,
-      "ry": 0
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
     },
     {
       "assetId": "tall_box",
       "x": -9.5,
       "y": 1,
       "z": 5.5,
-      "ry": 0
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
     },
     {
       "assetId": "tall_box",
       "x": -6.5,
       "y": 1,
       "z": 6.5,
-      "ry": 0
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
     },
     {
       "assetId": "tall_box",
       "x": -9.5,
       "y": 1,
       "z": 6.5,
-      "ry": 0
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
     },
     {
       "assetId": "tall_box",
       "x": -8.5,
       "y": 1,
       "z": 6.5,
-      "ry": 0
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
     },
     {
       "assetId": "tall_box",
       "x": -7.5,
       "y": 1,
       "z": 6.5,
-      "ry": 0
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
     },
     {
       "assetId": "tall_box",
       "x": -5.5,
       "y": 1,
       "z": 6.5,
-      "ry": 0
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
     },
     {
       "assetId": "tall_box",
       "x": -5.5,
       "y": 1,
       "z": 5.5,
-      "ry": 0
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
     },
     {
       "assetId": "tall_box",
       "x": -5.5,
       "y": 1,
       "z": 7.5,
-      "ry": 0
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
     },
     {
       "assetId": "tall_box",
       "x": -6.5,
       "y": 1,
       "z": 7.5,
-      "ry": 0
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
     },
     {
       "assetId": "tall_box",
       "x": -7.5,
       "y": 1,
       "z": 7.5,
-      "ry": 0
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
     },
     {
       "assetId": "tall_box",
       "x": -8.5,
       "y": 1,
       "z": 7.5,
-      "ry": 0
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
     }
   ],
   "placerSelectedAsset": "tall_box",
@@ -270,5 +318,9 @@
   "enemyDestructionParticleGlow": 8,
   "enemyDestructionPhysics": true,
   "placerObjectColor": "#445566",
-  "doubleJumpEnabled": false
+  "doubleJumpEnabled": false,
+  "placerScaleX": 1,
+  "placerScaleY": 1,
+  "placerScaleZ": 1,
+  "placerRotationDeg": 0
 }

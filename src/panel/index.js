@@ -35,280 +35,332 @@ const ICON_LANDSCAPE = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" vi
 const ICON_ASSETS = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M450-199 256-312q-14.25-8.43-22.12-22.21Q226-348 226-364v-226q0-16 7.88-29.79Q241.75-633.57 256-642l194-113q14.33-8 30.16-8 15.84 0 29.84 8l194 113q14.25 8.43 22.13 22.21Q734-606 734-590v226q0 16-7.87 29.79Q718.25-320.43 704-312L510-199q-14.33 8-30.16 8-15.84 0-29.84-8Zm16-23v-248L254-590v226q0 8 4 15t12 12l196 115Zm28 0 196-115q8-5 12-12t4-15v-226L494-470v248ZM145.96-666q-5.96 0-9.96-4.03-4-4.02-4-9.97v-88q0-24.75 17.63-42.38Q167.25-828 192-828h88q5.95 0 9.98 4.04 4.02 4.03 4.02 10 0 5.96-4.02 9.96-4.03 4-9.98 4h-88q-14 0-23 9t-9 23v88q0 5.95-4.04 9.97-4.03 4.03-10 4.03ZM192-132q-24.75 0-42.37-17.63Q132-167.25 132-192v-88q0-5.95 4.04-9.98 4.03-4.02 10-4.02 5.96 0 9.96 4.02 4 4.03 4 9.98v88q0 14 9 23t23 9h88q5.95 0 9.98 4.04 4.02 4.03 4.02 10 0 5.96-4.02 9.96-4.03 4-9.98 4h-88Zm576 0h-88q-5.95 0-9.97-4.04-4.03-4.03-4.03-10 0-5.96 4.03-9.96 4.02-4 9.97-4h88q14 0 23-9t9-23v-88q0-5.95 4.04-9.98 4.03-4.02 10-4.02 5.96 0 9.96 4.02 4 4.03 4 9.98v88q0 24.75-17.62 42.37Q792.75-132 768-132Zm32-548v-88q0-14-9-23t-23-9h-88q-5.95 0-9.97-4.04-4.03-4.03-4.03-10 0-5.96 4.03-9.96 4.02-4 9.97-4h88q24.75 0 42.38 17.62Q828-792.75 828-768v88q0 5.95-4.04 9.97-4.03 4.03-10 4.03-5.96 0-9.96-4.03-4-4.02-4-9.97ZM480-494l212-122-196-113q-8-5-16-5t-16 5L268-616l212 122Zm0 14Zm0-14Zm14 24Zm-28 0Z"/></svg>`;
 const ICON_SCENARIOS = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="m192-748 39 78q7 14 20 22t28 8q30 0 46-25.5t2-52.5l-15-30h80l39 78q7 14 20 22t28 8q30 0 46-25.5t2-52.5l-15-30h80l39 78q7 14 20 22t28 8q30 0 46-25.5t2-52.5l-15-30h56q26 0 43 17t17 43v416q0 26-17 43t-43 17H192q-26 0-43-17t-17-43v-416q0-26 17-43t43-17Zm-32 136v340q0 14 9 23t23 9h576q14 0 23-9t9-23v-340H160Zm0 0v372-372Z"/></svg>`;
 const PRESET_SETTINGS = [
-  { key: 'g10', label: 'G10', path: './presets/G10.json', data:   {
-    "cameraMode": "third2",
-    "isoCamD": 12,
-    "thirdDist": 5,
-    "thirdHeight": 3,
-    "thirdFov": 62,
-    "thirdMinDist": 3,
-    "thirdPitchDistanceCompression": 0.75,
-    "third2PitchMin": -0.9,
-    "third2PitchMax": 0.85,
-    "third2BodyFrameStrength": 1,
-    "third2BodyFrameHeight": 1.35,
-    "third2BodyScreenY": 0.45,
-    "third2MinEyeHeight": 0.15,
-    "thirdAzimuth": 4.162185307179694,
-    "thirdLookAhead": 3.8,
-    "thirdSmoothPos": 10,
-    "thirdSmoothLook": 12,
-    "thirdMouseLook": true,
-    "aimEnabled": true,
-    "aimFovDelta": -18,
-    "aimDistDelta": -1.5,
-    "aimSpeedMult": 0.55,
-    "aimSmooth": 10,
-    "thirdMouseSensitivityX": 0.003,
-    "thirdMouseSensitivityY": 0.0024,
-    "thirdPitch": -0.2631999999999968,
-    "thirdOffsetMode": "parallel",
-    "thirdOffsetX": 1.25,
-    "thirdOffsetY": -0.25,
-    "thirdOffsetZ": -0.25,
-    "playerSpeed": 7,
-    "playerColor": "#0044cc",
-    "playerMetalness": 0.67,
-    "playerRoughness": 0,
-    "playerRadius": 0.4,
-    "playerLength": 1.2,
-    "playerMaxHealth": 100,
-    "playerHealth": 100,
-    "playerMaxArmor": 100,
-    "playerArmor": 100,
-    "playerInvincible": false,
-    "jumpEnabled": true,
-    "doubleJumpEnabled": false,
-    "jumpForce": 9.5,
-    "jumpGravity": 26,
-    "bulletTimeEnabled": true,
-    "bulletTimeDuration": 3,
-    "bulletTimeCooldown": 8,
-    "bulletTimeScale": 0.35,
-    "shieldVisible": false,
-    "shieldColor": "#1e7bff",
-    "shieldOpacity": 0.4,
-    "shieldRadius": 2.2,
-    "shieldHexSize": 0.05,
-    "shieldLineThickness": 0.01,
-    "shieldGlow": true,
-    "shieldLineBloom": 1,
-    "shieldBloomIntensity": 0,
-    "shieldBloomRadius": 2.01,
-    "shieldFresnelPower": 3,
-    "dashEnabled": true,
-    "dashSpeed": 28,
-    "dashDuration": 0.18,
-    "dashCooldown": 1.4,
-    "ambientIntensity": 0.42,
-    "sunIntensity": 5.8,
-    "fillIntensity": 1.35,
-    "rimIntensity": 0.82,
-    "sunAngleX": 16,
-    "sunAngleZ": 14,
-    "shadows": true,
-    "shadowQuality": "high",
-    "fogNear": 1,
-    "fogFar": 200,
-    "bgColor": "#142130",
-    "floorColor": "#0C1620",
-    "gridColor": "#000000",
-    "showFloor": true,
-    "showGrid": true,
-    "showFps": true,
-    "hudVisible": true,
-    "hudFont": "michroma",
-    "reticleVisible": true,
-    "reticleType": "triSpoke",
-    "reticleColor": "#ffffff",
-    "reticleSize": 24,
-    "reticleThickness": 2,
-    "reticleOpacity": 1,
-    "reticleGlow": false,
-    "laserEnabled": true,
-    "laserBloom": true,
-    "laserBloomColor": "#ff1100",
-    "laserBloomIntensity": 0.55,
-    "laserProjectileSpeed": 80,
-    "laserRange": 42,
-    "laserFireRate": 5,
-    "enemyType": "rusher",
-    "enemyCount": 6,
-    "enemyHealth": 100,
-    "enemyInvincible": false,
-    "enemyBehavior": "rush",
-    "enemyMoveSpeed": 2.2,
-    "enemyDamage": 10,
-    "enemyPlacement": "random",
-    "enemyWeaponType": "contact",
-    "enemyDestructionEnabled": true,
-    "enemyDestructionStandardCount": 10,
-    "enemyDestructionStandardSize": 0.25,
-    "enemyDestructionStandardSpeed": 1,
-    "enemyDestructionEliteCount": 100,
-    "enemyDestructionEliteSize": 0.5,
-    "enemyDestructionEliteSpeed": 1.75,
-    "enemyDestructionEliteGlow": 12,
-    "controllerEnabled": true,
-    "controllerMoveDeadzone": 0.12,
-    "controllerLookDeadzone": 0.1,
-    "controllerLookSensX": 0.045,
-    "controllerLookSensY": 0.036,
-    "controllerInvertY": false,
-    "controllerFireThreshold": 0.5,
-    "controllerVibration": true,
-    "tagEnabled": true,
-    "tagColor": "#ff2828",
-    "tagSize": 25,
-    "tagDwellTime": 0.8,
-    "tagThickness": 12,
-    "tagBloom": 0,
-    "tagShadow": 1,
-    "tagHeight": 30,
-    "placedObjects": [
-      {
-        "assetId": "cylinder",
-        "x": -9.5,
-        "y": 0.6,
-        "z": 7.5,
-        "ry": 0
-      },
-      {
-        "assetId": "ramp",
-        "x": -8,
-        "y": 0,
-        "z": 4,
-        "ry": 0
-      },
-      {
-        "assetId": "tall_box",
-        "x": -6.5,
-        "y": 1,
-        "z": 5.5,
-        "ry": 0
-      },
-      {
-        "assetId": "tall_box",
-        "x": -7.5,
-        "y": 1,
-        "z": 5.5,
-        "ry": 0
-      },
-      {
-        "assetId": "tall_box",
-        "x": -8.5,
-        "y": 1,
-        "z": 5.5,
-        "ry": 0
-      },
-      {
-        "assetId": "tall_box",
-        "x": -9.5,
-        "y": 1,
-        "z": 5.5,
-        "ry": 0
-      },
-      {
-        "assetId": "tall_box",
-        "x": -6.5,
-        "y": 1,
-        "z": 6.5,
-        "ry": 0
-      },
-      {
-        "assetId": "tall_box",
-        "x": -9.5,
-        "y": 1,
-        "z": 6.5,
-        "ry": 0
-      },
-      {
-        "assetId": "tall_box",
-        "x": -8.5,
-        "y": 1,
-        "z": 6.5,
-        "ry": 0
-      },
-      {
-        "assetId": "tall_box",
-        "x": -7.5,
-        "y": 1,
-        "z": 6.5,
-        "ry": 0
-      },
-      {
-        "assetId": "tall_box",
-        "x": -5.5,
-        "y": 1,
-        "z": 6.5,
-        "ry": 0
-      },
-      {
-        "assetId": "tall_box",
-        "x": -5.5,
-        "y": 1,
-        "z": 5.5,
-        "ry": 0
-      },
-      {
-        "assetId": "tall_box",
-        "x": -5.5,
-        "y": 1,
-        "z": 7.5,
-        "ry": 0
-      },
-      {
-        "assetId": "tall_box",
-        "x": -6.5,
-        "y": 1,
-        "z": 7.5,
-        "ry": 0
-      },
-      {
-        "assetId": "tall_box",
-        "x": -7.5,
-        "y": 1,
-        "z": 7.5,
-        "ry": 0
-      },
-      {
-        "assetId": "tall_box",
-        "x": -8.5,
-        "y": 1,
-        "z": 7.5,
-        "ry": 0
-      }
-    ],
-    "placerSelectedAsset": "tall_box",
-    "radarEnabled": true,
-    "radarRadius": 60,
-    "radarRange": 60,
-    "radarBgColor": "#0a1628",
-    "radarEnemyColor": "#ff3030",
-    "radarOpacity": 0.82,
-    "radarTaggedColor": "#FF3030",
-    "soundMuted": false,
-    "soundMusicVolume": 0.4,
-    "soundSfxVolume": 1,
-    "soundSfx_shoot": 1,
-    "soundSfx_dash": 1,
-    "soundSfx_player_hit": 1,
-    "soundSfx_standard_hit": 1,
-    "soundSfx_elite_hit": 1,
-    "soundSfx_explode": 1,
-    "soundSfx_coin": 1,
-    "soundSfx_heal": 1,
-    "soundSfx_levelup": 1,
-    "soundSfx_gameover": 1,
-    "soundSfx_victory": 1,
-    "soundSfx_ambience": 0.5,
-    "enemyDestructionParticleCount": 40,
-    "enemyDestructionParticleSize": 0.32,
-    "enemyDestructionParticleSpeed": 1.25,
-    "enemyDestructionParticleGlow": 8,
-    "enemyDestructionPhysics": true,
-    "placerObjectColor": "#445566"
-  } },
+  { key: 'g10', label: 'G10', path: './presets/G10.json', data: {
+  "cameraMode": "third2",
+  "isoCamD": 12,
+  "thirdDist": 5,
+  "thirdHeight": 3,
+  "thirdFov": 62,
+  "thirdMinDist": 3,
+  "thirdPitchDistanceCompression": 0.75,
+  "third2PitchMin": -0.9,
+  "third2PitchMax": 0.85,
+  "third2BodyFrameStrength": 1,
+  "third2BodyFrameHeight": 1.35,
+  "third2BodyScreenY": 0.45,
+  "third2MinEyeHeight": 0.15,
+  "thirdAzimuth": 4.162185307179694,
+  "thirdLookAhead": 3.8,
+  "thirdSmoothPos": 10,
+  "thirdSmoothLook": 12,
+  "thirdMouseLook": true,
+  "aimEnabled": true,
+  "aimFovDelta": -18,
+  "aimDistDelta": -1.5,
+  "aimSpeedMult": 0.55,
+  "aimSmooth": 10,
+  "thirdMouseSensitivityX": 0.003,
+  "thirdMouseSensitivityY": 0.0024,
+  "thirdPitch": -0.2631999999999968,
+  "thirdOffsetMode": "parallel",
+  "thirdOffsetX": 1.25,
+  "thirdOffsetY": -0.25,
+  "thirdOffsetZ": -0.25,
+  "playerSpeed": 7,
+  "playerColor": "#0044cc",
+  "playerMetalness": 0.67,
+  "playerRoughness": 0,
+  "playerRadius": 0.4,
+  "playerLength": 1.2,
+  "playerMaxHealth": 100,
+  "playerHealth": 100,
+  "playerMaxArmor": 100,
+  "playerArmor": 100,
+  "playerInvincible": false,
+  "jumpEnabled": true,
+  "jumpForce": 9.5,
+  "jumpGravity": 26,
+  "bulletTimeEnabled": true,
+  "bulletTimeDuration": 3,
+  "bulletTimeCooldown": 8,
+  "bulletTimeScale": 0.35,
+  "shieldVisible": false,
+  "shieldColor": "#1e7bff",
+  "shieldOpacity": 0.4,
+  "shieldRadius": 2.2,
+  "shieldHexSize": 0.05,
+  "shieldLineThickness": 0.01,
+  "shieldGlow": true,
+  "shieldLineBloom": 1,
+  "shieldBloomIntensity": 0,
+  "shieldBloomRadius": 2.01,
+  "shieldFresnelPower": 3,
+  "dashEnabled": true,
+  "dashSpeed": 28,
+  "dashDuration": 0.18,
+  "dashCooldown": 1.4,
+  "ambientIntensity": 0.42,
+  "sunIntensity": 5.8,
+  "fillIntensity": 1.35,
+  "rimIntensity": 0.82,
+  "sunAngleX": 16,
+  "sunAngleZ": 14,
+  "shadows": true,
+  "shadowQuality": "high",
+  "fogNear": 1,
+  "fogFar": 200,
+  "bgColor": "#142130",
+  "floorColor": "#0C1620",
+  "gridColor": "#000000",
+  "showFloor": true,
+  "showGrid": true,
+  "showFps": true,
+  "hudVisible": true,
+  "hudFont": "michroma",
+  "reticleVisible": true,
+  "reticleType": "triSpoke",
+  "reticleColor": "#ffffff",
+  "reticleSize": 24,
+  "reticleThickness": 2,
+  "reticleOpacity": 1,
+  "reticleGlow": false,
+  "laserEnabled": true,
+  "laserBloom": true,
+  "laserBloomColor": "#ff1100",
+  "laserBloomIntensity": 0.55,
+  "laserProjectileSpeed": 80,
+  "laserRange": 42,
+  "laserFireRate": 5,
+  "enemyType": "rusher",
+  "enemyCount": 6,
+  "enemyHealth": 100,
+  "enemyInvincible": false,
+  "enemyBehavior": "rush",
+  "enemyMoveSpeed": 2.2,
+  "enemyDamage": 10,
+  "enemyPlacement": "random",
+  "enemyWeaponType": "contact",
+  "enemyDestructionEnabled": true,
+  "enemyDestructionStandardCount": 10,
+  "enemyDestructionStandardSize": 0.25,
+  "enemyDestructionStandardSpeed": 1,
+  "enemyDestructionEliteCount": 100,
+  "enemyDestructionEliteSize": 0.5,
+  "enemyDestructionEliteSpeed": 1.75,
+  "enemyDestructionEliteGlow": 12,
+  "controllerEnabled": true,
+  "controllerMoveDeadzone": 0.12,
+  "controllerLookDeadzone": 0.1,
+  "controllerLookSensX": 0.045,
+  "controllerLookSensY": 0.036,
+  "controllerInvertY": false,
+  "controllerFireThreshold": 0.5,
+  "controllerVibration": true,
+  "tagEnabled": true,
+  "tagColor": "#ff2828",
+  "tagSize": 25,
+  "tagDwellTime": 0.8,
+  "tagThickness": 12,
+  "tagBloom": 0,
+  "tagShadow": 1,
+  "tagHeight": 30,
+  "placedObjects": [
+    {
+      "assetId": "cylinder",
+      "x": -9.5,
+      "y": 0.6,
+      "z": 7.5,
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
+    },
+    {
+      "assetId": "ramp",
+      "x": -8,
+      "y": 0,
+      "z": 4,
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
+    },
+    {
+      "assetId": "tall_box",
+      "x": -6.5,
+      "y": 1,
+      "z": 5.5,
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
+    },
+    {
+      "assetId": "tall_box",
+      "x": -7.5,
+      "y": 1,
+      "z": 5.5,
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
+    },
+    {
+      "assetId": "tall_box",
+      "x": -8.5,
+      "y": 1,
+      "z": 5.5,
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
+    },
+    {
+      "assetId": "tall_box",
+      "x": -9.5,
+      "y": 1,
+      "z": 5.5,
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
+    },
+    {
+      "assetId": "tall_box",
+      "x": -6.5,
+      "y": 1,
+      "z": 6.5,
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
+    },
+    {
+      "assetId": "tall_box",
+      "x": -9.5,
+      "y": 1,
+      "z": 6.5,
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
+    },
+    {
+      "assetId": "tall_box",
+      "x": -8.5,
+      "y": 1,
+      "z": 6.5,
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
+    },
+    {
+      "assetId": "tall_box",
+      "x": -7.5,
+      "y": 1,
+      "z": 6.5,
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
+    },
+    {
+      "assetId": "tall_box",
+      "x": -5.5,
+      "y": 1,
+      "z": 6.5,
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
+    },
+    {
+      "assetId": "tall_box",
+      "x": -5.5,
+      "y": 1,
+      "z": 5.5,
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
+    },
+    {
+      "assetId": "tall_box",
+      "x": -5.5,
+      "y": 1,
+      "z": 7.5,
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
+    },
+    {
+      "assetId": "tall_box",
+      "x": -6.5,
+      "y": 1,
+      "z": 7.5,
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
+    },
+    {
+      "assetId": "tall_box",
+      "x": -7.5,
+      "y": 1,
+      "z": 7.5,
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
+    },
+    {
+      "assetId": "tall_box",
+      "x": -8.5,
+      "y": 1,
+      "z": 7.5,
+      "ry": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1
+    }
+  ],
+  "placerSelectedAsset": "tall_box",
+  "radarEnabled": true,
+  "radarRadius": 60,
+  "radarRange": 60,
+  "radarBgColor": "#0a1628",
+  "radarEnemyColor": "#ff3030",
+  "radarOpacity": 0.82,
+  "radarTaggedColor": "#FF3030",
+  "soundMuted": false,
+  "soundMusicVolume": 0.4,
+  "soundSfxVolume": 1,
+  "soundSfx_shoot": 1,
+  "soundSfx_dash": 1,
+  "soundSfx_player_hit": 1,
+  "soundSfx_standard_hit": 1,
+  "soundSfx_elite_hit": 1,
+  "soundSfx_explode": 1,
+  "soundSfx_coin": 1,
+  "soundSfx_heal": 1,
+  "soundSfx_levelup": 1,
+  "soundSfx_gameover": 1,
+  "soundSfx_victory": 1,
+  "soundSfx_ambience": 0.5,
+  "enemyDestructionParticleCount": 40,
+  "enemyDestructionParticleSize": 0.32,
+  "enemyDestructionParticleSpeed": 1.25,
+  "enemyDestructionParticleGlow": 8,
+  "enemyDestructionPhysics": true,
+  "placerObjectColor": "#445566",
+  "doubleJumpEnabled": false,
+  "placerScaleX": 1,
+  "placerScaleY": 1,
+  "placerScaleZ": 1,
+  "placerRotationDeg": 0
+} },
   { key: 'g9', label: 'G9', path: './presets/G9.json', data: {
   "cameraMode": "third2",
   "isoCamD": 12,
@@ -2703,6 +2755,9 @@ function applyAllParams() {
   setGridColor(p.gridColor);
   setFloorVisible(p.showFloor);
   setGridVisible(p.showGrid);
+  const rotationDeg = ((Math.round((Number(p.placerRotationDeg) || 0) / 90) * 90) % 360 + 360) % 360;
+  p.placerRotationDeg = rotationDeg;
+  state.placerRotation = THREE.MathUtils.degToRad(rotationDeg);
   applyHudSettings();
   applyTagSettings();
   rebuildPlacedObjects();
@@ -2941,6 +2996,158 @@ export function initPanel() {
     modal.appendChild(box);
     document.body.appendChild(modal);
   }
+
+  // ── Object placer transform modal ───────────────────────────────────────────
+  if (!document.getElementById('placer-transform-modal')) {
+    const modal = document.createElement('div');
+    modal.id = 'placer-transform-modal';
+    modal.style.cssText = [
+      'display:none', 'position:fixed', 'inset:0', 'z-index:201',
+      'align-items:center', 'justify-content:center',
+      'background:rgba(0,0,0,0.65)', 'backdrop-filter:blur(4px)',
+      'cursor:default',
+    ].join(';');
+
+    const clampScale = value => Math.min(6, Math.max(0.25, Number(value) || 1));
+    const normalizeDeg = value => ((Math.round((Number(value) || 0) / 90) * 90) % 360 + 360) % 360;
+    const syncRotation = deg => {
+      const normalized = normalizeDeg(deg);
+      state.params.placerRotationDeg = normalized;
+      state.placerRotation = THREE.MathUtils.degToRad(normalized);
+      return normalized;
+    };
+
+    const openModal = () => {
+      state.primaryFire = false;
+      state.secondaryFire = false;
+      state.isAiming = false;
+      document.exitPointerLock?.();
+      document.body.classList.remove('third-person-mouse-look');
+      syncFields();
+      modal.style.display = 'flex';
+    };
+    const closeModal = () => {
+      state.secondaryFire = false;
+      modal.style.display = 'none';
+    };
+    window.__openPlacerTransformModal = openModal;
+    window.__closePlacerTransformModal = closeModal;
+
+    const box = document.createElement('div');
+    box.style.cssText = [
+      'background:#0d1117', 'border:1px solid #21262d', 'border-radius:10px',
+      'padding:20px', 'max-width:460px', 'width:90%',
+      'font-family:var(--hud-font-family,system-ui)', 'color:#c9d1d9',
+    ].join(';');
+
+    const title = document.createElement('div');
+    title.textContent = 'SHAPE TRANSFORM';
+    title.style.cssText = 'font-size:11px;font-weight:700;letter-spacing:0.18em;color:#58a6ff;margin-bottom:14px;';
+    box.appendChild(title);
+
+    const hint = document.createElement('div');
+    hint.textContent = 'Resize and rotate the next object placed.';
+    hint.style.cssText = 'font-size:11px;color:#8b949e;margin-bottom:14px;letter-spacing:0.03em;';
+    box.appendChild(hint);
+
+    const inputs = {};
+    const makeNumberRow = (label, key, min, max, step) => {
+      const rowEl = document.createElement('label');
+      rowEl.style.cssText = 'display:grid;grid-template-columns:130px 1fr 70px;gap:10px;align-items:center;margin:10px 0;font-size:11px;letter-spacing:0.08em;color:#8b949e;';
+
+      const labelEl = document.createElement('span');
+      labelEl.textContent = label;
+      rowEl.appendChild(labelEl);
+
+      const range = document.createElement('input');
+      range.type = 'range';
+      range.min = min;
+      range.max = max;
+      range.step = step;
+      range.style.cssText = 'width:100%;';
+      rowEl.appendChild(range);
+
+      const number = document.createElement('input');
+      number.type = 'number';
+      number.min = min;
+      number.max = max;
+      number.step = step;
+      number.style.cssText = 'background:#161b22;border:1px solid #21262d;border-radius:6px;color:#c9d1d9;padding:6px 8px;font-size:11px;width:70px;box-sizing:border-box;';
+      rowEl.appendChild(number);
+
+      const apply = value => {
+        const next = clampScale(value);
+        state.params[key] = next;
+        range.value = String(next);
+        number.value = String(next);
+      };
+      range.addEventListener('input', () => apply(range.value));
+      number.addEventListener('input', () => apply(number.value));
+      inputs[key] = { range, number, apply };
+      return rowEl;
+    };
+
+    const makeRotationRow = () => {
+      const rowEl = document.createElement('label');
+      rowEl.style.cssText = 'display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:center;margin:10px 0;font-size:11px;letter-spacing:0.08em;color:#8b949e;';
+
+      const labelEl = document.createElement('span');
+      labelEl.textContent = 'Rotation';
+      rowEl.appendChild(labelEl);
+
+      const selectEl = document.createElement('select');
+      selectEl.className = 'sb-select';
+      [0, 90, 180, 270].forEach(deg => {
+        const opt = document.createElement('option');
+        opt.value = String(deg);
+        opt.textContent = `${deg}°`;
+        selectEl.appendChild(opt);
+      });
+      selectEl.addEventListener('change', () => syncRotation(selectEl.value));
+      rowEl.appendChild(selectEl);
+      inputs.placerRotationDeg = { select: selectEl, apply: value => { selectEl.value = String(syncRotation(value)); } };
+      return rowEl;
+    };
+
+    box.appendChild(makeRotationRow());
+    box.appendChild(makeNumberRow('Width', 'placerScaleX', 0.25, 6, 0.25));
+    box.appendChild(makeNumberRow('Height', 'placerScaleY', 0.25, 6, 0.25));
+    box.appendChild(makeNumberRow('Depth', 'placerScaleZ', 0.25, 6, 0.25));
+
+    function syncFields() {
+      inputs.placerRotationDeg?.apply(state.params.placerRotationDeg ?? THREE.MathUtils.radToDeg(state.placerRotation ?? 0));
+      inputs.placerScaleX?.apply(state.params.placerScaleX ?? 1);
+      inputs.placerScaleY?.apply(state.params.placerScaleY ?? 1);
+      inputs.placerScaleZ?.apply(state.params.placerScaleZ ?? 1);
+    }
+
+    const buttonRow = document.createElement('div');
+    buttonRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;margin-top:16px;';
+
+    const resetBtn = document.createElement('button');
+    resetBtn.textContent = 'Reset';
+    resetBtn.style.cssText = 'background:transparent;border:1px solid #21262d;border-radius:6px;color:#8b949e;font-size:11px;padding:7px 14px;cursor:pointer;';
+    resetBtn.addEventListener('click', () => {
+      state.params.placerScaleX = 1;
+      state.params.placerScaleY = 1;
+      state.params.placerScaleZ = 1;
+      syncRotation(0);
+      syncFields();
+    });
+    buttonRow.appendChild(resetBtn);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    closeBtn.style.cssText = 'background:#161b22;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:11px;padding:7px 16px;cursor:pointer;';
+    closeBtn.addEventListener('click', closeModal);
+    buttonRow.appendChild(closeBtn);
+
+    box.appendChild(buttonRow);
+    modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+    modal.appendChild(box);
+    document.body.appendChild(modal);
+  }
+
 
   initSidebarResize();
   // Apply the active preset at startup so state.params matches the selected preset's

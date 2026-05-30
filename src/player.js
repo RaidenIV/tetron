@@ -527,7 +527,7 @@ function getPlayerCollisionRadius() {
   return Math.max(0.25, Number(state.params.playerRadius) || 0.4);
 }
 
-function getPlayerGroundHeight(stepUp = 0.35, stepDown = 0.45) {
+function getPlayerGroundHeight(stepUp = 0.7, stepDown = 0.75) {
   return getWalkablePlacedObjectHeight(playerGroup.position, getPlayerCollisionRadius(), {
     currentY: playerGroup.position.y,
     stepUp,
@@ -535,7 +535,7 @@ function getPlayerGroundHeight(stepUp = 0.35, stepDown = 0.45) {
   });
 }
 
-function syncPlayerGround(maxStepUp = 0.35, maxStepDown = 0.45) {
+function syncPlayerGround(maxStepUp = 0.7, maxStepDown = 0.75) {
   const groundHeight = getPlayerGroundHeight(maxStepUp, maxStepDown);
   const y = playerGroup.position.y;
 
@@ -646,10 +646,10 @@ export function updatePlayer(delta, moveForward, moveRight) {
     resolveCircleAgainstPlacedObjects(playerGroup.position, getPlayerCollisionRadius(), 4, {
       walkableRamps: true,
       footY: playerGroup.position.y,
-      stepUp: 0.35,
-      stepDown: 0.45,
+      stepUp: 0.7,
+      stepDown: 0.75,
     });
-    syncPlayerGround();
+    syncPlayerGround(0.7, 0.75);
   }
 
   // Dash — shunts in a fixed direction at higher speed while dashTimer > 0
@@ -660,10 +660,10 @@ export function updatePlayer(delta, moveForward, moveRight) {
     resolveCircleAgainstPlacedObjects(playerGroup.position, getPlayerCollisionRadius(), 4, {
       walkableRamps: true,
       footY: playerGroup.position.y,
-      stepUp: 0.5,
-      stepDown: 0.25,
+      stepUp: 0.7,
+      stepDown: 0.75,
     });
-    syncPlayerGround(0.5, 0.25);
+    syncPlayerGround(0.7, 0.75);
     playerMesh.rotation.z   = state.dashVX * -0.35;
     state.dashGhostTimer -= delta;
     if (state.dashGhostTimer <= 0) {

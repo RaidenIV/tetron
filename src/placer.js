@@ -2,8 +2,8 @@
 // Object placer system: ghost preview, footprint-aware grid-snapping, placement,
 // placed-object clipping, flat-top/ramp walkability, per-object colour, and targeted removal.
 // Slot 0 = laser, Slot 1 = placer. Scroll wheel switches slots.
-// R key rotates ghost 90°. Right-click removes the targeted placed object.
-// Placed objects store rotation/colour in serialised state.
+// R key opens the shape transform modal. Right-click removes the targeted placed object.
+// Placed objects store rotation/colour/scale in serialised state.
 
 import * as THREE from 'three';
 import { scene, camera } from './renderer.js';
@@ -60,10 +60,67 @@ function resolvePlacedColor(obj, asset) {
     || assetColorHex(asset);
 }
 
-function getClipHeight(asset) {
+function getBaseClipHeight(asset) {
   const explicit = Number(asset?.height);
   if (Number.isFinite(explicit) && explicit > 0) return explicit;
   return Math.max(0.5, Number(asset?.yOffset ?? 0.5) * 2);
+}
+
+function normalizeScaleValue(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(6, Math.max(0.25, n));
+}
+
+function getCurrentPlacerScale() {
+  return {
+    x: normalizeScaleValue(state.params.placerScaleX),
+    y: normalizeScaleValue(state.params.placerScaleY),
+    z: normalizeScaleValue(state.params.placerScaleZ),
+  };
+}
+
+function getPlacedScale(obj = null) {
+  if (!obj) return getCurrentPlacerScale();
+  if (!('assetId' in obj) && 'x' in obj && 'y' in obj && 'z' in obj) {
+    return {
+      x: normalizeScaleValue(obj.x),
+      y: normalizeScaleValue(obj.y),
+      z: normalizeScaleValue(obj.z),
+    };
+  }
+  return {
+    x: normalizeScaleValue(obj.scaleX ?? 1),
+    y: normalizeScaleValue(obj.scaleY ?? 1),
+    z: normalizeScaleValue(obj.scaleZ ?? 1),
+  };
+}
+
+function normalizeRotationDegrees(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return ((Math.round(n / 90) * 90) % 360 + 360) % 360;
+}
+
+function getCurrentPlacerRotation() {
+  const deg = normalizeRotationDegrees(state.params.placerRotationDeg ?? 0);
+  state.params.placerRotationDeg = deg;
+  state.placerRotation = THREE.MathUtils.degToRad(deg);
+  return state.placerRotation;
+}
+
+function getClipHeight(asset, obj = null) {
+  return getBaseClipHeight(asset) * getPlacedScale(obj).y;
+}
+
+function getClipBottom(obj, asset) {
+  const y = Number(obj?.y) || 0;
+  if (asset?.walkable === true || obj?.assetId === 'ramp') return y;
+  return y - getClipHeight(asset, obj) / 2;
+}
+
+function getClipTop(obj, asset) {
+  return getClipBottom(obj, asset) + getClipHeight(asset, obj);
 }
 
 function clamp(v, min, max) {
@@ -83,27 +140,42 @@ function clamp(v, min, max) {
 // all base edges flush with grid lines.
 
 function snapAxis(v, footprintDim) {
-  if (footprintDim % 2 === 1) {
+  const dim = Math.max(0.25, Number(footprintDim) || 1);
+  const rounded = Math.round(dim);
+
+  if (Math.abs(dim - rounded) > 0.001) {
+    // Non-cell-sized scaled shapes keep their centre on half-cell increments.
+    return Math.round(v * 2) / 2;
+  }
+
+  if (rounded % 2 === 1) {
     // Odd-width: centre inside the middle cell
     return Math.floor(v) + 0.5;
   } else {
     // Even-width: align to multiples of footprintDim
-    return Math.round(v / footprintDim) * footprintDim;
+    return Math.round(v / rounded) * rounded;
   }
 }
 
-function getEffectiveFootprint(assetId, ry) {
+function getLocalFootprint(asset, scaleSource = null) {
+  const scale = getPlacedScale(scaleSource);
+  return {
+    fw: Math.max(0.25, Number(asset?.footprintW ?? 1) * scale.x),
+    fh: Math.max(0.25, Number(asset?.footprintH ?? 1) * scale.z),
+  };
+}
+
+function getEffectiveFootprint(assetId, ry, scaleSource = null) {
   const asset = getAsset(assetId);
-  const fw = asset.footprintW ?? 1;
-  const fh = asset.footprintH ?? 1;
+  const { fw, fh } = getLocalFootprint(asset, scaleSource);
   // 90° or 270° rotation swaps X and Z footprint dimensions
   const rotSteps = Math.round(((ry % (Math.PI * 2)) + Math.PI * 2) / (Math.PI / 2)) % 4;
   if (rotSteps === 1 || rotSteps === 3) return { fw: fh, fh: fw };
   return { fw, fh };
 }
 
-function snapToFootprint(worldX, worldZ, assetId, ry) {
-  const { fw, fh } = getEffectiveFootprint(assetId, ry);
+function snapToFootprint(worldX, worldZ, assetId, ry, scaleSource = null) {
+  const { fw, fh } = getEffectiveFootprint(assetId, ry, scaleSource);
   return {
     sx: snapAxis(worldX, fw),
     sz: snapAxis(worldZ, fh),
@@ -129,32 +201,47 @@ function footprintCells(cx, cz, fw, fh) {
   return cells;
 }
 
-function isFootprintOccupied(sx, sz, fw, fh) {
-  const newCells = new Set(footprintCells(sx, sz, fw, fh));
+function boundsOverlap(a, b, padding = 0.001) {
+  return a.minX < b.maxX - padding
+    && a.maxX > b.minX + padding
+    && a.minZ < b.maxZ - padding
+    && a.maxZ > b.minZ + padding;
+}
+
+function makeBounds(assetId, x, z, ry, scaleSource = null, y = 0) {
+  const asset = getAsset(assetId);
+  const scale = getPlacedScale(scaleSource);
+  const yOffset = Number(asset?.yOffset ?? 0.5) * scale.y;
+  const obj = { assetId, x, y: Number.isFinite(Number(y)) ? Number(y) : yOffset, z, ry,
+    scaleX: scale.x, scaleY: scale.y, scaleZ: scale.z };
+  const { fw, fh } = getEffectiveFootprint(assetId, ry ?? 0, obj);
+  return {
+    asset,
+    minX: x - fw / 2,
+    maxX: x + fw / 2,
+    minZ: z - fh / 2,
+    maxZ: z + fh / 2,
+    minY: getClipBottom(obj, asset),
+    maxY: getClipTop(obj, asset),
+  };
+}
+
+function isFootprintOccupied(sx, sz, assetId, ry, scaleSource = null) {
+  const asset = getAsset(assetId);
+  const scale = getPlacedScale(scaleSource);
+  const y = Number(asset?.yOffset ?? 0.5) * scale.y;
+  const candidate = makeBounds(assetId, sx, sz, ry, scale, y);
   const list = state.params.placedObjects || [];
   for (const obj of list) {
-    const asset = getAsset(obj.assetId);
-    if (asset.clip === false) continue;
-    const { fw: ofw, fh: ofh } = getEffectiveFootprint(obj.assetId, obj.ry ?? 0);
-    for (const cell of footprintCells(obj.x, obj.z, ofw, ofh)) {
-      if (newCells.has(cell)) return true;
-    }
+    const bounds = placedObjectBounds(obj);
+    if (bounds.asset.clip === false) continue;
+    if (boundsOverlap(candidate, bounds)) return true;
   }
   return false;
 }
 
 function placedObjectBounds(obj) {
-  const asset = getAsset(obj.assetId);
-  const { fw, fh } = getEffectiveFootprint(obj.assetId, obj.ry ?? 0);
-  return {
-    asset,
-    minX: obj.x - fw / 2,
-    maxX: obj.x + fw / 2,
-    minZ: obj.z - fh / 2,
-    maxZ: obj.z + fh / 2,
-    minY: 0,
-    maxY: getClipHeight(asset),
-  };
+  return makeBounds(obj.assetId, obj.x, obj.z, obj.ry ?? 0, obj, obj.y);
 }
 
 function localPointForObject(obj, worldX, worldZ) {
@@ -169,9 +256,8 @@ function localPointForObject(obj, worldX, worldZ) {
   };
 }
 
-function isInsideLocalFootprint(local, asset, padding = 0) {
-  const fw = Number(asset?.footprintW ?? 1);
-  const fh = Number(asset?.footprintH ?? 1);
+function isInsideLocalFootprint(local, asset, padding = 0, scaleSource = null) {
+  const { fw, fh } = getLocalFootprint(asset, scaleSource);
   return local.x >= -fw / 2 - padding
     && local.x <=  fw / 2 + padding
     && local.z >= -fh / 2 - padding
@@ -181,18 +267,18 @@ function isInsideLocalFootprint(local, asset, padding = 0) {
 function rampSurfaceHeightAt(obj, asset, worldX, worldZ, padding = 0) {
   if (obj.assetId !== 'ramp' && asset.walkable !== true) return null;
   const local = localPointForObject(obj, worldX, worldZ);
-  if (!isInsideLocalFootprint(local, asset, padding)) return null;
+  if (!isInsideLocalFootprint(local, asset, padding, obj)) return null;
 
-  const fh = Math.max(0.001, Number(asset?.footprintH ?? 1));
-  const t = clamp((local.z + fh / 2) / fh, 0, 1);
-  return (Number(obj.y) || 0) + t * getClipHeight(asset);
+  const { fh } = getLocalFootprint(asset, obj);
+  const t = clamp((local.z + fh / 2) / Math.max(0.001, fh), 0, 1);
+  return getClipBottom(obj, asset) + t * getClipHeight(asset, obj);
 }
 
 function flatTopHeightAt(obj, asset, worldX, worldZ, padding = 0) {
   if (asset.clip === false || asset.walkable === true) return null;
   const local = localPointForObject(obj, worldX, worldZ);
-  if (!isInsideLocalFootprint(local, asset, padding)) return null;
-  return getClipHeight(asset);
+  if (!isInsideLocalFootprint(local, asset, padding, obj)) return null;
+  return getClipTop(obj, asset);
 }
 
 function canStandOnObjectTop(footY, topY, stepUp = 0.35, stepDown = 0.45) {
@@ -216,7 +302,7 @@ export function getWalkablePlacedObjectHeight(position, radius = 0.35, options =
     const asset = getAsset(obj.assetId);
     if (asset.clip === false) continue;
 
-    const rampY = rampSurfaceHeightAt(obj, asset, position.x, position.z, r * 0.35);
+    const rampY = rampSurfaceHeightAt(obj, asset, position.x, position.z, Math.max(r, 0.12));
     if (rampY !== null && rampY > height) {
       height = rampY;
       continue;
@@ -287,7 +373,7 @@ export function resolveCircleAgainstPlacedObjects(position, radius = 0.45, passe
       if (options.walkableRamps === true && bounds.asset.walkable === true) continue;
       if (Number.isFinite(Number(options.footY)) && bounds.asset.walkable !== true) {
         const local = localPointForObject(obj, position.x, position.z);
-        if (isInsideLocalFootprint(local, bounds.asset, r)
+        if (isInsideLocalFootprint(local, bounds.asset, r, obj)
           && canStandOnObjectTop(options.footY, bounds.maxY, options.stepUp, options.stepDown)) {
           continue;
         }
@@ -403,14 +489,16 @@ function removePlacedObjectByAim() {
   return removePlacedMesh(hits[0].object);
 }
 
-function removePlacedObjectAtFootprint(sx, sz, fw, fh) {
-  const targetCells = new Set(footprintCells(sx, sz, fw, fh));
+function removePlacedObjectAtFootprint(sx, sz, assetId, ry, scaleSource = null) {
+  const asset = getAsset(assetId);
+  const scale = getPlacedScale(scaleSource);
+  const y = Number(asset?.yOffset ?? 0.5) * scale.y;
+  const targetBounds = makeBounds(assetId, sx, sz, ry, scale, y);
   const list = state.params.placedObjects || [];
   for (let i = list.length - 1; i >= 0; i--) {
     const obj = list[i];
-    const { fw: ofw, fh: ofh } = getEffectiveFootprint(obj.assetId, obj.ry ?? 0);
-    const overlaps = footprintCells(obj.x, obj.z, ofw, ofh).some(cell => targetCells.has(cell));
-    if (overlaps && _placedMeshes[i]) return removePlacedMesh(_placedMeshes[i]);
+    const bounds = placedObjectBounds(obj);
+    if (boundsOverlap(targetBounds, bounds) && _placedMeshes[i]) return removePlacedMesh(_placedMeshes[i]);
   }
   return false;
 }
@@ -426,8 +514,10 @@ export function rebuildPlacedObjects() {
     const asset = getAsset(obj.assetId);
     const mesh  = new THREE.Mesh(makeGeo(asset.id), materialForAsset(asset, obj));
     mesh.userData.placedObject = obj;
+    const scale = getPlacedScale(obj);
     mesh.position.set(obj.x, obj.y, obj.z);
     mesh.rotation.y    = obj.ry ?? 0;
+    mesh.scale.set(scale.x, scale.y, scale.z);
     mesh.castShadow    = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
@@ -438,11 +528,15 @@ export function rebuildPlacedObjects() {
 function placeObject(sx, sz) {
   const assetId = state.params.placerSelectedAsset || 'box';
   const asset   = getAsset(assetId);
-  const yOff    = asset.yOffset ?? 0.5;
-  const ry      = state.placerRotation ?? 0;
+  const scale   = getCurrentPlacerScale();
+  const yOff    = (asset.yOffset ?? 0.5) * scale.y;
+  const ry      = getCurrentPlacerRotation();
 
   const color = resolvePlacedColor(null, asset);
-  const placed = { assetId, x: sx, y: yOff, z: sz, ry, color };
+  const placed = {
+    assetId, x: sx, y: yOff, z: sz, ry, color,
+    scaleX: scale.x, scaleY: scale.y, scaleZ: scale.z,
+  };
   const list = state.params.placedObjects || [];
   list.push(placed);
   state.params.placedObjects = list;
@@ -451,6 +545,7 @@ function placeObject(sx, sz) {
   mesh.userData.placedObject = placed;
   mesh.position.set(sx, yOff, sz);
   mesh.rotation.y    = ry;
+  mesh.scale.set(scale.x, scale.y, scale.z);
   mesh.castShadow    = true;
   mesh.receiveShadow = true;
   scene.add(mesh);
@@ -511,7 +606,7 @@ export function updatePlacer() {
   if (!state.paused) {
     slotEl.textContent = slot === 0
       ? '[ LASER ]  placer'
-      : 'laser  [ PLACER ]  ·  R rotate  ·  F pick  ·  Right-click remove';
+      : 'laser  [ PLACER ]  ·  R transform  ·  F pick  ·  Right-click remove';
   }
 
   // Hide ghost when not in placer mode
@@ -528,10 +623,13 @@ export function updatePlacer() {
   if (!_ghostMesh) rebuildGhost(assetId);
   syncGhostColor(getAsset(assetId));
 
-  // Apply current rotation to ghost
-  const ry = state.placerRotation ?? 0;
+  // Apply current transform to ghost
+  const ry = getCurrentPlacerRotation();
+  const scale = getCurrentPlacerScale();
   _ghostMesh.rotation.y = ry;
   _ghostWire.rotation.y = ry;
+  _ghostMesh.scale.set(scale.x, scale.y, scale.z);
+  _ghostWire.scale.set(scale.x, scale.y, scale.z);
 
   // Raycast camera centre → placed objects first, then floor plane.
   camera.updateMatrixWorld(true);
@@ -547,21 +645,21 @@ export function updatePlacer() {
 
   if (hit) {
     const asset = getAsset(assetId);
-    const yOff  = asset.yOffset ?? 0.5;
+    const yOff  = (asset.yOffset ?? 0.5) * scale.y;
 
     // Footprint-aware snap: aligns base edges to grid lines
-    const { sx, sz, fw, fh } = snapToFootprint(_hitPoint.x, _hitPoint.z, assetId, ry);
+    const { sx, sz } = snapToFootprint(_hitPoint.x, _hitPoint.z, assetId, ry, scale);
 
     _ghostMesh.position.set(sx, yOff, sz);
     _ghostWire.position.copy(_ghostMesh.position);
 
-    const occupied = isFootprintOccupied(sx, sz, fw, fh);
+    const occupied = isFootprintOccupied(sx, sz, assetId, ry, scale);
     _ghostMesh.material = occupied ? _ghostBlockedMat : _ghostMat;
     _ghostMesh.visible  = true;
     _ghostWire.visible  = true;
 
     if (removePressed && occupied) {
-      removePlacedObjectAtFootprint(sx, sz, fw, fh);
+      removePlacedObjectAtFootprint(sx, sz, assetId, ry, scale);
     } else if (state.primaryFire && !_firePrev && !occupied) {
       placeObject(sx, sz);
     }

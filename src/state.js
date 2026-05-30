@@ -312,7 +312,11 @@ export const state = {
         "enemyDestructionParticleSpeed": 1.25,
         "enemyDestructionParticleGlow": 8,
         "enemyDestructionPhysics": true,
-        "placerObjectColor": "#445566"
+        "placerObjectColor": "#445566",
+        "placerScaleX": 1,
+        "placerScaleY": 1,
+        "placerScaleZ": 1,
+        "placerRotationDeg": 0
   },
 };
 
