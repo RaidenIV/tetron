@@ -29,6 +29,7 @@ const ICON_CONTROLLER = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" v
 
 const ICON_SOUND = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M564-195v-30q81-30 130.5-100T744-481q0-86-49.5-156T564-737v-30q92 33 150 111t58 175q0 97-58 175T564-195ZM188-412v-136h130l126-126v388L318-412H188Zm376 56v-250q30 22 45 55.5t15 70.5q0 37-15.5 69.5T564-356ZM416-606l-86 86H216v80h114l86 86v-252ZM316-480Z"/></svg>`;
 const ICON_ALLIES = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M52-262v-26q0-35 38-58.5t97-23.5q8 0 18 1t22 3q-8 15-11.5 30.5T212-305v43H52Zm240 0v-39q0-21.84 13-39.92Q318-359 344-372t60-19.5q34-6.5 75.6-6.5 42.4 0 76.4 6.5 34 6.5 60 19.5t39 31.08q13 18.08 13 39.92v39H292Zm456 0v-42.7q0-17.08-3.5-32.19T734-366q13-2 22.5-3t17.5-1q59 0 96.5 23.5T908-288v26H748Zm-428-28h320v-11q0-31-44-50t-116-19q-72 0-116 19t-44 50v11ZM186.73-407q-20.73 0-35.23-14.69Q137-436.38 137-457q0-20 14.69-34.5T187-506q20 0 35 14.5t15 34.8q0 19.7-14.45 34.7-14.45 15-35.82 15ZM774-407q-20 0-35-15t-15-34.7q0-20.3 15-34.8 15-14.5 35.19-14.5 20.81 0 35.31 14.5Q824-477 824-457q0 20.62-14.37 35.31Q795.25-407 774-407Zm-293.65-21Q448-428 425-450.75T402-506q0-33.15 22.75-55.58Q447.5-584 480-584q33.15 0 55.58 22.32Q558-539.35 558-506.35 558-474 535.68-451q-22.33 23-55.33 23Zm.15-28q20.5 0 35-15t14.5-35.5q0-20.5-14.37-35Q501.25-556 480-556q-20 0-35 14.37-15 14.38-15 35.63 0 20 15 35t35.5 15Zm-.5 166Zm0-216Z"/></svg>`;
+const ICON_LANDSCAPE = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M80-200v-78l240-240 160 160 200-240L880-240v40H80Zm0-155 240-238 160 160 200-239 200 197v-325H80v445Zm0 127h800v-69L683-500 484-262 324-422 80-184v-16 16Zm800-600H80h800ZM384-420q-26 0-43-17t-17-43q0-26 17-43t43-17q26 0 43 17t17 43q0 26-17 43t-43 17Z"/></svg>`;
 const PRESET_SETTINGS = [
   { key: 'g5', label: 'G5', path: './presets/G5.json', data: {
   "cameraMode": "third2",
@@ -1431,6 +1432,29 @@ function buildAllies(body) {
 }
 
 
+function buildLandscape(body) {
+  body.appendChild(subhdr('Sky & Fog'));
+  body.appendChild(colorPicker('Background', 'bgColor', v => {
+    scene.background = new THREE.Color(v);
+    if (scene.fog) scene.fog.color.set(v);
+  }));
+  body.appendChild(slider({
+    key: 'fogNear', label: 'Fog Near', min: 0, max: 100, step: 1, dec: 0,
+    onChange: v => { if (scene.fog) scene.fog.near = v; },
+  }));
+  body.appendChild(slider({
+    key: 'fogFar', label: 'Fog Far', min: 10, max: 500, step: 5, dec: 0,
+    onChange: v => { if (scene.fog) scene.fog.far = v; },
+  }));
+
+  body.appendChild(subhdr('Floor'));
+  body.appendChild(colorPicker('Floor Color', 'floorColor', v => setFloorColor(v)));
+  body.appendChild(colorPicker('Grid Color',  'gridColor',  v => setGridColor(v)));
+  body.appendChild(toggle('Show Floor', 'showFloor', v => setFloorVisible(v)));
+  body.appendChild(toggle('Show Grid',  'showGrid',  v => setGridVisible(v)));
+}
+
+
 // ── JSON export / import / reset ───────────────────────────────────────────────
 
 // Export serialises state.params and triggers a file download.
@@ -1509,10 +1533,17 @@ async function applyPreset(key) {
   if (!preset) return;
 
   try {
-    let presetData = preset.data;
+    // Start with the complete inline data (always up to date).
+    // If the server has a newer JSON, merge it on top — but inline wins for any
+    // key the server file is missing (avoids stale deployed JSON wiping new params).
+    let presetData = { ...preset.data };
     try {
       const response = await fetch(preset.path, { cache: 'no-store' });
-      if (response.ok) presetData = await response.json();
+      if (response.ok) {
+        const serverData = await response.json();
+        // Server data takes priority only for keys it actually contains.
+        presetData = { ...preset.data, ...serverData };
+      }
     } catch {
       // Fall back to the embedded preset so local file previews still work.
     }
@@ -1702,6 +1733,7 @@ function rebuildPanel() {
     [ICON_SOUND, 'Sound', buildSound],
     [ICON_CONTROLLER, 'Controller', buildController],
     [ICON_ALLIES, 'Allies', buildAllies],
+    [ICON_LANDSCAPE, 'Landscape', buildLandscape],
   ];
 
   sectionDefs.forEach(([icon, title, buildFn]) => {

@@ -503,7 +503,7 @@ body.is-paused * {
 #radar-canvas {
   position: fixed;
   bottom: 28px;
-  right: 28px;
+  right: calc(var(--sb-width, 320px) + 28px);
   z-index: 24;
   pointer-events: none;
   border-radius: 50%;
