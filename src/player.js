@@ -527,12 +527,16 @@ function getPlayerCollisionRadius() {
   return Math.max(0.25, Number(state.params.playerRadius) || 0.4);
 }
 
-function getPlayerGroundHeight() {
-  return getWalkablePlacedObjectHeight(playerGroup.position, getPlayerCollisionRadius());
+function getPlayerGroundHeight(stepUp = 0.35, stepDown = 0.45) {
+  return getWalkablePlacedObjectHeight(playerGroup.position, getPlayerCollisionRadius(), {
+    currentY: playerGroup.position.y,
+    stepUp,
+    stepDown,
+  });
 }
 
-function syncPlayerGround(maxStepUp = 0.35, maxStepDown = 0.35) {
-  const groundHeight = getPlayerGroundHeight();
+function syncPlayerGround(maxStepUp = 0.35, maxStepDown = 0.45) {
+  const groundHeight = getPlayerGroundHeight(maxStepUp, maxStepDown);
   const y = playerGroup.position.y;
 
   if (state.jumpGrounded) {
@@ -540,6 +544,7 @@ function syncPlayerGround(maxStepUp = 0.35, maxStepDown = 0.35) {
     if (delta >= -maxStepDown && delta <= maxStepUp) {
       playerGroup.position.y = groundHeight;
       state.jumpVelocity = 0;
+      state.jumpAirJumpsUsed = 0;
     } else if (delta < -maxStepDown) {
       state.jumpGrounded = false;
     }
@@ -547,6 +552,7 @@ function syncPlayerGround(maxStepUp = 0.35, maxStepDown = 0.35) {
     playerGroup.position.y = groundHeight;
     state.jumpVelocity = 0;
     state.jumpGrounded = true;
+    state.jumpAirJumpsUsed = 0;
   }
 }
 
@@ -558,6 +564,7 @@ function updateJump(delta) {
     state.jumpQueued = false;
     state.jumpVelocity = 0;
     state.jumpGrounded = true;
+    state.jumpAirJumpsUsed = 0;
     playerGroup.position.y = groundHeight;
     return;
   }
@@ -569,9 +576,15 @@ function updateJump(delta) {
     playerGroup.position.y = groundHeight;
   }
 
-  if (state.jumpQueued && state.jumpGrounded) {
-    state.jumpVelocity = jumpForce;
-    state.jumpGrounded = false;
+  if (state.jumpQueued) {
+    if (state.jumpGrounded) {
+      state.jumpVelocity = jumpForce;
+      state.jumpGrounded = false;
+      state.jumpAirJumpsUsed = 0;
+    } else if (p.doubleJumpEnabled && (state.jumpAirJumpsUsed || 0) < 1) {
+      state.jumpVelocity = jumpForce;
+      state.jumpAirJumpsUsed = (state.jumpAirJumpsUsed || 0) + 1;
+    }
   }
   state.jumpQueued = false;
 
@@ -583,6 +596,7 @@ function updateJump(delta) {
       playerGroup.position.y = groundHeight;
       state.jumpVelocity = 0;
       state.jumpGrounded = true;
+      state.jumpAirJumpsUsed = 0;
     }
   } else if (state.jumpGrounded) {
     playerGroup.position.y = groundHeight;
@@ -629,7 +643,12 @@ export function updatePlayer(delta, moveForward, moveRight) {
       ? Math.max(0.1, Math.min(1, Number(state.params.aimSpeedMult) || 0.55))
       : 1;
     playerGroup.position.addScaledVector(_v, speed * aimMult * delta);
-    resolveCircleAgainstPlacedObjects(playerGroup.position, getPlayerCollisionRadius(), 4, { walkableRamps: true });
+    resolveCircleAgainstPlacedObjects(playerGroup.position, getPlayerCollisionRadius(), 4, {
+      walkableRamps: true,
+      footY: playerGroup.position.y,
+      stepUp: 0.35,
+      stepDown: 0.45,
+    });
     syncPlayerGround();
   }
 
@@ -638,8 +657,13 @@ export function updatePlayer(delta, moveForward, moveRight) {
     state.dashTimer -= delta;
     playerGroup.position.x += state.dashVX * p.dashSpeed * delta;
     playerGroup.position.z += state.dashVZ * p.dashSpeed * delta;
-    resolveCircleAgainstPlacedObjects(playerGroup.position, getPlayerCollisionRadius(), 4, { walkableRamps: true });
-    syncPlayerGround(0.5, 0.2);
+    resolveCircleAgainstPlacedObjects(playerGroup.position, getPlayerCollisionRadius(), 4, {
+      walkableRamps: true,
+      footY: playerGroup.position.y,
+      stepUp: 0.5,
+      stepDown: 0.25,
+    });
+    syncPlayerGround(0.5, 0.25);
     playerMesh.rotation.z   = state.dashVX * -0.35;
     state.dashGhostTimer -= delta;
     if (state.dashGhostTimer <= 0) {

@@ -1,6 +1,6 @@
 // src/placer.js
 // Object placer system: ghost preview, footprint-aware grid-snapping, placement,
-// placed-object clipping, per-object colour, and targeted removal.
+// placed-object clipping, flat-top/ramp walkability, per-object colour, and targeted removal.
 // Slot 0 = laser, Slot 1 = placer. Scroll wheel switches slots.
 // R key rotates ghost 90°. Right-click removes the targeted placed object.
 // Placed objects store rotation/colour in serialised state.
@@ -188,17 +188,44 @@ function rampSurfaceHeightAt(obj, asset, worldX, worldZ, padding = 0) {
   return (Number(obj.y) || 0) + t * getClipHeight(asset);
 }
 
-export function getWalkablePlacedObjectHeight(position, radius = 0.35) {
+function flatTopHeightAt(obj, asset, worldX, worldZ, padding = 0) {
+  if (asset.clip === false || asset.walkable === true) return null;
+  const local = localPointForObject(obj, worldX, worldZ);
+  if (!isInsideLocalFootprint(local, asset, padding)) return null;
+  return getClipHeight(asset);
+}
+
+function canStandOnObjectTop(footY, topY, stepUp = 0.35, stepDown = 0.45) {
+  const y = Number(footY) || 0;
+  const up = Math.max(0, Number(stepUp) || 0);
+  const down = Math.max(0, Number(stepDown) || 0);
+  return topY >= y - down && topY <= y + up;
+}
+
+export function getWalkablePlacedObjectHeight(position, radius = 0.35, options = {}) {
   const list = state.params.placedObjects || [];
   if (!list.length || !position) return 0;
 
   const r = Math.max(0, Number(radius) || 0);
+  const currentY = Number.isFinite(Number(options.currentY)) ? Number(options.currentY) : Number(position.y) || 0;
+  const stepUp = Math.max(0, Number(options.stepUp) || 0.35);
+  const stepDown = Math.max(0, Number(options.stepDown) || 0.45);
   let height = 0;
+
   for (const obj of list) {
     const asset = getAsset(obj.assetId);
-    if (asset.clip === false || asset.walkable !== true) continue;
-    const surfaceY = rampSurfaceHeightAt(obj, asset, position.x, position.z, r * 0.35);
-    if (surfaceY !== null && surfaceY > height) height = surfaceY;
+    if (asset.clip === false) continue;
+
+    const rampY = rampSurfaceHeightAt(obj, asset, position.x, position.z, r * 0.35);
+    if (rampY !== null && rampY > height) {
+      height = rampY;
+      continue;
+    }
+
+    const topY = flatTopHeightAt(obj, asset, position.x, position.z, r);
+    if (topY !== null && topY > height && canStandOnObjectTop(currentY, topY, stepUp, stepDown)) {
+      height = topY;
+    }
   }
   return height;
 }
@@ -258,6 +285,13 @@ export function resolveCircleAgainstPlacedObjects(position, radius = 0.45, passe
       const bounds = placedObjectBounds(obj);
       if (bounds.asset.clip === false) continue;
       if (options.walkableRamps === true && bounds.asset.walkable === true) continue;
+      if (Number.isFinite(Number(options.footY)) && bounds.asset.walkable !== true) {
+        const local = localPointForObject(obj, position.x, position.z);
+        if (isInsideLocalFootprint(local, bounds.asset, r)
+          && canStandOnObjectTop(options.footY, bounds.maxY, options.stepUp, options.stepDown)) {
+          continue;
+        }
+      }
       if (resolveCircleAgainstBounds(position, r, bounds)) {
         changed = true;
         clipped = true;
@@ -452,13 +486,24 @@ function getSlotEl() {
 let _firePrev = false;
 let _secondaryPrev = false;
 
+function syncReticleForActiveSlot(placerOn) {
+  const reticle = document.getElementById('target-reticle');
+  if (!reticle) return;
+  const shouldShow = !placerOn && !!state.params.hudVisible && !!state.params.reticleVisible;
+  reticle.style.display = shouldShow ? '' : 'none';
+  if (placerOn) {
+    reticle.classList.remove('reticle-enemy-hover', 'is-targeting-enemy');
+  }
+}
+
 export function updatePlacer() {
   const slot     = state.activeSlot ?? 0;
   const placerOn = slot === 1;
   const assetId  = state.params.placerSelectedAsset || 'box';
 
-  // ADS is disabled while placer is active
+  // ADS and the combat reticle are disabled while placer is active.
   if (placerOn) state.isAiming = false;
+  syncReticleForActiveSlot(placerOn);
 
   // Slot HUD
   const slotEl = getSlotEl();

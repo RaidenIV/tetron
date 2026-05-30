@@ -269,5 +269,6 @@
   "enemyDestructionParticleSpeed": 1.25,
   "enemyDestructionParticleGlow": 8,
   "enemyDestructionPhysics": true,
-  "placerObjectColor": "#445566"
+  "placerObjectColor": "#445566",
+  "doubleJumpEnabled": false
 }

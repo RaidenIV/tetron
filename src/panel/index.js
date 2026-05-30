@@ -78,6 +78,7 @@ const PRESET_SETTINGS = [
     "playerArmor": 100,
     "playerInvincible": false,
     "jumpEnabled": true,
+    "doubleJumpEnabled": false,
     "jumpForce": 9.5,
     "jumpGravity": 26,
     "bulletTimeEnabled": true,
@@ -351,6 +352,7 @@ const PRESET_SETTINGS = [
   "playerArmor": 100,
   "playerInvincible": false,
   "jumpEnabled": true,
+  "doubleJumpEnabled": false,
   "jumpForce": 9.5,
   "jumpGravity": 26,
   "bulletTimeEnabled": true,
@@ -510,6 +512,7 @@ const PRESET_SETTINGS = [
   "playerArmor": 100,
   "playerInvincible": false,
   "jumpEnabled": true,
+  "doubleJumpEnabled": false,
   "jumpForce": 9.5,
   "jumpGravity": 26,
   "bulletTimeEnabled": true,
@@ -669,6 +672,7 @@ const PRESET_SETTINGS = [
   "playerArmor": 100,
   "playerInvincible": false,
   "jumpEnabled": true,
+  "doubleJumpEnabled": false,
   "jumpForce": 9.5,
   "jumpGravity": 26,
   "bulletTimeEnabled": true,
@@ -818,6 +822,7 @@ const PRESET_SETTINGS = [
   "playerArmor": 100,
   "playerInvincible": false,
   "jumpEnabled": true,
+  "doubleJumpEnabled": false,
   "jumpForce": 9.5,
   "jumpGravity": 26,
   "bulletTimeEnabled": true,
@@ -977,6 +982,7 @@ const PRESET_SETTINGS = [
   "playerArmor": 100,
   "playerInvincible": false,
   "jumpEnabled": true,
+  "doubleJumpEnabled": false,
   "jumpForce": 9.5,
   "jumpGravity": 26,
   "bulletTimeEnabled": true,
@@ -1131,6 +1137,7 @@ const PRESET_SETTINGS = [
   "playerArmor": 100,
   "playerInvincible": false,
   "jumpEnabled": true,
+  "doubleJumpEnabled": false,
   "jumpForce": 9.5,
   "jumpGravity": 26,
   "bulletTimeEnabled": true,
@@ -1285,6 +1292,7 @@ const PRESET_SETTINGS = [
   "playerArmor": 100,
   "playerInvincible": false,
   "jumpEnabled": true,
+  "doubleJumpEnabled": false,
   "jumpForce": 9.5,
   "jumpGravity": 26,
   "shieldVisible": false,
@@ -1439,6 +1447,7 @@ const PRESET_SETTINGS = [
   "playerRadius": 0.4,
   "playerLength": 1.2,
   "jumpEnabled": true,
+  "doubleJumpEnabled": false,
   "jumpForce": 9.5,
   "jumpGravity": 26,
   "shieldVisible": false,
@@ -1514,6 +1523,7 @@ const PRESET_SETTINGS = [
   "playerRadius": 0.4,
   "playerLength": 1.2,
   "jumpEnabled": true,
+  "doubleJumpEnabled": false,
   "jumpForce": 9.5,
   "jumpGravity": 26,
   "shieldVisible": false,
@@ -2197,6 +2207,9 @@ function buildAbilities(body) {
   body.appendChild(slider({ key: 'bulletTimeDuration', label: 'Duration', min: 0.1, max: 30, step: 0.1, dec: 1 }));
   body.appendChild(slider({ key: 'bulletTimeCooldown', label: 'Cooldown', min: 0, max: 120, step: 0.5, dec: 1 }));
   body.appendChild(slider({ key: 'bulletTimeScale', label: 'World Scale', min: 0.05, max: 1, step: 0.05, dec: 2 }));
+
+  body.appendChild(subhdr('Movement'));
+  body.appendChild(toggle('Double Jump', 'doubleJumpEnabled'));
 }
 
 function buildWeapons(body) {

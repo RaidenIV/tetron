@@ -59,6 +59,7 @@ export function clearGameplayInput() {
   state.primaryFire = false;
   state.secondaryFire = false;
   state.jumpQueued = false;
+  state.jumpAirJumpsUsed = 0;
   state.isAiming = false;
   _mouseDragActive = false;
   // clear analogue controller axes
