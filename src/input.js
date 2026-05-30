@@ -232,6 +232,14 @@ window.addEventListener('keydown', e => {
     return;
   }
 
+
+  // R key → rotate placed object 90° (placer slot only)
+  if (k === 'r' && !e.repeat && (state.activeSlot ?? 0) === 1) {
+    e.preventDefault();
+    state.placerRotation = ((state.placerRotation ?? 0) + Math.PI / 2) % (Math.PI * 2);
+    return;
+  }
+
   // V key → shoulder swap (flip lateral camera offset)
   if (k === 'v' && !e.repeat) {
     state.params.thirdOffsetX = -(state.params.thirdOffsetX || 1.25);

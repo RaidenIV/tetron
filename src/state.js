@@ -12,6 +12,7 @@ export const state = {
   mouseLookActive: false,
   isAiming: false,          // true while right-mouse / L2 held
   activeSlot: 0,            // 0 = laser, 1 = object placer
+  placerRotation: 0,        // current ghost rotation in radians (multiples of π/2)
   primaryFire: false,
   jumpQueued: false,
   jumpVelocity: 0,

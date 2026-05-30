@@ -196,7 +196,7 @@ export function tick() {
   // Poll controller every frame (including paused — Options button must work).
   updateController(delta);
   updateRadar();
-  updatePlacer(delta);
+  updatePlacer();
 
   // Stage 1 aim resolve — runs every frame so reticle hover and firing share
   // the exact same result. Resolves camera ray → enemy volume or fallback point.
