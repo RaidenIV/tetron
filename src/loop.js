@@ -231,6 +231,7 @@ export function tick() {
 
   if (state.paused) {
     state.primaryFire = false;
+    state.secondaryFire = false;
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
     return;

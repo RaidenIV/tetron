@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { scene } from './renderer.js';
 import { state } from './state.js';
+import { resolveCircleAgainstPlacedObjects } from './placer.js';
 
 // ── Geometry & material ────────────────────────────────────────────────────────
 // The player is a CapsuleGeometry inside a Group.
@@ -589,6 +590,7 @@ export function updatePlayer(delta, moveForward, moveRight) {
       ? Math.max(0.1, Math.min(1, Number(state.params.aimSpeedMult) || 0.55))
       : 1;
     playerGroup.position.addScaledVector(_v, speed * aimMult * delta);
+    resolveCircleAgainstPlacedObjects(playerGroup.position, Math.max(0.25, Number(p.playerRadius) || 0.4));
   }
 
   // Dash — shunts in a fixed direction at higher speed while dashTimer > 0
@@ -596,6 +598,7 @@ export function updatePlayer(delta, moveForward, moveRight) {
     state.dashTimer -= delta;
     playerGroup.position.x += state.dashVX * p.dashSpeed * delta;
     playerGroup.position.z += state.dashVZ * p.dashSpeed * delta;
+    resolveCircleAgainstPlacedObjects(playerGroup.position, Math.max(0.25, Number(p.playerRadius) || 0.4));
     playerMesh.rotation.z   = state.dashVX * -0.35;
     state.dashGhostTimer -= delta;
     if (state.dashGhostTimer <= 0) {

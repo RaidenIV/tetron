@@ -12,6 +12,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { scene } from './renderer.js';
 import { state } from './state.js';
 import { playerGroup } from './player.js';
+import { resolveCircleAgainstPlacedObjects, isPlacedObjectHit } from './placer.js';
 
 export const ENEMY_TYPE = Object.freeze({
   RUSHER: 'rusher',
@@ -323,6 +324,8 @@ function applyHardEnemyDecollision() {
       a.group.position.z -= nz * pushA;
       b.group.position.x += nx * pushB;
       b.group.position.z += nz * pushB;
+      resolveCircleAgainstPlacedObjects(a.group.position, ar);
+      resolveCircleAgainstPlacedObjects(b.group.position, br);
     }
   }
 }
@@ -922,6 +925,7 @@ function updateEnemyMovement(enemy, delta) {
   const baseSpeed = Math.max(0, Number.isFinite(configuredSpeed) ? configuredSpeed : BASE_SPEED);
   enemy.group.position.x += moveX * baseSpeed * speedMult * delta;
   enemy.group.position.z += moveZ * baseSpeed * speedMult * delta;
+  resolveCircleAgainstPlacedObjects(enemy.group.position, enemy.radius);
 }
 
 function updateContactDamage(enemy, delta) {
@@ -988,6 +992,11 @@ function updateEnemyBullets(delta) {
     const bullet = enemyBullets[i];
     bullet.life -= delta;
     bullet.mesh.position.addScaledVector(bullet.dir, bullet.speed * delta);
+    if (isPlacedObjectHit(bullet.mesh.position, 0.08)) {
+      enemyBullets.splice(i, 1);
+      disposeEnemyBullet(bullet);
+      continue;
+    }
     _tmpVec.copy(playerGroup.position);
     _tmpVec.y += Math.max(0.55, playerRadius + 0.35);
     if (bullet.mesh.position.distanceTo(_tmpVec) <= playerHitRadius) {

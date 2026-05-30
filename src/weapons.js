@@ -13,6 +13,7 @@ import { state } from './state.js';
 import { scene, camera } from './renderer.js';
 import { playerGroup } from './player.js';
 import { damageEnemiesAt, getEnemies } from './enemies.js';
+import { isPlacedObjectHit } from './placer.js';
 
 const _up = new THREE.Vector3(0, 1, 0);
 const _spawnPos = new THREE.Vector3();
@@ -255,6 +256,12 @@ export function updateLaserProjectiles(delta, projectileDelta = delta) {
     laser.group.position.addScaledVector(laser.dir, step);
     laser.distance += step;
     laser.glow.visible = !!p.laserBloom;
+
+    if (isPlacedObjectHit(laser.group.position, 0.12)) {
+      _activeLasers.splice(i, 1);
+      releaseLaser(laser);
+      continue;
+    }
 
     if (damageEnemiesAt(laser.group.position, 0.36, 34)) {
       _activeLasers.splice(i, 1);

@@ -57,6 +57,7 @@ export function clearGameplayInput() {
   state.keys.d = false;
   state.keys.space = false;
   state.primaryFire = false;
+  state.secondaryFire = false;
   state.jumpQueued = false;
   state.isAiming = false;
   _mouseDragActive = false;
@@ -99,6 +100,7 @@ renderer.domElement.addEventListener('contextmenu', event => event.preventDefaul
 renderer.domElement.addEventListener('pointerdown', event => {
   if (state.paused) {
     state.primaryFire = false;
+    state.secondaryFire = false;
     return;
   }
 
@@ -110,9 +112,16 @@ renderer.domElement.addEventListener('pointerdown', event => {
     state.primaryFire = true;
   }
 
-  // Right-click on viewport → enter aim (ADS) mode
-  if (event.button === 2 && isViewportTarget(event.target) && state.params.aimEnabled !== false) {
-    state.isAiming = true;
+  const placerActive = (state.activeSlot ?? 0) === 1;
+
+  // Right-click removes placed objects while the placer is active; otherwise it enters ADS.
+  if (event.button === 2 && isViewportTarget(event.target)) {
+    if (placerActive) {
+      state.secondaryFire = true;
+      state.isAiming = false;
+    } else if (state.params.aimEnabled !== false) {
+      state.isAiming = true;
+    }
   }
 
   if (!canUseMouseLook(event.target)) return;
@@ -147,6 +156,7 @@ function stopMouseDrag(event) {
   }
   if (!event || event.button === 2) {
     state.isAiming = false;
+    state.secondaryFire = false;
   }
 
   _mouseDragActive = false;
@@ -185,17 +195,52 @@ document.addEventListener('mousedown', event => {
   if (state.paused) return;
   if (document.pointerLockElement !== renderer.domElement) return;
   if (event.button === 0) state.primaryFire = true;
+  if (event.button === 2) {
+    if ((state.activeSlot ?? 0) === 1) {
+      state.secondaryFire = true;
+      state.isAiming = false;
+    } else if (state.params.aimEnabled !== false) {
+      state.isAiming = true;
+    }
+  }
 });
 
 document.addEventListener('mouseup', event => {
   if (event.button === 0) state.primaryFire = false;
+  if (event.button === 2) {
+    state.secondaryFire = false;
+    state.isAiming = false;
+  }
 });
 
 document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement !== renderer.domElement) {
     state.primaryFire = false;
+    state.secondaryFire = false;
+    state.isAiming = false;
   }
 });
+
+
+function togglePlacerAssetModal() {
+  const modal = document.getElementById('placer-modal');
+  if (!modal) return;
+
+  const visible = modal.style.display !== 'none' && modal.style.display !== '';
+  if (visible) {
+    if (window.__closePlacerAssetModal) window.__closePlacerAssetModal();
+    else modal.style.display = 'none';
+    return;
+  }
+
+  state.primaryFire = false;
+  state.secondaryFire = false;
+  state.isAiming = false;
+  document.exitPointerLock?.();
+  document.body.classList.remove('third-person-mouse-look');
+  if (window.__openPlacerAssetModal) window.__openPlacerAssetModal();
+  else modal.style.display = 'flex';
+}
 
 window.addEventListener('keydown', e => {
   if (e.key === 'Tab') { e.preventDefault(); _togglePanel?.(); return; }
@@ -227,8 +272,7 @@ window.addEventListener('keydown', e => {
   // F key → open asset picker modal (only when placer slot is active)
   if (k === 'f' && !e.repeat && (state.activeSlot ?? 0) === 1) {
     e.preventDefault();
-    const modal = document.getElementById('placer-modal');
-    if (modal) modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
+    togglePlacerAssetModal();
     return;
   }
 
@@ -290,6 +334,8 @@ window.addEventListener('wheel', e => {
   const slots = 2; // 0=laser, 1=placer
   const dir   = e.deltaY > 0 ? 1 : -1;
   state.activeSlot = ((state.activeSlot ?? 0) + dir + slots) % slots;
+  state.isAiming = false;
+  state.secondaryFire = false;
   e.preventDefault();
 }, { passive: false });
 
@@ -416,9 +462,15 @@ export function updateController(delta) {
   }
   state.primaryFire = firePressed;
 
-  // ── L2 (button 6) → aim (ADS) mode ──────────────────────────────────────
+  // ── L2 (button 6) → remove while placing, otherwise aim (ADS) ─────────────
   const l2Value = pad.buttons[6]?.value ?? 0;
-  state.isAiming = state.params.aimEnabled !== false && l2Value >= fireThresh;
+  if ((state.activeSlot ?? 0) === 1) {
+    state.secondaryFire = l2Value >= fireThresh;
+    state.isAiming = false;
+  } else {
+    state.secondaryFire = false;
+    state.isAiming = state.params.aimEnabled !== false && l2Value >= fireThresh;
+  }
 
   // ── Cross (0) → jump ───────────────────────────────────────────────────────
   if (pressed(0)) {
@@ -464,7 +516,7 @@ export function updateController(delta) {
   }
 
   // ── L1 / L2 (4/6) → bullet time ───────────────────────────────────────────
-  const btPressed = pressed(4) || (pad.buttons[6]?.value ?? 0) >= fireThresh;
+  const btPressed = pressed(4) || ((state.activeSlot ?? 0) !== 1 && (pad.buttons[6]?.value ?? 0) >= fireThresh);
   if (btPressed) {
     if (!_btHeld.get(idx)) {
       _btHeld.set(idx, true);

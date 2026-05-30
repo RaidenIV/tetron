@@ -1,7 +1,9 @@
 // src/placer.js
-// Object placer system: ghost preview, footprint-aware grid-snapping, placement.
+// Object placer system: ghost preview, footprint-aware grid-snapping, placement,
+// placed-object clipping, per-object colour, and targeted removal.
 // Slot 0 = laser, Slot 1 = placer. Scroll wheel switches slots.
-// R key rotates ghost 90°. Placed objects store rotation in serialised state.
+// R key rotates ghost 90°. Right-click removes the targeted placed object.
+// Placed objects store rotation/colour in serialised state.
 
 import * as THREE from 'three';
 import { scene, camera } from './renderer.js';
@@ -39,6 +41,33 @@ function makeGeo(assetId) {
 
 function getAsset(id) {
   return ASSET_CATALOGUE.find(a => a.id === id) || ASSET_CATALOGUE[0];
+}
+
+function normalizeHexColor(value) {
+  if (typeof value !== 'string') return null;
+  const hex = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : null;
+}
+
+function assetColorHex(asset) {
+  const numeric = Number(asset?.color ?? 0xffffff) >>> 0;
+  return `#${numeric.toString(16).padStart(6, '0')}`;
+}
+
+function resolvePlacedColor(obj, asset) {
+  return normalizeHexColor(obj?.color)
+    || (obj === null ? normalizeHexColor(state.params.placerObjectColor) : null)
+    || assetColorHex(asset);
+}
+
+function getClipHeight(asset) {
+  const explicit = Number(asset?.height);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  return Math.max(0.5, Number(asset?.yOffset ?? 0.5) * 2);
+}
+
+function clamp(v, min, max) {
+  return Math.min(max, Math.max(min, v));
 }
 
 // ── Footprint-aware grid snapping ─────────────────────────────────────────────
@@ -105,10 +134,105 @@ function isFootprintOccupied(sx, sz, fw, fh) {
   const list = state.params.placedObjects || [];
   for (const obj of list) {
     const asset = getAsset(obj.assetId);
+    if (asset.clip === false) continue;
     const { fw: ofw, fh: ofh } = getEffectiveFootprint(obj.assetId, obj.ry ?? 0);
     for (const cell of footprintCells(obj.x, obj.z, ofw, ofh)) {
       if (newCells.has(cell)) return true;
     }
+  }
+  return false;
+}
+
+function placedObjectBounds(obj) {
+  const asset = getAsset(obj.assetId);
+  const { fw, fh } = getEffectiveFootprint(obj.assetId, obj.ry ?? 0);
+  return {
+    asset,
+    minX: obj.x - fw / 2,
+    maxX: obj.x + fw / 2,
+    minZ: obj.z - fh / 2,
+    maxZ: obj.z + fh / 2,
+    minY: 0,
+    maxY: getClipHeight(asset),
+  };
+}
+
+function circleOverlapsBounds(x, z, radius, bounds) {
+  const closestX = clamp(x, bounds.minX, bounds.maxX);
+  const closestZ = clamp(z, bounds.minZ, bounds.maxZ);
+  const dx = x - closestX;
+  const dz = z - closestZ;
+  return (dx * dx + dz * dz) < radius * radius;
+}
+
+function resolveCircleAgainstBounds(position, radius, bounds) {
+  const closestX = clamp(position.x, bounds.minX, bounds.maxX);
+  const closestZ = clamp(position.z, bounds.minZ, bounds.maxZ);
+  let dx = position.x - closestX;
+  let dz = position.z - closestZ;
+  const radiusSq = radius * radius;
+  const dSq = dx * dx + dz * dz;
+
+  if (dSq >= radiusSq) return false;
+
+  if (dSq > 0.000001) {
+    const d = Math.sqrt(dSq);
+    const push = radius - d;
+    position.x += (dx / d) * push;
+    position.z += (dz / d) * push;
+    return true;
+  }
+
+  // Circle centre is inside the object footprint. Push to the nearest edge.
+  const left = Math.abs(position.x - bounds.minX);
+  const right = Math.abs(bounds.maxX - position.x);
+  const bottom = Math.abs(position.z - bounds.minZ);
+  const top = Math.abs(bounds.maxZ - position.z);
+  const min = Math.min(left, right, bottom, top);
+
+  if (min === left) position.x = bounds.minX - radius;
+  else if (min === right) position.x = bounds.maxX + radius;
+  else if (min === bottom) position.z = bounds.minZ - radius;
+  else position.z = bounds.maxZ + radius;
+
+  return true;
+}
+
+export function resolveCircleAgainstPlacedObjects(position, radius = 0.45, passes = 4) {
+  const list = state.params.placedObjects || [];
+  if (!list.length || !position) return false;
+
+  const r = Math.max(0.01, Number(radius) || 0.45);
+  let clipped = false;
+  const maxPasses = Math.max(1, Math.min(8, Number(passes) || 4));
+
+  for (let pass = 0; pass < maxPasses; pass++) {
+    let changed = false;
+    for (const obj of list) {
+      const bounds = placedObjectBounds(obj);
+      if (bounds.asset.clip === false) continue;
+      if (resolveCircleAgainstBounds(position, r, bounds)) {
+        changed = true;
+        clipped = true;
+      }
+    }
+    if (!changed) break;
+  }
+
+  return clipped;
+}
+
+export function isPlacedObjectHit(position, radius = 0.1) {
+  const list = state.params.placedObjects || [];
+  if (!list.length || !position) return false;
+
+  const r = Math.max(0.001, Number(radius) || 0.1);
+  const y = Number(position.y) || 0;
+  for (const obj of list) {
+    const bounds = placedObjectBounds(obj);
+    if (bounds.asset.clip === false) continue;
+    if (y + r < bounds.minY || y - r > bounds.maxY) continue;
+    if (circleOverlapsBounds(position.x, position.z, r, bounds)) return true;
   }
   return false;
 }
@@ -153,24 +277,69 @@ function rebuildGhost(assetId) {
 // ── Placed-object registry ─────────────────────────────────────────────────────
 const _placedMeshes = [];
 
-function materialForAsset(asset) {
+function materialForAsset(asset, obj = null) {
   return new THREE.MeshStandardMaterial({
-    color: asset.color, roughness: 0.7, metalness: 0.1,
+    color: resolvePlacedColor(obj, asset), roughness: 0.7, metalness: 0.1,
   });
+}
+
+function syncGhostColor(asset) {
+  const previewColor = resolvePlacedColor(null, asset);
+  _ghostMat.color.set(previewColor);
+  _ghostWireMat.color.set(previewColor);
+}
+
+function disposePlacedMesh(mesh) {
+  scene.remove(mesh);
+  mesh.geometry.dispose();
+  mesh.material.dispose();
+}
+
+function removePlacedMesh(mesh) {
+  const meshIndex = _placedMeshes.indexOf(mesh);
+  if (meshIndex === -1) return false;
+
+  const list = state.params.placedObjects || [];
+  const obj = mesh.userData?.placedObject;
+  const dataIndex = obj ? list.indexOf(obj) : -1;
+  if (dataIndex !== -1) list.splice(dataIndex, 1);
+  else if (meshIndex < list.length) list.splice(meshIndex, 1);
+  state.params.placedObjects = list;
+
+  _placedMeshes.splice(meshIndex, 1);
+  disposePlacedMesh(mesh);
+  return true;
+}
+
+function removePlacedObjectByAim() {
+  const hits = _raycaster.intersectObjects(_placedMeshes, false);
+  if (!hits.length) return false;
+  return removePlacedMesh(hits[0].object);
+}
+
+function removePlacedObjectAtFootprint(sx, sz, fw, fh) {
+  const targetCells = new Set(footprintCells(sx, sz, fw, fh));
+  const list = state.params.placedObjects || [];
+  for (let i = list.length - 1; i >= 0; i--) {
+    const obj = list[i];
+    const { fw: ofw, fh: ofh } = getEffectiveFootprint(obj.assetId, obj.ry ?? 0);
+    const overlaps = footprintCells(obj.x, obj.z, ofw, ofh).some(cell => targetCells.has(cell));
+    if (overlaps && _placedMeshes[i]) return removePlacedMesh(_placedMeshes[i]);
+  }
+  return false;
 }
 
 export function rebuildPlacedObjects() {
   for (const m of _placedMeshes) {
-    scene.remove(m);
-    m.geometry.dispose();
-    m.material.dispose();
+    disposePlacedMesh(m);
   }
   _placedMeshes.length = 0;
 
   const list = state.params.placedObjects || [];
   for (const obj of list) {
     const asset = getAsset(obj.assetId);
-    const mesh  = new THREE.Mesh(makeGeo(asset.id), materialForAsset(asset));
+    const mesh  = new THREE.Mesh(makeGeo(asset.id), materialForAsset(asset, obj));
+    mesh.userData.placedObject = obj;
     mesh.position.set(obj.x, obj.y, obj.z);
     mesh.rotation.y    = obj.ry ?? 0;
     mesh.castShadow    = true;
@@ -186,11 +355,14 @@ function placeObject(sx, sz) {
   const yOff    = asset.yOffset ?? 0.5;
   const ry      = state.placerRotation ?? 0;
 
+  const color = resolvePlacedColor(null, asset);
+  const placed = { assetId, x: sx, y: yOff, z: sz, ry, color };
   const list = state.params.placedObjects || [];
-  list.push({ assetId, x: sx, y: yOff, z: sz, ry });
+  list.push(placed);
   state.params.placedObjects = list;
 
-  const mesh = new THREE.Mesh(makeGeo(asset.id), materialForAsset(asset));
+  const mesh = new THREE.Mesh(makeGeo(asset.id), materialForAsset(asset, placed));
+  mesh.userData.placedObject = placed;
   mesh.position.set(sx, yOff, sz);
   mesh.rotation.y    = ry;
   mesh.castShadow    = true;
@@ -201,9 +373,7 @@ function placeObject(sx, sz) {
 
 export function clearPlacedObjects() {
   for (const m of _placedMeshes) {
-    scene.remove(m);
-    m.geometry.dispose();
-    m.material.dispose();
+    disposePlacedMesh(m);
   }
   _placedMeshes.length = 0;
   state.params.placedObjects = [];
@@ -228,6 +398,7 @@ function getSlotEl() {
 
 // ── Per-frame update ───────────────────────────────────────────────────────────
 let _firePrev = false;
+let _secondaryPrev = false;
 
 export function updatePlacer() {
   const slot     = state.activeSlot ?? 0;
@@ -243,7 +414,7 @@ export function updatePlacer() {
   if (!state.paused) {
     slotEl.textContent = slot === 0
       ? '[ LASER ]  placer'
-      : 'laser  [ PLACER ]  ·  R rotate  ·  F pick';
+      : 'laser  [ PLACER ]  ·  R rotate  ·  F pick  ·  Right-click remove';
   }
 
   // Hide ghost when not in placer mode
@@ -251,21 +422,30 @@ export function updatePlacer() {
     if (_ghostMesh) _ghostMesh.visible = false;
     if (_ghostWire) _ghostWire.visible = false;
     _firePrev = state.primaryFire;
+    _secondaryPrev = state.secondaryFire;
     return;
   }
 
   // Rebuild ghost if asset changed
   if (assetId !== _currentAssetId) rebuildGhost(assetId);
   if (!_ghostMesh) rebuildGhost(assetId);
+  syncGhostColor(getAsset(assetId));
 
   // Apply current rotation to ghost
   const ry = state.placerRotation ?? 0;
   _ghostMesh.rotation.y = ry;
   _ghostWire.rotation.y = ry;
 
-  // Raycast camera centre → floor plane
+  // Raycast camera centre → placed objects first, then floor plane.
   camera.updateMatrixWorld(true);
   _raycaster.setFromCamera(_ndc, camera);
+  const removePressed = !!state.secondaryFire && !_secondaryPrev;
+  if (removePressed && removePlacedObjectByAim()) {
+    _firePrev = state.primaryFire;
+    _secondaryPrev = state.secondaryFire;
+    return;
+  }
+
   const hit = _raycaster.ray.intersectPlane(_floorPlane, _hitPoint);
 
   if (hit) {
@@ -283,7 +463,9 @@ export function updatePlacer() {
     _ghostMesh.visible  = true;
     _ghostWire.visible  = true;
 
-    if (state.primaryFire && !_firePrev && !occupied) {
+    if (removePressed && occupied) {
+      removePlacedObjectAtFootprint(sx, sz, fw, fh);
+    } else if (state.primaryFire && !_firePrev && !occupied) {
       placeObject(sx, sz);
     }
   } else {
@@ -292,4 +474,5 @@ export function updatePlacer() {
   }
 
   _firePrev = state.primaryFire;
+  _secondaryPrev = state.secondaryFire;
 }
