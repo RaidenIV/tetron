@@ -8,7 +8,7 @@ export const state = {
   slowTimer: 0,
   slowScale: 0.35,
   slowRequested: false,
-  activePreset: 'g4',
+  activePreset: 'g5',
   mouseLookActive: false,
   primaryFire: false,
   jumpQueued: false,
@@ -157,6 +157,7 @@ export const state = {
       "tagThickness": 2,
       "tagBloom": 3,
       "tagShadow": 4,
+      "tagHeight": 0.55,
 
       // Sound
       "soundMuted": false,

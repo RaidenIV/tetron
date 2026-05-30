@@ -465,6 +465,10 @@ function getTagShadow() {
   return Math.max(0, Math.min(30, Number(state.params.tagShadow) ?? 4));
 }
 
+function getTagHeight() {
+  return Math.max(0, Math.min(10, Number(state.params.tagHeight) ?? 0.55));
+}
+
 function buildTagFilter(color) {
   const thickness = getTagThickness();
   const bloom     = getTagBloom();
@@ -515,7 +519,7 @@ function makeTagMarker(enemy) {
     + ` style="display:block;transform:rotate(180deg);filter:${imgFilter};">`;
   const obj = new CSS2DObject(el);
   obj.center.set(0.5, 0);
-  const topY = (enemy.radius * 2 + enemy.sizeMult * 1.2) + 0.55;
+  const topY = (enemy.radius * 2 + enemy.sizeMult * 1.2) + getTagHeight();
   obj.position.set(0, topY, 0);
   enemy.group.add(obj);
   enemy._tagEl  = el;
@@ -550,6 +554,9 @@ export function applyTagSettings() {
       img.height = size;
       img.style.filter = imgFilter;
     }
+    // Reposition based on current height setting
+    const topY = (enemy.radius * 2 + enemy.sizeMult * 1.2) + getTagHeight();
+    enemy._tagObj.position.set(0, topY, 0);
     // Show/hide based on tag state and enabled setting
     if (enemy.tagged) {
       enemy._tagEl.style.opacity = state.params.tagEnabled === false ? '0' : '1';
