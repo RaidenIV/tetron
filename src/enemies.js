@@ -410,6 +410,10 @@ function makeEnemyMaterial(def) {
 // ── MGSV-style tag marker — hidden until the player tags the enemy ────────────
 export const TAG_DWELL_SECONDS = 1.2; // seconds of continuous aim needed to tag
 
+// SVG path data extracted from tag.svg — used for inline SVG rendering of the tag marker.
+// Inline SVG allows stroke-width control for true line thickness without ghost copies.
+const TAG_PATH = 'M228-212q-18 0-26-15.5t1-30.5l252-403q9-14 25-14t25 14l252 403q9 15 1 30.5T732-212H228Zm-4-28h512L480-650 224-240Zm256-205Z';
+
 function getTagColor() {
   return state.params.tagColor || '#ff2828';
 }
@@ -470,32 +474,16 @@ function getTagHeight() {
   return Math.max(0, Math.min(500, Number(state.params.tagHeight) ?? 18));
 }
 
-function buildTagFilter(color) {
-  const thickness = getTagThickness();
-  const bloom     = getTagBloom();
-  const shadow    = getTagShadow();
-  const parts = [];
-  // Thickness = hard outline: zero-blur drop-shadows stacked in 4 diagonal directions.
-  // Zero blur means no spread/glow — the shadow is painted as a hard copy of the icon shape.
-  // Stacking in N/S/E/W gives a uniform solid stroke effect.
-  if (thickness > 0) {
-    const t = thickness;
-    parts.push(`drop-shadow( ${t}px  0    0   ${color})`);
-    parts.push(`drop-shadow(-${t}px  0    0   ${color})`);
-    parts.push(`drop-shadow( 0    ${t}px  0   ${color})`);
-    parts.push(`drop-shadow( 0   -${t}px  0   ${color})`);
-    // Diagonal fills to prevent corner gaps
-    parts.push(`drop-shadow( ${t}px  ${t}px 0 ${color})`);
-    parts.push(`drop-shadow(-${t}px -${t}px 0 ${color})`);
-    parts.push(`drop-shadow( ${t}px -${t}px 0 ${color})`);
-    parts.push(`drop-shadow(-${t}px  ${t}px 0 ${color})`);
-  }
-  // Bloom = soft glow: large-blur drop-shadow centred on the icon
+// Wrapper filter: only bloom and shadow — thickness is now handled by SVG stroke-width.
+// Keeping thickness off the wrapper prevents ghost-copy duplication.
+function buildWrapperFilter(color) {
+  const bloom  = getTagBloom();
+  const shadow = getTagShadow();
+  const parts  = [];
   if (bloom > 0) {
     parts.push(`drop-shadow(0 0 ${bloom}px ${color})`);
     parts.push(`drop-shadow(0 0 ${Math.ceil(bloom * 0.5)}px ${color})`);
   }
-  // Shadow = offset dark shadow for depth and legibility
   if (shadow > 0) {
     parts.push(`drop-shadow(0 ${Math.ceil(shadow * 0.5)}px ${shadow}px rgba(0,0,0,0.85))`);
   }
@@ -503,9 +491,26 @@ function buildTagFilter(color) {
 }
 
 
+function buildTagSvgEl(color, size, thickness) {
+  // Inline SVG so we can control stroke-width for true line thickness
+  // without creating ghost copies of the icon.
+  // The tag is rendered upside-down (rotate 180deg) to point downward.
+  const strokeW = thickness > 0 ? thickness : 0;
+  const svgEl = document.createElement('div');
+  svgEl.style.cssText = [
+    `width:${size}px`, `height:${size}px`,
+    'display:block', 'transform:rotate(180deg)',
+    'pointer-events:none',
+  ].join(';');
+  svgEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 -960 960 960" style="display:block;overflow:visible"><path d="${TAG_PATH}" fill="${color}" stroke="${color}" stroke-width="${strokeW}" stroke-linejoin="round"/></svg>`;
+  return svgEl;
+}
+
 function makeTagMarker(enemy) {
-  const color = getTagColor();
-  const size  = getTagSize();
+  const color     = getTagColor();
+  const size      = getTagSize();
+  const thickness = getTagThickness();
+
   const el = document.createElement('div');
   el.style.cssText = [
     `width:${size}px`, `height:${size}px`,
@@ -513,20 +518,25 @@ function makeTagMarker(enemy) {
     'display:flex', 'align-items:center', 'justify-content:center',
     'opacity:0',
     'transition:opacity 0.2s ease',
-    `filter:${buildTagFilter(color)}`,
   ].join(';');
-  const imgFilter = colorToFilter(color);
-  el.innerHTML = `<img src="./icons/tag.svg" width="${size}" height="${size}" aria-hidden="true"`
-    + ` style="display:block;transform:rotate(180deg);filter:${imgFilter};">`;
+
+  el.appendChild(buildTagSvgEl(color, size, thickness));
+
+  // Bloom + shadow on wrapper only (no duplicate-icon problem here)
+  const wrapFilter = buildWrapperFilter(color);
+  if (wrapFilter !== 'none') el.style.filter = wrapFilter;
+
   const obj = new CSS2DObject(el);
-  // center=(0.5,1) anchors the BOTTOM of the DOM element to the world point,
-  // so the element hangs above. The world point is at enemy visual top.
-  obj.center.set(0.5, 1);
+  // center=(0.5, 0): top-centre of element anchors to the world point.
+  // We place the world point at enemyVisualTop + height-offset (world units = 0),
+  // then use marginTop to push the element up in screen-space pixels.
+  obj.center.set(0.5, 0);
   const enemyVisualTop = (enemy.radius * 2 + enemy.sizeMult * 1.2);
   obj.position.set(0, enemyVisualTop, 0);
-  // Screen-space gap: negative margin-bottom pushes element further up in pixels,
-  // making the offset look the same regardless of camera distance.
-  el.style.marginBottom = `${getTagHeight()}px`;
+  // marginTop: negative value pulls element upward in screen space.
+  // This is distance-independent — looks the same near or far.
+  el.style.marginTop = `-${getTagHeight()}px`;
+
   enemy.group.add(obj);
   enemy._tagEl  = el;
   enemy._tagObj = obj;
@@ -548,20 +558,20 @@ export function applyTagSettings() {
     if (!enemy._tagEl || !enemy._tagObj) continue;
     const color  = getTagColor();
     const size   = getTagSize();
-    const imgFilter = colorToFilter(color);
-    // Update wrapper
-    enemy._tagEl.style.width   = `${size}px`;
-    enemy._tagEl.style.height  = `${size}px`;
-    enemy._tagEl.style.filter  = buildTagFilter(color);
-    // Update img
-    const img = enemy._tagEl.querySelector('img');
-    if (img) {
-      img.width  = size;
-      img.height = size;
-      img.style.filter = imgFilter;
-    }
-    // Update screen-space offset (margin-bottom in pixels)
-    enemy._tagEl.style.marginBottom = `${getTagHeight()}px`;
+    const thickness = getTagThickness();
+    // Replace the inner SVG element with a freshly built one (simplest correct update)
+    const oldSvgWrap = enemy._tagEl.querySelector('div');
+    const newSvgWrap = buildTagSvgEl(color, size, thickness);
+    if (oldSvgWrap) enemy._tagEl.replaceChild(newSvgWrap, oldSvgWrap);
+    else enemy._tagEl.appendChild(newSvgWrap);
+    // Update wrapper size and filter (bloom + shadow only)
+    enemy._tagEl.style.width  = `${size}px`;
+    enemy._tagEl.style.height = `${size}px`;
+    const wrapFilter = buildWrapperFilter(color);
+    if (wrapFilter !== 'none') enemy._tagEl.style.filter = wrapFilter;
+    else enemy._tagEl.style.filter = '';
+    // Update screen-space height offset (marginTop, distance-independent)
+    enemy._tagEl.style.marginTop = `-${getTagHeight()}px`;
     // Show/hide based on tag state and enabled setting
     if (enemy.tagged) {
       enemy._tagEl.style.opacity = state.params.tagEnabled === false ? '0' : '1';
