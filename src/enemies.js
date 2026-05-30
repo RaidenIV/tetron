@@ -8,6 +8,7 @@
 //   - Steering smoothing (prevents jitter)
 //   - Hard decollision pass (after movement, spatial-hash-accelerated)
 import * as THREE from 'three';
+import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { scene } from './renderer.js';
 import { state } from './state.js';
 import { playerGroup } from './player.js';
@@ -406,6 +407,19 @@ function makeEnemyMaterial(def) {
   });
 }
 
+// ── Permanent skull tag above each enemy ──────────────────────────────────────
+function makeSkullTag(enemy) {
+  const el = document.createElement('div');
+  el.style.cssText = 'width:20px;height:20px;pointer-events:none;';
+  el.innerHTML = '<img src="./icons/skull.svg" width="20" height="20" aria-hidden="true" style="display:block;">';
+  const obj = new CSS2DObject(el);
+  obj.center.set(0.5, 0); // bottom-centre of label anchors to the position point
+  const topY = (enemy.radius * 2 + enemy.sizeMult * 1.2) + 0.45;
+  obj.position.set(0, topY, 0);
+  enemy.group.add(obj);
+}
+
+
 function makeEnemy(type, position, index = 0) {
   const def = getDef(type);
   const group = new THREE.Group();
@@ -422,7 +436,7 @@ function makeEnemy(type, position, index = 0) {
   scene.add(group);
 
   const maxHp = Math.max(1, Number(state.params.enemyHealth) || 100);
-  return {
+  const enemy = {
     type, def, group, mesh, material, maxHp,
     hp: maxHp,
     radius: BASE_RADIUS * def.sizeMult,
@@ -438,6 +452,8 @@ function makeEnemy(type, position, index = 0) {
     slotTimer: randomRange(0, 0.5), // stagger initial slot assignment
     lastSteer: null,
   };
+  makeSkullTag(enemy);
+  return enemy;
 }
 
 function disposeEnemy(enemy) {
