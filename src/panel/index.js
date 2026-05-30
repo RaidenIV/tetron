@@ -298,7 +298,7 @@ const PRESET_SETTINGS = [
   "soundSfx_levelup": 1,
   "soundSfx_gameover": 1,
   "soundSfx_victory": 1,
-  "soundSfx_ambience": 0.75
+  "soundSfx_ambience": 0.75,
   "tagBloom": 1,
   "tagColor": "#ff2828",
   "tagDwellTime": 2,
@@ -423,7 +423,7 @@ const PRESET_SETTINGS = [
   "controllerLookSensY": 0.036,
   "controllerInvertY": false,
   "controllerFireThreshold": 0.5,
-  "controllerVibration": true
+  "controllerVibration": true,
   "enemyDestructionEliteCount": 100,
   "enemyDestructionEliteGlow": 12,
   "enemyDestructionEliteSize": 0.5,
