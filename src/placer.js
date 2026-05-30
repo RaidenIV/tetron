@@ -369,6 +369,7 @@ export function getWalkablePlacedObjectHeight(position, radius = 0.35, options =
       // enough to stand on/descend the slope. This keeps ground-level rear
       // contact blocked, but lets the player move down from the top edge.
       highEndPadding: r + 0.03,
+      maxHighEndPadding: r + 0.03,
     });
     if (rampY !== null
       && rampY > height
@@ -449,6 +450,7 @@ export function resolveCircleAgainstPlacedObjects(position, radius = 0.45, passe
             // descending from the ramp top, but keep the canStandOnObjectTop
             // check so low/rear contact still behaves as a blocker.
             highEndPadding: r + 0.03,
+            maxHighEndPadding: r + 0.03,
           });
           if (rampY !== null && canStandOnObjectTop(footY, rampY, options.stepUp, options.stepDown)) {
             continue;
