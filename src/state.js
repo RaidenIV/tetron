@@ -92,6 +92,7 @@ export const state = {
       "shieldHexSize": 0.22,
       "shieldLineThickness": 0.012,
       "shieldGlow": true,
+      "shieldLineBloom": 0.5,
       "shieldBloomIntensity": 0.12,
       "shieldBloomRadius": 1.18,
       "shieldFresnelPower": 3.0,

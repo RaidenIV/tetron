@@ -30,7 +30,7 @@ const ICON_CONTROLLER = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" v
 const ICON_SOUND = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M564-195v-30q81-30 130.5-100T744-481q0-86-49.5-156T564-737v-30q92 33 150 111t58 175q0 97-58 175T564-195ZM188-412v-136h130l126-126v388L318-412H188Zm376 56v-250q30 22 45 55.5t15 70.5q0 37-15.5 69.5T564-356ZM416-606l-86 86H216v80h114l86 86v-252ZM316-480Z"/></svg>`;
 const ICON_ALLIES = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M52-262v-26q0-35 38-58.5t97-23.5q8 0 18 1t22 3q-8 15-11.5 30.5T212-305v43H52Zm240 0v-39q0-21.84 13-39.92Q318-359 344-372t60-19.5q34-6.5 75.6-6.5 42.4 0 76.4 6.5 34 6.5 60 19.5t39 31.08q13 18.08 13 39.92v39H292Zm456 0v-42.7q0-17.08-3.5-32.19T734-366q13-2 22.5-3t17.5-1q59 0 96.5 23.5T908-288v26H748Zm-428-28h320v-11q0-31-44-50t-116-19q-72 0-116 19t-44 50v11ZM186.73-407q-20.73 0-35.23-14.69Q137-436.38 137-457q0-20 14.69-34.5T187-506q20 0 35 14.5t15 34.8q0 19.7-14.45 34.7-14.45 15-35.82 15ZM774-407q-20 0-35-15t-15-34.7q0-20.3 15-34.8 15-14.5 35.19-14.5 20.81 0 35.31 14.5Q824-477 824-457q0 20.62-14.37 35.31Q795.25-407 774-407Zm-293.65-21Q448-428 425-450.75T402-506q0-33.15 22.75-55.58Q447.5-584 480-584q33.15 0 55.58 22.32Q558-539.35 558-506.35 558-474 535.68-451q-22.33 23-55.33 23Zm.15-28q20.5 0 35-15t14.5-35.5q0-20.5-14.37-35Q501.25-556 480-556q-20 0-35 14.37-15 14.38-15 35.63 0 20 15 35t35.5 15Zm-.5 166Zm0-216Z"/></svg>`;
 const ICON_LANDSCAPE = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M206-416q8-15 21.88-23.5Q241.75-448 259-448q18 0 33.1 9.37 15.1 9.38 21.9 26.63l19 44q9 19 33.06 17.43Q390.13-352.14 397-371l83-261q12-37 44-58.5t70.38-21.5Q632-712 664-691q32 21 44 57l148 404q2 7-1 12.5t-10.97 5.5q-4.55 0-8.34-2.5T830-221L681-625q-9-28-33.5-43.5T594-684q-29 0-53.5 16T507-624l-83 261q-7 19-23 30.5T364.61-321q-18.35 0-33.98-9.5Q315-340 307-357l-21-50q-8-17-27.5-17.5T230-408l-98 189q-1.69 3.18-5.08 5.09-3.39 1.91-7.12 1.91-7.8 0-11.8-6-4-6 0-13l98-185Zm58.94-148q-37.94 0-65.44-27.15-27.5-27.14-27.5-64.61Q172-694 199.5-721q27.5-27 65.44-27t64.5 26.92Q356-694.15 356-655.69 356-618 329.44-591t-64.5 27Zm-.1-28q26.84 0 45-19T328-656.5q0-26.5-18.16-45t-45-18.5Q238-720 219-701.6q-19 18.4-19 45.6 0 26 19 45t45.84 19ZM365-321ZM264-656Z"/></svg>`;
-const ICON_SCENARIOS = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M320-242 80-482l242-242 43 43-199 199 197 197-43 43Zm320 0-43-43 199-199-197-197 43-43 240 240-242 242Z"/></svg>`;
+const ICON_SCENARIOS = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="m192-748 39 78q7 14 20 22t28 8q30 0 46-25.5t2-52.5l-15-30h80l39 78q7 14 20 22t28 8q30 0 46-25.5t2-52.5l-15-30h80l39 78q7 14 20 22t28 8q30 0 46-25.5t2-52.5l-15-30h56q26 0 43 17t17 43v416q0 26-17 43t-43 17H192q-26 0-43-17t-17-43v-416q0-26 17-43t43-17Zm-32 136v340q0 14 9 23t23 9h576q14 0 23-9t9-23v-340H160Zm0 0v372-372Z"/></svg>`;
 const PRESET_SETTINGS = [
   { key: 'g7', label: 'G7', path: './presets/G7.json', data: {
   "cameraMode": "third2",
@@ -181,7 +181,8 @@ const PRESET_SETTINGS = [
   "soundSfx_levelup": 1,
   "soundSfx_gameover": 1,
   "soundSfx_victory": 1,
-  "soundSfx_ambience": 0.5
+  "soundSfx_ambience": 0.5,
+  "shieldLineBloom": 0.5,
 } },
   { key: 'g6', label: 'G6', path: './presets/G6.json', data: {
   "cameraMode": "third2",
@@ -337,7 +338,8 @@ const PRESET_SETTINGS = [
   "aimFovDelta": -18,
   "aimDistDelta": -1.5,
   "aimSpeedMult": 0.55,
-  "aimSmooth": 10
+  "aimSmooth": 10,
+  "shieldLineBloom": 0.5,
 } },
   { key: 'g5', label: 'G5', path: './presets/G5.json', data: {
   "cameraMode": "third2",
@@ -489,6 +491,7 @@ const PRESET_SETTINGS = [
   "aimFovDelta": -18,
   "aimSmooth": 10,
   "aimSpeedMult": 0.55,
+  "shieldLineBloom": 0.5,
 } },
   { key: 'g4', label: 'G4', path: './presets/G4.json', data: {
   "cameraMode": "third2",
@@ -640,6 +643,7 @@ const PRESET_SETTINGS = [
   "aimFovDelta": -18,
   "aimSmooth": 10,
   "aimSpeedMult": 0.55,
+  "shieldLineBloom": 0.5,
 } },
   { key: 'g3', label: 'G3', path: './presets/G3.json', data: {
   "cameraMode": "third2",
@@ -796,6 +800,7 @@ const PRESET_SETTINGS = [
   "aimFovDelta": -18,
   "aimSmooth": 10,
   "aimSpeedMult": 0.55,
+  "shieldLineBloom": 0.5,
 } },
   { key: 'default', label: 'Default', path: './presets/default.json', data: {
   "cameraMode": "iso",
@@ -1461,6 +1466,7 @@ function buildShield(body) {
     key: 'shieldLineThickness', label: 'Line Thickness', min: 0.002, max: 0.06, step: 0.001, dec: 3,
     onChange: () => applyShieldSettings(),
   }));
+  body.appendChild(slider({ key: 'shieldLineBloom', label: 'Line Bloom', min: 0, max: 2, step: 0.05, dec: 2, onChange: () => applyShieldSettings() }));
   body.appendChild(slider({
     key: 'shieldOpacity', label: 'Opacity', min: 0.05, max: 0.75, step: 0.01, dec: 2,
     onChange: () => applyShieldSettings(),

@@ -433,8 +433,12 @@ export function applyShieldSettings() {
   shieldPanelMat.uniforms.uFresnelPower.value = fresnelPower;
   shieldPanelMat.needsUpdate = true;
 
+  const lineBloom = Math.max(0, Math.min(2, Number(p.shieldLineBloom) ?? 0.5));
+  // Line opacity = base opacity * multiplier + lineBloom boost for extra edge glow
+  const lineBaseOpacity = glowEnabled ? Math.min(1, opacity * 3.2) : Math.min(1, opacity * 1.9);
+  const lineOpacity = Math.min(1, lineBaseOpacity + lineBloom * opacity);
   shieldLineMat.uniforms.uColor.value.set(color);
-  shieldLineMat.uniforms.uOpacity.value = glowEnabled ? Math.min(1, opacity * 3.2) : Math.min(1, opacity * 1.9);
+  shieldLineMat.uniforms.uOpacity.value = lineOpacity;
   shieldLineMat.uniforms.uFresnelPower.value = Math.max(0.5, fresnelPower - 0.5);
   shieldLineMat.needsUpdate = true;
 

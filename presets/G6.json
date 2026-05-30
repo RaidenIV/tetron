@@ -152,5 +152,6 @@
   "aimFovDelta": -18,
   "aimDistDelta": -1.5,
   "aimSpeedMult": 0.55,
-  "aimSmooth": 10
+  "aimSmooth": 10,
+  "shieldLineBloom": 0.5
 }
