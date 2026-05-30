@@ -8,6 +8,7 @@
 //   - Steering smoothing (prevents jitter)
 //   - Hard decollision pass (after movement, spatial-hash-accelerated)
 import * as THREE from 'three';
+import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { scene } from './renderer.js';
 import { state } from './state.js';
 import { playerGroup } from './player.js';
@@ -422,7 +423,7 @@ function makeEnemy(type, position, index = 0) {
   scene.add(group);
 
   const maxHp = Math.max(1, Number(state.params.enemyHealth) || 100);
-  return {
+  const enemy = {
     type, def, group, mesh, material, maxHp,
     hp: maxHp,
     radius: BASE_RADIUS * def.sizeMult,
@@ -438,6 +439,8 @@ function makeEnemy(type, position, index = 0) {
     slotTimer: randomRange(0, 0.5), // stagger initial slot assignment
     lastSteer: null,
   };
+  makeSkullTag(enemy);
+  return enemy;
 }
 
 function disposeEnemy(enemy) {

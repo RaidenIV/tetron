@@ -230,6 +230,12 @@ function fireLaser() {
 
   _activeLasers.push(laser);
   playShootSound();
+
+  // Hitscan: if the aim resolved to an enemy, deal damage immediately at fire time.
+  // The laser still travels visually to the target point.
+  if (aimResult.type === 'enemy' && aimResult.enemy) {
+    damageEnemiesAt(aimResult.enemy.group.position, aimResult.enemy.radius, 34);
+  }
 }
 
 export function updateLaserProjectiles(delta, projectileDelta = delta) {
@@ -255,12 +261,6 @@ export function updateLaserProjectiles(delta, projectileDelta = delta) {
     laser.group.position.addScaledVector(laser.dir, step);
     laser.distance += step;
     laser.glow.visible = !!p.laserBloom;
-
-    if (damageEnemiesAt(laser.group.position, 0.36, 34)) {
-      _activeLasers.splice(i, 1);
-      releaseLaser(laser);
-      continue;
-    }
 
     if (laser.distance >= laser.maxRange) {
       _activeLasers.splice(i, 1);
