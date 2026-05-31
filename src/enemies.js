@@ -854,7 +854,7 @@ function spawnEnemyCorpse(enemy, cfg = getDestructionConfig(enemy)) {
   mesh.position.y += enemy.mesh.position.y;
   mesh.quaternion.copy(enemy.group.quaternion);
   scene.add(mesh);
-  liftCorpseAboveFloor({ mesh });
+  alignCorpseToFloor({ mesh });
 
   const yaw = Math.random() * Math.PI * 2;
   const speed = (1.1 + Math.random() * 1.7) * Math.max(0.2, cfg.speed);
@@ -870,18 +870,24 @@ function spawnEnemyCorpse(enemy, cfg = getDestructionConfig(enemy)) {
     maxLife: cfg.despawnTime,
     radius: Math.max(0.25, BASE_RADIUS * enemy.sizeMult),
     physics: cfg.physics,
+    grounded: false,
   });
 }
 
-function liftCorpseAboveFloor(corpse) {
+function alignCorpseToFloor(corpse, { snapDown = false, tolerance = 0.75 } = {}) {
   corpse.mesh.updateMatrixWorld(true);
   _corpseBox.setFromObject(corpse.mesh);
   const floorY = 0.035;
-  if (_corpseBox.min.y < floorY) {
-    corpse.mesh.position.y += floorY - _corpseBox.min.y;
-    return true;
+  const delta = floorY - _corpseBox.min.y;
+  if (delta > 0) {
+    corpse.mesh.position.y += delta;
+    return 1;
   }
-  return false;
+  if (snapDown && delta < 0 && Math.abs(delta) <= tolerance) {
+    corpse.mesh.position.y += delta;
+    return -1;
+  }
+  return 0;
 }
 
 function disposeEnemyCorpse(corpse) {
@@ -928,14 +934,25 @@ function updateEnemyCorpses(delta) {
         corpse.rz *= 0.85;
       }
 
-      if (liftCorpseAboveFloor(corpse)) {
-        corpse.vy = Math.abs(corpse.vy) > 0.22 ? Math.abs(corpse.vy) * 0.24 : 0;
+      const floorHit = alignCorpseToFloor(corpse, {
+        snapDown: corpse.grounded === true && corpse.vy <= 0.08,
+        tolerance: Math.max(0.2, (corpse.radius || 0.35) * 2.4),
+      });
+      if (floorHit !== 0) {
+        if (floorHit > 0) {
+          corpse.vy = Math.abs(corpse.vy) > 0.22 ? Math.abs(corpse.vy) * 0.18 : 0;
+        } else {
+          corpse.vy = Math.min(corpse.vy, 0);
+        }
+        corpse.grounded = true;
         const floorFriction = Math.exp(-1.65 * delta);
         corpse.vx *= floorFriction;
         corpse.vz *= floorFriction;
         corpse.rx *= floorFriction;
         corpse.ry *= floorFriction;
         corpse.rz *= floorFriction;
+      } else {
+        corpse.grounded = false;
       }
     }
 
