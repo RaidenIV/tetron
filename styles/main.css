@@ -415,6 +415,24 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   border: var(--reticle-thickness) solid var(--reticle-color);
   border-radius: 0;
 }
+
+.reticle-svg {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: var(--reticle-size);
+  height: var(--reticle-size);
+  transform: translate(-50%, -50%);
+  color: var(--reticle-color);
+  overflow: visible;
+}
+.reticle-svg .reticle-stroke {
+  stroke: currentColor;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+.reticle-svg .reticle-fill {
+  fill: currentColor;
+}
 #target-reticle.reticle-glow {
   filter: drop-shadow(0 0 6px var(--reticle-color));
 }
