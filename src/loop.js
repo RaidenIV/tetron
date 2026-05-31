@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import {
   renderer, scene, camera, labelRenderer,
   setActiveCamera, updateIsoCamera, updateThirdCamera, isThirdPersonCameraMode,
-  getMoveForward, getMoveRight,
+  getMoveForward, getMoveRight, updateCameraShake,
 } from './renderer.js';
 import { state } from './state.js';
 import { updateSunPosition } from './lighting.js';
@@ -232,6 +232,7 @@ export function tick() {
   if (state.paused) {
     state.primaryFire = false;
     state.secondaryFire = false;
+    updateCameraShake(delta);
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
     return;
@@ -247,6 +248,7 @@ export function tick() {
     updateLaserProjectiles(delta, worldDelta);
   }
 
+  updateCameraShake(delta);
   renderer.render(scene, camera);
   labelRenderer.render(scene, camera);
 }

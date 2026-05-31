@@ -9,7 +9,7 @@
 //   - Hard decollision pass (after movement, spatial-hash-accelerated)
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { scene } from './renderer.js';
+import { scene, triggerCameraShake } from './renderer.js';
 import { state } from './state.js';
 import { playerGroup } from './player.js';
 import { resolveCircleAgainstPlacedObjects, isPlacedObjectHit } from './placer.js';
@@ -902,6 +902,8 @@ function enemyBaseHeight(mesh) {
 function destroyEnemy(enemy) {
   playEnemyGruntSound();
   const cfg = getDestructionConfig(enemy);
+  const shakeForce = enemy.type === ENEMY_TYPE.BOSS ? 1.6 : enemy.type === ENEMY_TYPE.SPLITTER ? 1.25 : 1;
+  triggerCameraShake(enemy.group.position, shakeForce);
   spawnEnemyCorpse(enemy, cfg);
   spawnDestructionParticles(enemy, cfg);
   if (enemy.type === ENEMY_TYPE.SPLITTER) spawnSplitChildren(enemy);

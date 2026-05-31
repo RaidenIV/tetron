@@ -173,7 +173,7 @@ const PRESET_SETTINGS = [
     {
       "assetId": "cylinder",
       "x": -9.5,
-      "y": 0.6,
+      "y": 0.5,
       "z": 7.5,
       "ry": 0,
       "scaleX": 1,
@@ -565,7 +565,7 @@ const PRESET_SETTINGS = [
     {
       "assetId": "cylinder",
       "x": -9.5,
-      "y": 0.6,
+      "y": 0.5,
       "z": 7.5,
       "ry": 0,
       "scaleX": 1,
@@ -2471,8 +2471,19 @@ function buildCamera(body) {
   ].forEach(o => third2Group.appendChild(slider(o)));
   thirdGroup.appendChild(third2Group);
 
+  const shakeGroup = document.createElement('div');
+  shakeGroup.appendChild(subhdr('Camera Shake'));
+  shakeGroup.appendChild(toggle('Shake Enabled', 'cameraShakeEnabled'));
+  shakeGroup.appendChild(slider({ key: 'cameraShakeIntensity', label: 'Intensity', min: 0, max: 1.5, step: 0.01, dec: 2 }));
+  shakeGroup.appendChild(slider({ key: 'cameraShakeDuration', label: 'Duration', min: 0.05, max: 2, step: 0.05, dec: 2 }));
+  shakeGroup.appendChild(slider({ key: 'cameraShakeFrequency', label: 'Frequency', min: 1, max: 80, step: 1, dec: 0 }));
+  shakeGroup.appendChild(toggle('Proximity Falloff', 'cameraShakeProximity'));
+  shakeGroup.appendChild(slider({ key: 'cameraShakeRadius', label: 'Shake Radius', min: 1, max: 80, step: 1, dec: 0 }));
+  shakeGroup.appendChild(slider({ key: 'cameraShakeMinFactor', label: 'Min Strength', min: 0, max: 1, step: 0.01, dec: 2 }));
+
   syncCameraGroups(state.params.cameraMode);
   body.appendChild(thirdGroup);
+  body.appendChild(shakeGroup);
 }
 
 function buildPlayer(body) {
@@ -3259,6 +3270,17 @@ function applyAllParams() {
   if (!('soundSfx_jump' in p)) p.soundSfx_jump = 1;
   if (!('soundSfx_enemy_grunt' in p)) p.soundSfx_enemy_grunt = 1;
   if (!('soundSfx_object_explode' in p)) p.soundSfx_object_explode = p.soundSfx_explode ?? 1;
+  const clampSetting = (value, min, max, fallback) => {
+    const numeric = Number(value);
+    return Math.min(max, Math.max(min, Number.isFinite(numeric) ? numeric : fallback));
+  };
+  p.cameraShakeEnabled = p.cameraShakeEnabled !== false;
+  p.cameraShakeIntensity = clampSetting(p.cameraShakeIntensity, 0, 1.5, 0.28);
+  p.cameraShakeDuration = clampSetting(p.cameraShakeDuration, 0.05, 2, 0.35);
+  p.cameraShakeFrequency = clampSetting(p.cameraShakeFrequency, 1, 80, 28);
+  p.cameraShakeProximity = p.cameraShakeProximity !== false;
+  p.cameraShakeRadius = clampSetting(p.cameraShakeRadius, 1, 80, 24);
+  p.cameraShakeMinFactor = clampSetting(p.cameraShakeMinFactor, 0, 1, 0.12);
   state.placerRotation = THREE.MathUtils.degToRad(rotationDeg);
   applyHudSettings();
   applyTagSettings();

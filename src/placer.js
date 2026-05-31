@@ -6,7 +6,7 @@
 // Placed objects store rotation/colour/scale in serialised state.
 
 import * as THREE from 'three';
-import { scene, camera } from './renderer.js';
+import { scene, camera, triggerCameraShake } from './renderer.js';
 import { state } from './state.js';
 import { ASSET_CATALOGUE } from './assets-catalogue.js';
 
@@ -14,9 +14,9 @@ import { ASSET_CATALOGUE } from './assets-catalogue.js';
 const _geoFactories = {
   box:      () => new THREE.BoxGeometry(1, 1, 1),
   tall_box: () => new THREE.BoxGeometry(1, 2, 1),
-  cylinder: () => new THREE.CylinderGeometry(0.4, 0.4, 1.2, 12),
+  cylinder: () => new THREE.CylinderGeometry(0.4, 0.4, 1.0, 12),
   destructible_crate:  () => new THREE.BoxGeometry(1, 1, 1),
-  destructible_barrel: () => new THREE.CylinderGeometry(0.4, 0.4, 1.2, 12),
+  destructible_barrel: () => new THREE.CylinderGeometry(0.4, 0.4, 1.0, 12),
   sphere:   () => new THREE.SphereGeometry(0.5, 16, 12),
   wall:     () => new THREE.BoxGeometry(4, 2, 0.25),
   ramp: () => {
@@ -937,6 +937,11 @@ function destroyPlacedObject(obj) {
   const asset = getAsset(obj.assetId);
   if (asset.destructible !== true) return false;
   playObjectExplosionSound();
+  triggerCameraShake(new THREE.Vector3(
+    Number(obj.x) || 0,
+    ((placedObjectBounds(obj).minY + placedObjectBounds(obj).maxY) * 0.5) || Number(obj.y) || 0.5,
+    Number(obj.z) || 0
+  ), 1);
   spawnPlacedObjectExplosion(obj, asset);
   list.splice(dataIndex, 1);
   state.params.placedObjects = list;
@@ -1002,7 +1007,7 @@ function addDangerDecals(mesh, obj, asset) {
   const decalSize = asset.id === 'destructible_barrel' ? 0.58 : 0.68;
   if (asset.id === 'destructible_barrel') {
     const r = 0.407;
-    const sideH = 0.54;
+    const sideH = 0.46;
     const quadrant = Math.PI / 2;
     // Use curved quarter-cylinder decal panels so danger.png wraps around the
     // barrel instead of floating as flat cards. Shared side quadrants are
@@ -1011,8 +1016,8 @@ function addDangerDecals(mesh, obj, asset) {
     if (!isDangerFaceShared(obj, bounds, 'posX')) addDangerCurvedPanel(mesh, r, sideH, Math.PI / 4, quadrant);
     if (!isDangerFaceShared(obj, bounds, 'negZ')) addDangerCurvedPanel(mesh, r, sideH, Math.PI * 3 / 4, quadrant);
     if (!isDangerFaceShared(obj, bounds, 'negX')) addDangerCurvedPanel(mesh, r, sideH, Math.PI * 5 / 4, quadrant);
-    if (!isDangerFaceShared(obj, bounds, 'top')) addDangerPlane(mesh, decalSize, decalSize, { x: 0, y: 0.605, z: 0 }, { x: -Math.PI / 2, y: 0, z: 0 });
-    if (!isDangerFaceShared(obj, bounds, 'bottom')) addDangerPlane(mesh, decalSize, decalSize, { x: 0, y: -0.605, z: 0 }, { x: Math.PI / 2, y: 0, z: 0 });
+    if (!isDangerFaceShared(obj, bounds, 'top')) addDangerPlane(mesh, decalSize, decalSize, { x: 0, y: 0.505, z: 0 }, { x: -Math.PI / 2, y: 0, z: 0 });
+    if (!isDangerFaceShared(obj, bounds, 'bottom')) addDangerPlane(mesh, decalSize, decalSize, { x: 0, y: -0.505, z: 0 }, { x: Math.PI / 2, y: 0, z: 0 });
     return;
   }
 

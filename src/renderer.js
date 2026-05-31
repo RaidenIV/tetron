@@ -103,6 +103,66 @@ function clamp(v, min, max) {
   return Math.min(max, Math.max(min, v));
 }
 
+const _shakeOffset = new THREE.Vector3();
+let _shakeTime = 0;
+let _shakeDuration = 0;
+let _shakeAmplitude = 0;
+let _shakeSeed = Math.random() * Math.PI * 2;
+
+export function triggerCameraShake(origin, force = 1) {
+  const p = state.params;
+  if (p.cameraShakeEnabled === false) return;
+
+  const duration = clamp(Number(p.cameraShakeDuration) || 0.35, 0.05, 2);
+  const radius = Math.max(0.1, Number(p.cameraShakeRadius) || 24);
+  const baseIntensity = Math.max(0, Number(p.cameraShakeIntensity) || 0);
+  const appliedForce = Math.max(0, Number(force) || 0);
+  let proximity = 1;
+
+  if (p.cameraShakeProximity !== false && origin?.isVector3) {
+    const distance = camera.position.distanceTo(origin);
+    if (distance >= radius) {
+      proximity = 0;
+    } else {
+      const minFactorRaw = Number(p.cameraShakeMinFactor);
+      const minFactor = clamp(Number.isFinite(minFactorRaw) ? minFactorRaw : 0.12, 0, 1);
+      proximity = minFactor + (1 - minFactor) * (1 - distance / radius);
+    }
+  }
+
+  const amplitude = baseIntensity * appliedForce * proximity;
+  if (amplitude <= 0.0001) return;
+
+  _shakeTime = Math.max(_shakeTime, duration);
+  _shakeDuration = Math.max(_shakeDuration, duration);
+  _shakeAmplitude = Math.min(5, Math.max(_shakeAmplitude, amplitude));
+  _shakeSeed = Math.random() * Math.PI * 2;
+}
+
+export function updateCameraShake(delta) {
+  const p = state.params;
+  if (p.cameraShakeEnabled === false || _shakeTime <= 0) {
+    _shakeTime = 0;
+    _shakeAmplitude = 0;
+    return;
+  }
+
+  _shakeTime = Math.max(0, _shakeTime - Math.max(0, delta));
+  const remaining = _shakeTime / Math.max(0.001, _shakeDuration);
+  const amplitude = _shakeAmplitude * remaining * remaining;
+  const frequency = clamp(Number(p.cameraShakeFrequency) || 28, 1, 80);
+  const phase = performance.now() * 0.001 * frequency * Math.PI * 2 + _shakeSeed;
+
+  _shakeOffset.set(
+    Math.sin(phase * 1.13) * amplitude,
+    Math.sin(phase * 1.71 + 1.8) * amplitude * 0.65,
+    Math.cos(phase * 0.97 + 0.6) * amplitude
+  );
+  camera.position.add(_shakeOffset);
+
+  if (_shakeTime <= 0) _shakeAmplitude = 0;
+}
+
 export function getThirdPitchRange() {
   if (state.params.cameraMode !== 'third2') {
     return { min: -1.1, max: 1.1 };
