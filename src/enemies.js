@@ -861,7 +861,7 @@ function spawnEnemyCorpse(enemy, cfg = getDestructionConfig(enemy)) {
   enemyCorpses.push({
     mesh,
     vx: Math.cos(yaw) * speed,
-    vy: cfg.physics === 'gravity' ? 0.12 + Math.random() * 0.28 : 0.12 + Math.random() * 0.22,
+    vy: cfg.physics === 'gravity' ? 0 : 0.12 + Math.random() * 0.22,
     vz: Math.sin(yaw) * speed,
     rx: (Math.random() - 0.5) * 4.2,
     ry: (Math.random() - 0.5) * 4.2,
@@ -870,8 +870,8 @@ function spawnEnemyCorpse(enemy, cfg = getDestructionConfig(enemy)) {
     maxLife: cfg.despawnTime,
     radius: Math.max(0.25, BASE_RADIUS * enemy.sizeMult),
     physics: cfg.physics,
-    grounded: true,
-    landed: true,
+    grounded: false,
+    landed: false,
   });
 }
 
@@ -1481,6 +1481,82 @@ function updateAllies(delta, elapsedTime = 0) {
     updateEnemyShooting(ally, delta, target);
     updateContactDamage(ally, delta, target);
   }
+}
+
+// ── JSON export / import ──────────────────────────────────────────────────────
+// Keys that this module reads from / writes to state.params. Keeping the list
+// here (rather than inlining in the exporter) makes it easy to extend when new
+// params are added to enemies.js.
+const ENEMY_PARAM_KEYS = Object.freeze([
+  // Core spawn
+  'enemyType', 'enemyCount', 'enemyPlacement',
+  'enemyHealth', 'enemyInvincible',
+  'enemyBehavior', 'enemyWeaponType', 'enemyDamage',
+  'enemyMoveSpeed', 'enemyAwarenessRange',
+  // Ally spawn
+  'allyType', 'allyCount', 'allyPlacement',
+  'allyHealth', 'allyInvincible',
+  'allyBehavior', 'allyWeaponType', 'allyDamage',
+  'allyMoveSpeed', 'allyAwarenessRange',
+  // Destruction — shared
+  'enemyDestructionEnabled', 'enemyDestructionPhysics',
+  'enemyDestructionParticleCount', 'enemyDestructionParticleSize',
+  'enemyDestructionParticleSpeed', 'enemyDestructionParticleGlow',
+  'enemyDestructionStandardCount', 'enemyDestructionStandardSize',
+  'enemyDestructionStandardSpeed',
+  'enemyDestructionEliteCount', 'enemyDestructionEliteSize',
+  'enemyDestructionEliteSpeed', 'enemyDestructionEliteGlow',
+  // Destruction — per-archetype
+  ...Object.values(ENEMY_DESTRUCTION_PREFIX).flatMap(prefix => [
+    `${prefix}ParticleCount`, `${prefix}ParticleSize`,
+    `${prefix}ParticleSpeed`, `${prefix}ParticleGlow`,
+    `${prefix}ParticleDespawnTime`, `${prefix}Color`,
+    `${prefix}Physics`, `${prefix}DespawnTime`,
+  ]),
+  // Tag marker
+  'tagEnabled', 'tagColor', 'tagSize', 'tagThickness',
+  'tagBloom', 'tagShadow', 'tagHeight',
+  // Audio / bloom referenced by this module
+  'soundSfx_enemy_grunt', 'soundSfx_standard_hit',
+  'overallBloomIntensity',
+  // Player stats written by this module
+  'playerHealth', 'playerArmor', 'playerMaxHealth', 'playerMaxArmor',
+  'playerInvincible', 'playerRadius',
+]);
+
+/**
+ * Returns a plain object containing every state.params entry that
+ * enemies.js reads or writes. Pass the result to JSON.stringify() to
+ * produce a portable settings blob.
+ */
+export function getEnemyExportData() {
+  const out = {};
+  for (const key of ENEMY_PARAM_KEYS) {
+    const val = state.params[key];
+    if (val !== undefined && val !== null) out[key] = val;
+  }
+  return out;
+}
+
+/**
+ * Restores state.params from a blob previously produced by
+ * getEnemyExportData(). Unknown keys are silently skipped so that
+ * blobs from older versions remain safe to import. Pass
+ * { respawn: true } (default) to immediately re-spawn enemies and
+ * allies from the restored settings.
+ */
+export function applyEnemyImportData(data, { respawn = true } = {}) {
+  if (!data || typeof data !== 'object') return;
+  for (const key of ENEMY_PARAM_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(data, key)) {
+      state.params[key] = data[key];
+    }
+  }
+  if (respawn) {
+    spawnEnemiesFromSettings();
+    spawnAlliesFromSettings();
+  }
+  applyTagSettings();
 }
 
 export function updateEnemies(delta, elapsedTime = 0) {
