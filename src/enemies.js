@@ -394,7 +394,7 @@ function acquireParticle(color) {
     _particleGeo,
     new THREE.MeshStandardMaterial({
       color, emissive: color, emissiveIntensity: 0,
-      transparent: true, opacity: 1, roughness: 0.45, metalness: 0.0, depthWrite: false,
+      transparent: true, opacity: 1, roughness: 0.45, metalness: 0.0, depthWrite: false, toneMapped: false,
     }),
   );
   mesh.material.color.set(color);
@@ -741,6 +741,11 @@ function getDestructionParam(prefix, suffix, fallback) {
   return value === undefined || value === null ? fallback : value;
 }
 
+function getOverallBloomFactor() {
+  const raw = Number(state.params.overallBloomIntensity);
+  return clamp(Number.isFinite(raw) ? raw : 1, 0, 4);
+}
+
 function defaultParticleCountForEnemy(enemy) {
   const elite = enemy.type === ENEMY_TYPE.SPLITTER || enemy.type === ENEMY_TYPE.BOSS;
   if (elite) return Number(state.params.enemyDestructionEliteCount ?? 100);
@@ -773,6 +778,7 @@ function getDestructionConfig(enemy) {
     size: Math.max(0.01, Number(getDestructionParam(prefix, 'ParticleSize', defaultParticleSizeForEnemy(enemy))) || 0.32),
     speed: Math.max(0.01, Number(getDestructionParam(prefix, 'ParticleSpeed', defaultParticleSpeedForEnemy(enemy))) || 1.25),
     glow: Math.max(0, Number(getDestructionParam(prefix, 'ParticleGlow', defaultParticleGlowForEnemy(enemy))) || 0),
+    particleDespawnTime: Math.max(0.1, Number(getDestructionParam(prefix, 'ParticleDespawnTime', 1.0)) || 1.0),
     color: hexToNumber(getDestructionParam(prefix, 'Color', `#${fallbackColor.toString(16).padStart(6, '0')}`), fallbackColor),
     physics: getDestructionParam(prefix, 'Physics', state.params.enemyDestructionPhysics === false ? 'ethereal' : 'gravity') === 'ethereal' ? 'ethereal' : 'gravity',
     despawnTime: Math.max(0.1, Number(getDestructionParam(prefix, 'DespawnTime', 3.0)) || 3.0),
@@ -828,7 +834,7 @@ function updateDestructionParticles(delta) {
     const t = clamp(particle.life / particle.maxLife, 0, 1);
     particle.mesh.scale.setScalar(Math.max(0.001, t * 1.2 * particle.baseRadius));
     particle.mesh.material.opacity = t;
-    particle.mesh.material.emissiveIntensity = Math.min(t * 5, particle.glowCap);
+    particle.mesh.material.emissiveIntensity = Math.max(0, t * particle.glowCap * getOverallBloomFactor());
   }
 }
 
@@ -854,6 +860,8 @@ function spawnEnemyCorpse(enemy, cfg = getDestructionConfig(enemy)) {
     rz: (Math.random() - 0.5) * 2.2,
     life: cfg.despawnTime,
     maxLife: cfg.despawnTime,
+    radius: Math.max(0.25, BASE_RADIUS * enemy.sizeMult),
+    grounded: false,
     physics: cfg.physics,
   });
 }
@@ -884,25 +892,69 @@ function updateEnemyCorpses(delta) {
       disposeEnemyCorpse(corpse);
       continue;
     }
+
+    if (corpse.physics === 'gravity' && !corpse.grounded) {
+      corpse.vy -= PARTICLE_GRAVITY * delta;
+    } else if (corpse.physics !== 'gravity') {
+      corpse.vy += 0.1 * delta;
+    }
+
     corpse.mesh.position.x += corpse.vx * delta;
     corpse.mesh.position.y += corpse.vy * delta;
     corpse.mesh.position.z += corpse.vz * delta;
     corpse.mesh.rotation.x += corpse.rx * delta;
     corpse.mesh.rotation.y += corpse.ry * delta;
     corpse.mesh.rotation.z += corpse.rz * delta;
+
     if (corpse.physics === 'gravity') {
-      corpse.vy -= PARTICLE_GRAVITY * delta;
-      if (liftCorpseAboveFloor(corpse)) {
-        corpse.vy = Math.abs(corpse.vy) * 0.08;
-        corpse.vx *= 0.55;
-        corpse.vz *= 0.55;
+      const objectClipped = resolveCircleAgainstPlacedObjects(corpse.mesh.position, corpse.radius || 0.35, 2, {
+        footY: Math.max(0, corpse.mesh.position.y - (corpse.radius || 0.35)),
+        grounded: corpse.grounded,
+        stepUp: 0.25,
+        stepDown: 0.35,
+      });
+      if (objectClipped) {
+        corpse.vx *= 0.35;
+        corpse.vz *= 0.35;
       }
-    } else {
-      corpse.vy += 0.1 * delta;
+
+      if (liftCorpseAboveFloor(corpse)) {
+        if (Math.abs(corpse.vy) < 0.45) {
+          corpse.vy = 0;
+          corpse.grounded = true;
+        } else {
+          corpse.vy = Math.abs(corpse.vy) * 0.12;
+        }
+        corpse.vx *= 0.68;
+        corpse.vz *= 0.68;
+        corpse.rx *= 0.65;
+        corpse.ry *= 0.65;
+        corpse.rz *= 0.65;
+      }
+
+      if (corpse.grounded) {
+        const friction = Math.exp(-5.5 * delta);
+        corpse.vx *= friction;
+        corpse.vz *= friction;
+        corpse.rx *= friction;
+        corpse.ry *= friction;
+        corpse.rz *= friction;
+        if (Math.hypot(corpse.vx, corpse.vz) < 0.025) {
+          corpse.vx = 0;
+          corpse.vz = 0;
+        }
+        if (Math.hypot(corpse.rx, corpse.ry, corpse.rz) < 0.025) {
+          corpse.rx = 0;
+          corpse.ry = 0;
+          corpse.rz = 0;
+        }
+      }
     }
-    const t = clamp(corpse.life / corpse.maxLife, 0, 1);
+
+    const fadeWindow = Math.min(0.5, Math.max(0.1, corpse.maxLife * 0.25));
+    const t = corpse.life < fadeWindow ? clamp(corpse.life / fadeWindow, 0, 1) : 1;
     corpse.mesh.material.opacity = t;
-    corpse.mesh.material.transparent = true;
+    corpse.mesh.material.transparent = t < 1;
   }
 }
 

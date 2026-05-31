@@ -8,7 +8,7 @@ export const state = {
   slowTimer: 0,
   slowScale: 0.35,
   slowRequested: false,
-  activePreset: 'g19',
+  activePreset: 'g20',
   mouseLookActive: false,
   isAiming: false,          // true while right-mouse / L2 held
   activeSlot: 0,            // 0 = laser, 1 = object placer

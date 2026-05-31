@@ -26,6 +26,12 @@ playerMesh.position.y = 0.4 + 1.2 / 2;
 playerGroup.add(playerMesh);
 
 let _jumpSoundEl = null;
+function getOverallBloomFactor() {
+  const raw = Number(state.params.overallBloomIntensity);
+  const value = Number.isFinite(raw) ? raw : 1;
+  return Math.min(4, Math.max(0, value));
+}
+
 function playJumpSound() {
   if (state.params.soundMuted) return;
   const master = Number(state.params.soundSfxVolume ?? 1);
@@ -471,7 +477,7 @@ export function applyShieldSettings() {
 
   // Bloom shell: a slightly larger sphere with very low additive opacity
   shieldBloomMat.color.set(color);
-  shieldBloomMat.opacity = glowEnabled ? bloomIntensity * opacity * 0.6 : 0;
+  shieldBloomMat.opacity = glowEnabled ? bloomIntensity * opacity * 0.6 * getOverallBloomFactor() : 0;
   shieldBloomMat.needsUpdate = true;
   playerShieldBloom.scale.setScalar(radius * bloomRadius);
   playerShieldBloom.visible = !!p.shieldVisible && glowEnabled && bloomIntensity > 0;

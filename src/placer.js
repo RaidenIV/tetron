@@ -833,6 +833,11 @@ function destructionParam(prefix, suffix, fallback) {
   return value === undefined || value === null ? fallback : value;
 }
 
+function getOverallBloomFactor() {
+  const raw = Number(state.params.overallBloomIntensity);
+  return clamp(Number.isFinite(raw) ? raw : 1, 0, 4);
+}
+
 function getDestructibleExplosionConfig() {
   const p = state.params;
   return {
@@ -840,6 +845,7 @@ function getDestructibleExplosionConfig() {
     size: Math.max(0.01, Number(destructionParam('destructionDestructible', 'ParticleSize', p.enemyDestructionParticleSize ?? 0.32)) || 0.32),
     speed: Math.max(0.01, Number(destructionParam('destructionDestructible', 'ParticleSpeed', p.enemyDestructionParticleSpeed ?? 1.25)) || 1.25),
     glow: Math.max(0, Number(destructionParam('destructionDestructible', 'ParticleGlow', p.enemyDestructionParticleGlow ?? 8)) || 0),
+    particleDespawnTime: Math.max(0.1, Number(destructionParam('destructionDestructible', 'ParticleDespawnTime', 1.0)) || 1.0),
     color: hexToNumber(destructionParam('destructionDestructible', 'Color', '#ffd400'), 0xffd400),
     physics: destructionParam('destructionDestructible', 'Physics', p.enemyDestructionPhysics === false ? 'ethereal' : 'gravity'),
     shockwaveSpeed: clamp(Number(destructionParam('destructionDestructible', 'ShockwaveSpeed', 10)) || 0, 0, 40),
@@ -859,7 +865,7 @@ function acquireDestructibleParticle(color) {
     _destructibleParticleGeo,
     new THREE.MeshStandardMaterial({
       color, emissive: color, emissiveIntensity: 0, transparent: true,
-      opacity: 1, roughness: 0.52, metalness: 0.05, depthWrite: false,
+      opacity: 1, roughness: 0.52, metalness: 0.05, depthWrite: false, toneMapped: false,
     }),
   );
   mesh.material.color.set(color);
@@ -909,6 +915,7 @@ function spawnDestructibleShockwave(cx, cy, cz, cfg) {
     depthWrite: false,
     side: THREE.DoubleSide,
     blending: THREE.AdditiveBlending,
+    toneMapped: false,
   });
   const mesh = new THREE.Mesh(_destructibleShockwaveGeo, material);
   mesh.name = 'DestructibleShockwaveSphere';
@@ -1017,7 +1024,7 @@ function spawnPlacedObjectExplosion(obj, asset) {
       const yaw = Math.random() * Math.PI * 2;
       const pitch = (Math.random() - 0.2) * Math.PI * 0.75;
       const speed = (3.5 + Math.random() * 8.5) * cfg.speed;
-      const maxLife = 0.65 + Math.random() * 0.7;
+      const maxLife = cfg.particleDespawnTime;
       mesh.position.set(cx, cy, cz);
       mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
       mesh.scale.setScalar(baseRadius);
@@ -1065,7 +1072,7 @@ function updateDestructibleParticles(delta = 1 / 60) {
     const t = clamp(particle.life / particle.maxLife, 0, 1);
     particle.mesh.scale.setScalar(Math.max(0.001, t * 1.15 * particle.baseRadius));
     particle.mesh.material.opacity = t;
-    particle.mesh.material.emissiveIntensity = Math.min(t * 5, particle.glowCap);
+    particle.mesh.material.emissiveIntensity = Math.max(0, t * particle.glowCap * getOverallBloomFactor());
   }
   updateDestructibleShockwaves(delta);
 }

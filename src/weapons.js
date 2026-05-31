@@ -60,11 +60,16 @@ function clamp(v, min, max) {
   return Math.min(max, Math.max(min, v));
 }
 
+function getOverallBloomFactor() {
+  const raw = Number(state.params.overallBloomIntensity);
+  return clamp(Number.isFinite(raw) ? raw : 1, 0, 4);
+}
+
 function applyLaserMaterials() {
   const p = state.params;
   const bloomIntensity = Number(p.laserBloomIntensity);
   _laserGlowMat.color.set(p.laserBloomColor || '#ff1100');
-  _laserGlowMat.opacity = p.laserBloom ? clamp(Number.isFinite(bloomIntensity) ? bloomIntensity : 0.55, 0, 1) : 0;
+  _laserGlowMat.opacity = p.laserBloom ? clamp((Number.isFinite(bloomIntensity) ? bloomIntensity : 0.55) * getOverallBloomFactor(), 0, 3) : 0;
   _laserGlowMat.needsUpdate = true;
 }
 
