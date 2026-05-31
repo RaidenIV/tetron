@@ -502,7 +502,6 @@ export const state = {
         "destructionDestructibleSplashFalloff": 1,
         "destructionDestructibleSplashMinFactor": 0.15
 }
-},
 };
 
 // Snapshot taken at startup — used by Reset button
