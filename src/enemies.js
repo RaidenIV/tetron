@@ -383,6 +383,8 @@ const _particleGeo = new THREE.SphereGeometry(1, 6, 4);
 const _enemyBulletMatCache = new Map();
 const _up = new THREE.Vector3(0, 1, 0);
 const _quat = new THREE.Quaternion();
+const _corpseRestAxis = new THREE.Vector3();
+const _corpseRestQuat = new THREE.Quaternion();
 
 function getDef(type) {
   return ENEMY_DEFS[type] || ENEMY_DEFS[ENEMY_TYPE.RUSHER];
@@ -954,7 +956,7 @@ function spawnDestructionParticles(enemy, cfg = getDestructionConfig(enemy)) {
       vx: Math.cos(yaw) * Math.cos(pitch) * speed,
       vy: Math.sin(pitch) * speed + (cfg.physics === 'gravity' ? 2 * cfg.speed : 0.7 * cfg.speed),
       vz: Math.sin(yaw) * Math.cos(pitch) * speed,
-      life: maxLife, maxLife, glowCap: cfg.glow, physics: cfg.physics,
+      life: maxLife, maxLife, glowCap: cfg.glow, physics: 'gravity',
     });
   }
 }
@@ -1002,47 +1004,51 @@ function spawnEnemyCorpse(enemy, cfg = getDestructionConfig(enemy)) {
   mesh.castShadow = true;
   mesh.receiveShadow = true;
 
-  enemy.group.getWorldPosition(_corpseWorldPos);
+  enemy.mesh.getWorldPosition(_corpseWorldPos);
   mesh.position.copy(_corpseWorldPos);
-  mesh.position.y += enemy.mesh.position.y;
-  mesh.rotation.set(0, enemy.group.rotation.y, 0);
-  mesh.rotateZ((Math.random() < 0.5 ? -1 : 1) * (Math.PI * 0.5 + randomRange(-0.18, 0.18)));
-  mesh.rotateY(randomRange(-0.35, 0.35));
-  mesh.rotateX(randomRange(-0.18, 0.18));
+  mesh.quaternion.copy(enemy.group.quaternion);
+
+  const yaw = enemy.group.rotation.y + randomRange(-0.35, 0.35);
+  _corpseRestAxis.set(Math.sin(yaw), 0, Math.cos(yaw)).normalize();
+  _corpseRestQuat.setFromUnitVectors(_up, _corpseRestAxis);
 
   scene.add(mesh);
-  liftCorpseAboveFloor({ mesh });
+  snapCorpseToFloor(mesh, false);
 
-  const yaw = Math.random() * Math.PI * 2;
-  const speed = (0.55 + Math.random() * 0.85) * Math.max(0.2, cfg.speed);
+  const shoveYaw = Math.random() * Math.PI * 2;
+  const speed = (0.35 + Math.random() * 0.55) * Math.max(0.2, cfg.speed);
   enemyCorpses.push({
     mesh,
-    vx: Math.cos(yaw) * speed,
-    vy: cfg.physics === 'gravity' ? 0.02 + Math.random() * 0.05 : 0.08 + Math.random() * 0.16,
-    vz: Math.sin(yaw) * speed,
-    rx: (Math.random() - 0.5) * 1.6,
-    ry: (Math.random() - 0.5) * 1.2,
-    rz: (Math.random() - 0.5) * 1.6,
+    vx: Math.cos(shoveYaw) * speed,
+    vy: 0,
+    vz: Math.sin(shoveYaw) * speed,
+    rx: (Math.random() < 0.5 ? -1 : 1) * randomRange(2.2, 3.4),
+    ry: (Math.random() - 0.5) * 0.35,
+    rz: (Math.random() < 0.5 ? -1 : 1) * randomRange(2.2, 3.4),
+    restQuat: _corpseRestQuat.clone(),
     life: cfg.despawnTime,
     maxLife: cfg.despawnTime,
     fadeTime: Math.min(cfg.despawnTime, Math.max(0.1, Number(cfg.corpseFadeTime) || 1.0)),
-    physics: cfg.physics,
+    physics: 'gravity',
     grounded: false,
+    groundTime: 0,
     sleepTimer: 0,
+    sleeping: false,
   });
 }
 
-function liftCorpseAboveFloor(corpse) {
-  if (!corpse?.mesh) return false;
-  corpse.mesh.updateMatrixWorld(true);
-  _corpseBox.setFromObject(corpse.mesh);
-  const floorY = 0.018;
+function snapCorpseToFloor(mesh, allowDownwardSnap = false) {
+  if (!mesh) return false;
+  mesh.updateMatrixWorld(true);
+  _corpseBox.setFromObject(mesh);
+  const floorY = 0;
   const delta = floorY - _corpseBox.min.y;
-  if (delta > 0) {
-    corpse.mesh.position.y += delta;
+  if (delta > 0.0001 || (allowDownwardSnap && Math.abs(delta) > 0.0001)) {
+    mesh.position.y += delta;
+    mesh.updateMatrixWorld(true);
     return true;
   }
-  return false;
+  return delta >= -0.0001;
 }
 
 function disposeEnemyCorpse(corpse) {
@@ -1062,49 +1068,65 @@ function updateEnemyCorpses(delta) {
     }
 
     if (corpse.physics === 'gravity') {
-      corpse.vy -= PARTICLE_GRAVITY * delta;
-    } else {
-      corpse.vy += 0.1 * delta;
-    }
+      if (!corpse.sleeping) {
+        corpse.vy -= PARTICLE_GRAVITY * delta;
 
-    corpse.mesh.position.x += corpse.vx * delta;
-    corpse.mesh.position.y += corpse.vy * delta;
-    corpse.mesh.position.z += corpse.vz * delta;
-    corpse.mesh.rotation.x += corpse.rx * delta;
-    corpse.mesh.rotation.y += corpse.ry * delta;
-    corpse.mesh.rotation.z += corpse.rz * delta;
+        corpse.mesh.position.x += corpse.vx * delta;
+        corpse.mesh.position.y += corpse.vy * delta;
+        corpse.mesh.position.z += corpse.vz * delta;
+        corpse.mesh.rotation.x += corpse.rx * delta;
+        corpse.mesh.rotation.y += corpse.ry * delta;
+        corpse.mesh.rotation.z += corpse.rz * delta;
 
-    if (corpse.physics === 'gravity') {
-      const floorHit = liftCorpseAboveFloor(corpse);
-      if (floorHit) {
-        corpse.grounded = true;
-        corpse.vy = Math.abs(corpse.vy) > 0.28 ? Math.abs(corpse.vy) * 0.1 : 0;
-
-        const floorFriction = Math.exp(-2.8 * delta);
-        const angularFriction = Math.exp(-3.4 * delta);
-        corpse.vx *= floorFriction;
-        corpse.vz *= floorFriction;
-        corpse.rx *= angularFriction;
-        corpse.ry *= angularFriction;
-        corpse.rz *= angularFriction;
-
-        const nearlyStill = Math.abs(corpse.vy) < 0.05
-          && Math.hypot(corpse.vx, corpse.vz) < 0.05
-          && Math.hypot(corpse.rx, corpse.ry, corpse.rz) < 0.08;
-        corpse.sleepTimer = nearlyStill ? (corpse.sleepTimer || 0) + delta : 0;
-        if (corpse.sleepTimer > 0.18) {
-          corpse.vx = 0;
+        const onFloor = snapCorpseToFloor(corpse.mesh, false);
+        if (onFloor) {
+          corpse.grounded = true;
+          corpse.groundTime = (corpse.groundTime || 0) + delta;
           corpse.vy = 0;
-          corpse.vz = 0;
-          corpse.rx = 0;
-          corpse.ry = 0;
-          corpse.rz = 0;
-          liftCorpseAboveFloor(corpse);
+
+          const floorFriction = Math.exp(-4.8 * delta);
+          const angularFriction = Math.exp(-5.6 * delta);
+          corpse.vx *= floorFriction;
+          corpse.vz *= floorFriction;
+          corpse.rx *= angularFriction;
+          corpse.ry *= angularFriction;
+          corpse.rz *= angularFriction;
+
+          const settleAmount = clamp(delta * 5.5, 0, 1);
+          corpse.mesh.quaternion.slerp(corpse.restQuat, settleAmount);
+          snapCorpseToFloor(corpse.mesh, true);
+
+          const nearlyStill = corpse.groundTime > 0.18
+            && Math.hypot(corpse.vx, corpse.vz) < 0.08
+            && Math.hypot(corpse.rx, corpse.ry, corpse.rz) < 0.12;
+          corpse.sleepTimer = nearlyStill ? (corpse.sleepTimer || 0) + delta : 0;
+          if (corpse.sleepTimer > 0.16) {
+            corpse.vx = 0;
+            corpse.vy = 0;
+            corpse.vz = 0;
+            corpse.rx = 0;
+            corpse.ry = 0;
+            corpse.rz = 0;
+            corpse.mesh.quaternion.copy(corpse.restQuat);
+            snapCorpseToFloor(corpse.mesh, true);
+            corpse.sleeping = true;
+          }
+        } else {
+          corpse.grounded = false;
+          corpse.groundTime = 0;
+          corpse.sleepTimer = 0;
         }
       } else {
-        corpse.grounded = false;
-        corpse.sleepTimer = 0;
+        snapCorpseToFloor(corpse.mesh, true);
       }
+    } else {
+      corpse.vy += 0.1 * delta;
+      corpse.mesh.position.x += corpse.vx * delta;
+      corpse.mesh.position.y += corpse.vy * delta;
+      corpse.mesh.position.z += corpse.vz * delta;
+      corpse.mesh.rotation.x += corpse.rx * delta;
+      corpse.mesh.rotation.y += corpse.ry * delta;
+      corpse.mesh.rotation.z += corpse.rz * delta;
     }
 
     const fadeWindow = Math.min(corpse.maxLife, Math.max(0.1, Number(corpse.fadeTime) || 1.0));
