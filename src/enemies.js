@@ -72,6 +72,12 @@ const FIRE_RATE_SECONDS = {
   projectile: 1.6,
   laser: 1.0,
   sniper: 2.2,
+  pistol: 0.8,
+  rifle: 1.0,
+  shotgun: 1.35,
+  sniperRifle: 2.2,
+  grenades: 2.6,
+  rocketLauncher: 2.4,
 };
 
 let _enemyGruntEl = null;
@@ -80,8 +86,8 @@ const _corpseWorldPos = new THREE.Vector3();
 const _splashVec = new THREE.Vector3();
 
 // Same rectangular rifle proportions used by the player rifle visual. NPC rifles
-// are shown only while that NPC's effective weapon is set to laser.
-const NPC_RIFLE = Object.freeze({ width: 0.08, height: 0.18, length: 1.5, grip: 0.16, sideGap: 0.105, forwardOffset: 0.12 });
+// are shown only while that NPC's effective weapon is rifle/laser-like.
+const NPC_RIFLE = Object.freeze({ width: 0.08, height: 0.18, length: 1.125, grip: 0.16, sideGap: 0.105, forwardOffset: 0.12 });
 const NPC_HEALTH_BAR_RATIO_EPSILON = 0.001;
 const NPC_HEALTH_BAR_DISTANCE_DEFAULT = 60;
 const _npcRifleGeo = new THREE.BoxGeometry(NPC_RIFLE.width, NPC_RIFLE.height, NPC_RIFLE.length);
@@ -592,6 +598,7 @@ function makeNpcHealthBar(npc) {
 
   const el = document.createElement('div');
   el.className = 'npc-health-bar game-hud-track';
+  el.dataset.team = npc.isAlly ? 'ally' : 'enemy';
   el.style.cssText = [
     'width:92px', 'height:10px', 'box-sizing:border-box',
     `background:${trackColor}`,
@@ -634,7 +641,11 @@ function getNpcHealthBarMaxDistance() {
 
 function updateNpcHealthBar(npc, { force = false } = {}) {
   if (!npc?._healthBarEl || !npc._healthBarFill) return;
-  const enabled = state.params.hudVisible !== false && state.params.hudNpcHealthBars !== false;
+  const legacyEnabled = state.params.hudNpcHealthBars !== false;
+  const teamEnabled = npc.isAlly
+    ? state.params.hudAllyHealthBars !== false
+    : state.params.hudEnemyHealthBars !== false;
+  const enabled = state.params.hudVisible !== false && legacyEnabled && teamEnabled;
   const ratio = clamp((Number(npc.hp) || 0) / Math.max(1, Number(npc.maxHp) || 1), 0, 1);
   const maxDistance = getNpcHealthBarMaxDistance();
   const inRange = maxDistance <= 0 || !camera?.position
@@ -688,7 +699,7 @@ function makeNpcRifleVisual(npc) {
 function updateNpcWeaponVisual(npc) {
   if (!npc?._weaponGroup) return;
   const weapon = getEffectiveWeapon(npc);
-  const visible = weapon === 'laser';
+  const visible = weapon === 'rifle' || weapon === 'laser';
   if (npc._weaponVisible !== visible) {
     npc._weaponGroup.visible = visible;
     npc._weaponVisible = visible;
@@ -923,18 +934,27 @@ function defaultParticleGlowForEnemy(enemy) {
 }
 
 function getDestructionConfig(enemy) {
-  const prefix = ENEMY_DESTRUCTION_PREFIX[enemy.type] || ENEMY_DESTRUCTION_PREFIX[ENEMY_TYPE.RUSHER];
-  const fallbackColor = enemy.def?.color ?? 0xff1111;
+  const legacyPrefix = ENEMY_DESTRUCTION_PREFIX[enemy.type] || ENEMY_DESTRUCTION_PREFIX[ENEMY_TYPE.RUSHER];
+  const prefix = enemy.isAlly ? 'destructionAllies' : 'destructionEnemies';
+  const fallbackColor = enemy.isAlly ? 0x35ff00 : 0xff3030;
+  const legacyColor = enemy.def?.color ?? fallbackColor;
+  const legacyColorHex = `#${legacyColor.toString(16).padStart(6, '0')}`;
+  const readGeneric = (suffix, fallback) => getDestructionParam(
+    prefix,
+    suffix,
+    getDestructionParam(legacyPrefix, suffix, fallback),
+  );
+
   return {
-    count: Math.max(0, Math.round(Number(getDestructionParam(prefix, 'ParticleCount', defaultParticleCountForEnemy(enemy))) || 0)),
-    size: Math.max(0.01, Number(getDestructionParam(prefix, 'ParticleSize', defaultParticleSizeForEnemy(enemy))) || 0.32),
-    speed: Math.max(0.01, Number(getDestructionParam(prefix, 'ParticleSpeed', defaultParticleSpeedForEnemy(enemy))) || 1.25),
-    glow: Math.max(0, Number(getDestructionParam(prefix, 'ParticleGlow', defaultParticleGlowForEnemy(enemy))) || 0),
-    particleDespawnTime: Math.max(0.1, Number(getDestructionParam(prefix, 'ParticleDespawnTime', 1.0)) || 1.0),
-    corpseFadeTime: Math.max(0.1, Number(getDestructionParam(prefix, 'CorpseFadeTime', 1.0)) || 1.0),
-    color: hexToNumber(getDestructionParam(prefix, 'Color', `#${fallbackColor.toString(16).padStart(6, '0')}`), fallbackColor),
-    physics: getDestructionParam(prefix, 'Physics', state.params.enemyDestructionPhysics === false ? 'ethereal' : 'gravity') === 'ethereal' ? 'ethereal' : 'gravity',
-    despawnTime: Math.max(0.1, Number(getDestructionParam(prefix, 'DespawnTime', 3.0)) || 3.0),
+    count: Math.max(0, Math.round(Number(readGeneric('ParticleCount', defaultParticleCountForEnemy(enemy))) || 0)),
+    size: Math.max(0.01, Number(readGeneric('ParticleSize', defaultParticleSizeForEnemy(enemy))) || 0.32),
+    speed: Math.max(0.01, Number(readGeneric('ParticleSpeed', defaultParticleSpeedForEnemy(enemy))) || 1.25),
+    glow: Math.max(0, Number(readGeneric('ParticleGlow', defaultParticleGlowForEnemy(enemy))) || 0),
+    particleDespawnTime: Math.max(0.1, Number(readGeneric('ParticleDespawnTime', 1.0)) || 1.0),
+    corpseFadeTime: Math.max(0.1, Number(readGeneric('CorpseFadeTime', 1.0)) || 1.0),
+    color: hexToNumber(readGeneric('Color', legacyColorHex), fallbackColor),
+    physics: readGeneric('Physics', state.params.enemyDestructionPhysics === false ? 'ethereal' : 'gravity') === 'ethereal' ? 'ethereal' : 'gravity',
+    despawnTime: Math.max(0.1, Number(readGeneric('DespawnTime', 3.0)) || 3.0),
   };
 }
 
@@ -1187,10 +1207,25 @@ function getEffectiveBehavior(npc) {
   return behavior || npc?.def?.defaultBehavior || 'rush';
 }
 
+function normalizeNpcWeapon(value, fallback = 'rifle') {
+  if (value === 'laser') return 'rifle';
+  if (value === 'sniper') return 'sniperRifle';
+  if (value === 'projectile') return 'pistol';
+  if (value === 'contact' || value === 'none') return value;
+  return ['pistol', 'rifle', 'shotgun', 'sniperRifle', 'grenades', 'rocketLauncher'].includes(value)
+    ? value
+    : fallback;
+}
+
 function getEffectiveWeapon(npc) {
   const key = npc?.isAlly ? 'allyWeaponType' : 'enemyWeaponType';
-  const weapon = state.params[key];
-  return weapon || npc?.def?.defaultWeapon || 'contact';
+  const configured = normalizeNpcWeapon(state.params[key], null);
+  if (configured) return configured;
+  return normalizeNpcWeapon(npc?.def?.defaultWeapon, 'rifle');
+}
+
+function isLaserLikeWeapon(weapon) {
+  return weapon === 'laser' || weapon === 'rifle' || weapon === 'sniperRifle';
 }
 
 function getNpcDamage(npc) {
@@ -1494,10 +1529,10 @@ function fireEnemyBullet(enemy, targetNpc = null) {
   if (weapon === 'none' || weapon === 'contact') return;
   if (enemy.isAlly && !targetNpc) return;
 
-  const color = weapon === 'sniper' ? 0xd975ff : weapon === 'laser' ? 0xff3333 : enemy.def.projectileColor;
+  const color = (weapon === 'sniper' || weapon === 'sniperRifle') ? 0xd975ff : isLaserLikeWeapon(weapon) ? 0xff3333 : enemy.def.projectileColor;
   const mesh = new THREE.Mesh(_enemyBulletGeo, getBulletMaterial(color));
   mesh.name = enemy.isAlly ? 'AllyProjectile' : 'EnemyProjectile';
-  if (weapon === 'laser' && enemy._weaponMuzzle) {
+  if (isLaserLikeWeapon(weapon) && enemy._weaponMuzzle) {
     updateNpcWeaponVisual(enemy);
     enemy._weaponMuzzle.getWorldPosition(mesh.position);
   } else {
@@ -1517,7 +1552,7 @@ function fireEnemyBullet(enemy, targetNpc = null) {
   _quat.setFromUnitVectors(_up, _bulletDir);
   mesh.quaternion.copy(_quat);
   scene.add(mesh);
-  const speedMult = weapon === 'sniper' ? 1.35 : weapon === 'laser' ? 1.6 : 1.0;
+  const speedMult = (weapon === 'sniper' || weapon === 'sniperRifle') ? 1.35 : isLaserLikeWeapon(weapon) ? 1.6 : weapon === 'rocketLauncher' ? 1.2 : weapon === 'grenades' ? 0.8 : 1.0;
   enemyBullets.push({
     mesh,
     dir: _bulletDir.clone(),
@@ -1526,6 +1561,7 @@ function fireEnemyBullet(enemy, targetNpc = null) {
     damage: getNpcDamage(enemy),
     ownerTeam: enemy.isAlly ? 'ally' : 'enemy',
     targetTeam: targetNpc ? (targetNpc.isAlly ? 'ally' : 'enemy') : 'player',
+    weapon,
   });
 }
 
@@ -1548,6 +1584,11 @@ function updateEnemyBullets(delta) {
     const bullet = enemyBullets[i];
     bullet.life -= delta;
     bullet.mesh.position.addScaledVector(bullet.dir, bullet.speed * delta);
+    if (isLaserLikeWeapon(bullet.weapon) && bullet.mesh.position.y <= 0.02) {
+      enemyBullets.splice(i, 1);
+      disposeEnemyBullet(bullet);
+      continue;
+    }
     if (isPlacedObjectHit(bullet.mesh.position, 0.08)) {
       enemyBullets.splice(i, 1);
       disposeEnemyBullet(bullet);

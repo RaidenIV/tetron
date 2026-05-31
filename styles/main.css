@@ -150,6 +150,7 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
 .arrow { color: var(--sb-muted); font-size: 10px; margin-left: auto; }
 .sb-section-body { display: none; padding: 6px 10px 10px; }
 .sb-section-body.open { display: block; }
+.sb-section.open .sb-section-title { color: var(--sb-accent); }
 .sidebar.minimized .sb-section-body { display: none !important; }
 .sb-section-error { color: #ff8a8a; font-size: 11px; line-height: 1.35; padding: 6px 0; }
 

@@ -409,9 +409,10 @@ export function updateLaserProjectiles(delta, projectileDelta = delta) {
     if (visual.glow) visual.glow.visible = !!p.laserBloom;
 
     const hitGround = projectileConfig.ballistic && projectile.age > 0.08 && visual.group.position.y <= 0.09;
+    const laserThroughFloor = projectileConfig.visual === 'laser' && visual.group.position.y <= 0.02;
     const hitObject = isPlacedObjectHit(visual.group.position, projectileConfig.visual === 'rocket' ? 0.16 : 0.1);
 
-    if (hitGround || hitObject) {
+    if (laserThroughFloor || hitGround || hitObject) {
       _activeProjectiles.splice(i, 1);
       if (projectileConfig.explosive) explodeProjectile(projectile);
       else disposeProjectile(projectile);

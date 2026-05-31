@@ -4925,6 +4925,8 @@ const PLAYER_WEAPON_OPTIONS = [
   ['rocketLauncher', 'Rocket Launcher'],
 ];
 
+const NPC_WEAPON_OPTIONS = PLAYER_WEAPON_OPTIONS;
+
 const ENEMY_JSON_KEYS = [
   'enemyType',
   'enemyCount',
@@ -5063,11 +5065,13 @@ function section(icon, title, buildFn) {
     if (state.panelMinimized) {
       setPanelMinimized(false);
       body.classList.add('open');
+      wrap.classList.add('open');
       hdr.querySelector('.arrow').textContent = '▴';
       return;
     }
 
     const open = body.classList.toggle('open'); // display: block when open
+    wrap.classList.toggle('open', open);
     hdr.querySelector('.arrow').textContent = open ? '▴' : '▾';
   });
 
@@ -5463,7 +5467,8 @@ function buildScene(body) {
 function buildHUD(body) {
   body.appendChild(toggle('HUD Enabled', 'hudVisible', () => applyHudSettings()));
   body.appendChild(select('Font', 'hudFont', HUD_FONT_OPTIONS, () => applyHudSettings()));
-  body.appendChild(toggle('Enemy / Ally Health Bars', 'hudNpcHealthBars', () => applyHudSettings()));
+  body.appendChild(toggle('Enemy Health Bars', 'hudEnemyHealthBars', () => applyHudSettings()));
+  body.appendChild(toggle('Ally Health Bars', 'hudAllyHealthBars', () => applyHudSettings()));
   body.appendChild(slider({ key: 'hudNpcHealthBarRange', label: 'Health Bar Range', min: 0, max: 200, step: 1, dec: 0, onChange: () => applyHudSettings() }));
 
   body.appendChild(subhdr('Enemy Tag'));
@@ -5549,7 +5554,7 @@ function buildEnemies(body) {
   body.appendChild(slider({ key: 'enemyMoveSpeed', label: 'Movement Speed', min: 0, max: 12, step: 0.1, dec: 1 }));
   body.appendChild(slider({ key: 'enemyDamage', label: 'Damage Amount', min: 0, max: 250, step: 1, dec: 0 }));
   body.appendChild(select('Placement', 'enemyPlacement', ENEMY_PLACEMENT_OPTIONS));
-  body.appendChild(select('Weapon Type', 'enemyWeaponType', ENEMY_WEAPON_OPTIONS));
+  body.appendChild(select('Weapon Type', 'enemyWeaponType', NPC_WEAPON_OPTIONS));
   body.appendChild(slider({ key: 'enemyAwarenessRange', label: 'Awareness Range', min: 1, max: 200, step: 1, dec: 0 }));
 
   body.appendChild(btn('Spawn / Apply Enemies', 'sb-btn-accent', () => {
@@ -5563,14 +5568,8 @@ function buildEnemies(body) {
 }
 
 const DESTRUCTION_CONTROL_GROUPS = [
-  ['Rusher', 'destructionRusher', true],
-  ['Orbiter', 'destructionOrbiter', true],
-  ['Tanker', 'destructionTanker', true],
-  ['Sniper', 'destructionSniper', true],
-  ['Teleporter', 'destructionTeleporter', true],
-  ['Shielded', 'destructionShielded', true],
-  ['Splitter', 'destructionSplitter', true],
-  ['Boss', 'destructionBoss', true],
+  ['Enemies', 'destructionEnemies', true],
+  ['Allies', 'destructionAllies', true],
   ['Destructible Assets', 'destructionDestructible', false],
 ];
 
@@ -5839,7 +5838,7 @@ function buildAllies(body) {
   body.appendChild(slider({ key: 'allyMoveSpeed', label: 'Movement Speed', min: 0, max: 12, step: 0.1, dec: 1 }));
   body.appendChild(slider({ key: 'allyDamage', label: 'Damage Amount', min: 0, max: 250, step: 1, dec: 0 }));
   body.appendChild(select('Placement', 'allyPlacement', ENEMY_PLACEMENT_OPTIONS));
-  body.appendChild(select('Weapon Type', 'allyWeaponType', ENEMY_WEAPON_OPTIONS));
+  body.appendChild(select('Weapon Type', 'allyWeaponType', NPC_WEAPON_OPTIONS));
   body.appendChild(slider({ key: 'allyAwarenessRange', label: 'Awareness Range', min: 1, max: 200, step: 1, dec: 0 }));
 
   body.appendChild(btn('Spawn / Apply Allies', 'sb-btn-accent', () => {
@@ -6170,7 +6169,12 @@ function applyHudSettings() {
   if (fpsEl) fpsEl.style.display = p.hudVisible && p.showFps ? '' : 'none';
 
   document.querySelectorAll('.npc-health-bar').forEach(el => {
-    el.style.display = p.hudVisible && p.hudNpcHealthBars !== false ? 'flex' : 'none';
+    const teamEnabled = el.dataset.team === 'ally'
+      ? p.hudAllyHealthBars !== false
+      : p.hudEnemyHealthBars !== false;
+    if (!p.hudVisible || p.hudNpcHealthBars === false || !teamEnabled) {
+      el.style.display = 'none';
+    }
   });
 
   applyReticleSettings();
@@ -6244,6 +6248,12 @@ function applyAllParams() {
   const normalizeChoice = (value, options, fallback) => (
     options.some(([key]) => key === value) ? value : fallback
   );
+  const normalizeNpcWeaponChoice = value => {
+    if (value === 'laser') return 'rifle';
+    if (value === 'sniper') return 'sniperRifle';
+    if (value === 'projectile') return 'pistol';
+    return normalizeChoice(value, NPC_WEAPON_OPTIONS, 'rifle');
+  };
   p.playerWeaponType = normalizeChoice(p.playerWeaponType, PLAYER_WEAPON_OPTIONS, 'rifle');
   p.weaponRifleDamage = Math.round(clampSetting(p.weaponRifleDamage, 1, 250, 34));
   p.weaponPistolDamage = Math.round(clampSetting(p.weaponPistolDamage, 1, 250, 24));
@@ -6265,8 +6275,9 @@ function applyAllParams() {
   p.allyMoveSpeed = clampSetting(p.allyMoveSpeed, 0, 12, 2.2);
   p.allyDamage = Math.round(clampSetting(p.allyDamage, 0, 250, 10));
   p.allyPlacement = normalizeChoice(p.allyPlacement, ENEMY_PLACEMENT_OPTIONS, 'random');
+  p.enemyWeaponType = normalizeNpcWeaponChoice(p.enemyWeaponType);
   p.enemyAwarenessRange = clampSetting(p.enemyAwarenessRange, 1, 200, 40);
-  p.allyWeaponType = normalizeChoice(p.allyWeaponType, ENEMY_WEAPON_OPTIONS, 'none');
+  p.allyWeaponType = normalizeNpcWeaponChoice(p.allyWeaponType);
   p.allyAwarenessRange = clampSetting(p.allyAwarenessRange, 1, 200, 40);
   p.soundProximityEnabled = p.soundProximityEnabled !== false;
   p.soundProximityRange = clampSetting(p.soundProximityRange, 1, 200, 40);
@@ -6281,8 +6292,14 @@ function applyAllParams() {
   p.cameraShakeMinFactor = clampSetting(p.cameraShakeMinFactor, 0, 1, 0.12);
   p.overallBloomIntensity = clampSetting(p.overallBloomIntensity, 0, 4, 1.8);
   p.hudNpcHealthBars = p.hudNpcHealthBars !== false;
+  if (!('hudEnemyHealthBars' in p)) p.hudEnemyHealthBars = p.hudNpcHealthBars !== false;
+  if (!('hudAllyHealthBars' in p)) p.hudAllyHealthBars = p.hudNpcHealthBars !== false;
+  p.hudEnemyHealthBars = p.hudEnemyHealthBars !== false;
+  p.hudAllyHealthBars = p.hudAllyHealthBars !== false;
   p.hudNpcHealthBarRange = clampSetting(p.hudNpcHealthBarRange, 0, 200, 60);
   const enemyDestructionPrefixes = [
+    'destructionEnemies',
+    'destructionAllies',
     'destructionRusher',
     'destructionOrbiter',
     'destructionTanker',

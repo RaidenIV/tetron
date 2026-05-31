@@ -99,7 +99,7 @@ applyPlayerContactShadow();
 
 // ── Right-hand player weapon visual ───────────────────────────────────────────
 // The weapon is a lightweight geometric prop attached to the player capsule. The
-// rifle uses a 1.5-unit rectangular prism and sits on the player's right side.
+// rifle uses a 1.125-unit rectangular prism and sits on the player's right side.
 const playerWeaponGroup = new THREE.Group();
 playerWeaponGroup.name = 'PlayerWeapon_RightHand';
 playerGroup.add(playerWeaponGroup);
@@ -115,7 +115,7 @@ playerWeaponGroup.add(playerWeaponMuzzle);
 
 let playerWeaponMesh = null;
 let playerWeaponModelKey = '';
-let playerWeaponLength = 1.5;
+let playerWeaponLength = 1.125;
 
 function getPlayerWeaponType() {
   const type = state.params.playerWeaponType;
@@ -138,7 +138,7 @@ function getPlayerWeaponSpec(type = getPlayerWeaponType()) {
       return { kind: 'cylinder', width: 0.28, height: 0.28, length: 1.35, grip: 0.2 };
     case 'rifle':
     default:
-      return { kind: 'box', width: 0.08, height: 0.18, length: 1.5, grip: 0.16 };
+      return { kind: 'box', width: 0.08, height: 0.18, length: 1.125, grip: 0.16 };
   }
 }
 
@@ -201,7 +201,7 @@ function updatePlayerWeaponVisual() {
   const forwardZ = -Math.cos(az);
   const rightX = Math.cos(az);
   const rightZ = -Math.sin(az);
-  const weaponSideGap = type === 'rifle' ? 0.105 : (type === 'grenades' ? 0.22 : 0.42);
+  const weaponSideGap = 0.105;
   const rightOffset = radius + weaponSideGap;
   const forwardOffset = type === 'grenades' ? 0.02 : 0.12;
 
