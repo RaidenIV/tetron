@@ -135,6 +135,7 @@ export const state = {
       "hudVisible": true,
       "hudFont": "michroma",
       "hudNpcHealthBars": true,
+  "hudNpcHealthBarRange": 60,
       "reticleVisible": true,
       "reticleType": "triSpoke",
       "reticleColor": "#ffffff",

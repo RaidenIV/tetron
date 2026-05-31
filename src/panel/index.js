@@ -130,6 +130,7 @@ const PRESET_SETTINGS = [
   "hudVisible": true,
   "hudFont": "michroma",
   "hudNpcHealthBars": true,
+  "hudNpcHealthBarRange": 60,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -601,6 +602,7 @@ const PRESET_SETTINGS = [
   "hudVisible": true,
   "hudFont": "michroma",
   "hudNpcHealthBars": true,
+  "hudNpcHealthBarRange": 60,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -1053,6 +1055,7 @@ const PRESET_SETTINGS = [
   "hudVisible": true,
   "hudFont": "michroma",
   "hudNpcHealthBars": true,
+  "hudNpcHealthBarRange": 60,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -1495,6 +1498,7 @@ const PRESET_SETTINGS = [
   "hudVisible": true,
   "hudFont": "michroma",
   "hudNpcHealthBars": true,
+  "hudNpcHealthBarRange": 60,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -1937,6 +1941,7 @@ const PRESET_SETTINGS = [
   "hudVisible": true,
   "hudFont": "michroma",
   "hudNpcHealthBars": true,
+  "hudNpcHealthBarRange": 60,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -2413,6 +2418,7 @@ const PRESET_SETTINGS = [
   "hudVisible": true,
   "hudFont": "michroma",
   "hudNpcHealthBars": true,
+  "hudNpcHealthBarRange": 60,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -2866,6 +2872,7 @@ const PRESET_SETTINGS = [
   "hudVisible": true,
   "hudFont": "michroma",
   "hudNpcHealthBars": true,
+  "hudNpcHealthBarRange": 60,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -3259,6 +3266,7 @@ const PRESET_SETTINGS = [
   "hudVisible": true,
   "hudFont": "michroma",
   "hudNpcHealthBars": true,
+  "hudNpcHealthBarRange": 60,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -3589,6 +3597,7 @@ const PRESET_SETTINGS = [
   "hudVisible": true,
   "hudFont": "michroma",
   "hudNpcHealthBars": true,
+  "hudNpcHealthBarRange": 60,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -3749,6 +3758,7 @@ const PRESET_SETTINGS = [
   "hudVisible": true,
   "hudFont": "michroma",
   "hudNpcHealthBars": true,
+  "hudNpcHealthBarRange": 60,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -3910,6 +3920,7 @@ const PRESET_SETTINGS = [
   "hudVisible": true,
   "hudFont": "michroma",
   "hudNpcHealthBars": true,
+  "hudNpcHealthBarRange": 60,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -4061,6 +4072,7 @@ const PRESET_SETTINGS = [
   "hudVisible": true,
   "hudFont": "michroma",
   "hudNpcHealthBars": true,
+  "hudNpcHealthBarRange": 60,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -5452,6 +5464,7 @@ function buildHUD(body) {
   body.appendChild(toggle('HUD Enabled', 'hudVisible', () => applyHudSettings()));
   body.appendChild(select('Font', 'hudFont', HUD_FONT_OPTIONS, () => applyHudSettings()));
   body.appendChild(toggle('Enemy / Ally Health Bars', 'hudNpcHealthBars', () => applyHudSettings()));
+  body.appendChild(slider({ key: 'hudNpcHealthBarRange', label: 'Health Bar Range', min: 0, max: 200, step: 1, dec: 0, onChange: () => applyHudSettings() }));
 
   body.appendChild(subhdr('Enemy Tag'));
   body.appendChild(toggle('Tag Enabled', 'tagEnabled', () => applyTagSettings()));
@@ -6268,6 +6281,7 @@ function applyAllParams() {
   p.cameraShakeMinFactor = clampSetting(p.cameraShakeMinFactor, 0, 1, 0.12);
   p.overallBloomIntensity = clampSetting(p.overallBloomIntensity, 0, 4, 1.8);
   p.hudNpcHealthBars = p.hudNpcHealthBars !== false;
+  p.hudNpcHealthBarRange = clampSetting(p.hudNpcHealthBarRange, 0, 200, 60);
   const enemyDestructionPrefixes = [
     'destructionRusher',
     'destructionOrbiter',

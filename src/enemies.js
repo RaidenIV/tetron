@@ -9,7 +9,7 @@
 //   - Hard decollision pass (after movement, spatial-hash-accelerated)
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { scene } from './renderer.js';
+import { scene, camera } from './renderer.js';
 import { state } from './state.js';
 import { playerGroup } from './player.js';
 import { getSfxVolume } from './audio.js';
@@ -81,6 +81,8 @@ const _splashVec = new THREE.Vector3();
 // Same rectangular rifle proportions used by the player rifle visual. NPC rifles
 // are shown only while that NPC's effective weapon is set to laser.
 const NPC_RIFLE = Object.freeze({ width: 0.08, height: 0.18, length: 1.5, grip: 0.16, sideGap: 0.105, forwardOffset: 0.12 });
+const NPC_HEALTH_BAR_RATIO_EPSILON = 0.001;
+const NPC_HEALTH_BAR_DISTANCE_DEFAULT = 60;
 const _npcRifleGeo = new THREE.BoxGeometry(NPC_RIFLE.width, NPC_RIFLE.height, NPC_RIFLE.length);
 const _npcRifleMat = new THREE.MeshStandardMaterial({
   color: 0x20242b,
@@ -591,9 +593,9 @@ function makeNpcHealthBar(npc) {
     'width:92px', 'height:10px', 'box-sizing:border-box',
     `background:${trackColor}`,
     'border:none', 'border-radius:3px', 'overflow:hidden',
-    'pointer-events:none', 'display:block', 'margin-top:0',
+    'pointer-events:none', 'display:none', 'margin-top:0',
     'box-shadow:0 0 0 1px rgba(0,0,0,0.95), 1px 2px 4px rgba(0,0,0,0.9)',
-    'filter:drop-shadow(0 0 3px rgba(0,0,0,0.95))',
+    'will-change:opacity,transform',
   ].join(';');
 
   const fill = document.createElement('div');
@@ -614,22 +616,48 @@ function makeNpcHealthBar(npc) {
   npc._healthBarEl = el;
   npc._healthBarFill = fill;
   npc._healthBarObj = obj;
-  updateNpcHealthBar(npc);
+  npc._healthBarState = {
+    display: 'none',
+    opacity: '',
+    ratio: null,
+    width: '',
+  };
+  updateNpcHealthBar(npc, { force: true });
 }
 
-function updateNpcHealthBar(npc) {
+function getNpcHealthBarMaxDistance() {
+  return Math.max(0, Number(state.params.hudNpcHealthBarRange ?? NPC_HEALTH_BAR_DISTANCE_DEFAULT) || 0);
+}
+
+function updateNpcHealthBar(npc, { force = false } = {}) {
   if (!npc?._healthBarEl || !npc._healthBarFill) return;
   const enabled = state.params.hudVisible !== false && state.params.hudNpcHealthBars !== false;
-  npc._healthBarEl.style.display = enabled ? 'block' : 'none';
-  if (!enabled) return;
-
   const ratio = clamp((Number(npc.hp) || 0) / Math.max(1, Number(npc.maxHp) || 1), 0, 1);
-  const teamColor = npc.isAlly ? '#35ff00' : '#ff3030';
-  const trackColor = npc.isAlly ? 'rgba(77,255,99,0.18)' : 'rgba(255,48,48,0.18)';
-  npc._healthBarEl.style.background = trackColor;
-  npc._healthBarFill.style.width = `${ratio * 100}%`;
-  npc._healthBarFill.style.background = teamColor;
-  npc._healthBarEl.style.opacity = ratio > 0 ? '1' : '0';
+  const maxDistance = getNpcHealthBarMaxDistance();
+  const inRange = maxDistance <= 0 || !camera?.position
+    || camera.position.distanceToSquared(npc.group.position) <= maxDistance * maxDistance;
+  const visible = enabled && ratio > 0 && inRange;
+  const display = visible ? 'block' : 'none';
+  const cache = npc._healthBarState || (npc._healthBarState = {});
+
+  if (force || cache.display !== display) {
+    npc._healthBarEl.style.display = display;
+    cache.display = display;
+  }
+  if (!visible) return;
+
+  if (force || cache.opacity !== '1') {
+    npc._healthBarEl.style.opacity = '1';
+    cache.opacity = '1';
+  }
+  if (force || cache.ratio === null || Math.abs(cache.ratio - ratio) >= NPC_HEALTH_BAR_RATIO_EPSILON) {
+    const width = `${Math.round(ratio * 1000) / 10}%`;
+    if (force || cache.width !== width) {
+      npc._healthBarFill.style.width = width;
+      cache.width = width;
+    }
+    cache.ratio = ratio;
+  }
 }
 
 function makeNpcRifleVisual(npc) {
@@ -638,8 +666,8 @@ function makeNpcRifleVisual(npc) {
 
   const rifle = new THREE.Mesh(_npcRifleGeo, _npcRifleMat);
   rifle.name = npc.isAlly ? 'AllyRifle' : 'EnemyRifle';
-  rifle.castShadow = true;
-  rifle.receiveShadow = true;
+  rifle.castShadow = false;
+  rifle.receiveShadow = false;
   rifle.position.z = NPC_RIFLE.length * 0.5 - NPC_RIFLE.grip;
   weaponGroup.add(rifle);
 
@@ -658,17 +686,24 @@ function updateNpcWeaponVisual(npc) {
   if (!npc?._weaponGroup) return;
   const weapon = getEffectiveWeapon(npc);
   const visible = weapon === 'laser';
-  npc._weaponGroup.visible = visible;
+  if (npc._weaponVisible !== visible) {
+    npc._weaponGroup.visible = visible;
+    npc._weaponVisible = visible;
+  }
   if (!visible) return;
 
   const radius = Math.max(0.25, Number(npc.radius) || BASE_RADIUS);
   const bodyLength = Math.max(0.5, BASE_LENGTH * (Number(npc.sizeMult) || 1));
+  const transformKey = `${radius.toFixed(3)}:${bodyLength.toFixed(3)}`;
+  if (npc._weaponTransformKey === transformKey) return;
+
   npc._weaponGroup.position.set(
     radius + NPC_RIFLE.sideGap,
     radius + bodyLength * 0.56,
     NPC_RIFLE.forwardOffset,
   );
   npc._weaponGroup.rotation.set(0, 0, 0);
+  npc._weaponTransformKey = transformKey;
 }
 
 

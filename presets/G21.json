@@ -467,5 +467,6 @@
   "destructionSplitterCorpseFadeTime": 1,
   "destructionBossCorpseFadeTime": 1,
   "hudNpcHealthBars": true,
+  "hudNpcHealthBarRange": 60,
   "allyFriendlyFire": false
 }
