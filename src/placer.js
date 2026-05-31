@@ -78,6 +78,46 @@ function getAsset(id) {
   return ASSET_CATALOGUE.find(a => a.id === id) || ASSET_CATALOGUE[0];
 }
 
+function isPrefabAsset(asset) {
+  return asset?.prefab === true && Array.isArray(asset.prefabItems);
+}
+
+let _placedObjectIdSeq = 1;
+let _prefabGroupIdSeq = 1;
+function nextPlacedObjectId(prefix = 'placed') {
+  return `${prefix}_${Date.now().toString(36)}_${(_placedObjectIdSeq++).toString(36)}`;
+}
+function nextPrefabGroupId() {
+  return `prefab_${Date.now().toString(36)}_${(_prefabGroupIdSeq++).toString(36)}`;
+}
+
+function ensurePlacedObjectMetadata() {
+  const list = state.params.placedObjects || [];
+  const seen = new Set();
+  for (const obj of list) {
+    if (!obj.objectId || seen.has(obj.objectId)) obj.objectId = nextPlacedObjectId();
+    seen.add(obj.objectId);
+  }
+  const valid = new Set(list.map(obj => obj.objectId).filter(Boolean));
+  state.selectedPlacedObjectIds = (state.selectedPlacedObjectIds || []).filter(id => valid.has(id));
+}
+
+function isObjectSelected(obj) {
+  return !!obj?.objectId && (state.selectedPlacedObjectIds || []).includes(obj.objectId);
+}
+
+function notifySelectionChanged() {
+  window.dispatchEvent?.(new CustomEvent('placed-selection-changed', {
+    detail: { count: getSelectedPlacedObjectCount() },
+  }));
+}
+
+function rotatePrefabOffset(x, z, ry) {
+  const c = Math.cos(ry);
+  const s = Math.sin(ry);
+  return { x: c * x - s * z, z: s * x + c * z };
+}
+
 function normalizeHexColor(value) {
   if (typeof value !== 'string') return null;
   const hex = value.trim();
@@ -553,24 +593,104 @@ const _raycaster    = new THREE.Raycaster();
 const _ndc          = new THREE.Vector2(0, 0);
 const _hitPoint     = new THREE.Vector3();
 
-function rebuildGhost(assetId) {
-  if (_ghostMesh) { scene.remove(_ghostMesh); _ghostMesh.geometry.dispose(); _ghostMesh = null; }
-  if (_ghostWire) { scene.remove(_ghostWire); _ghostWire.geometry.dispose(); _ghostWire = null; }
+function disposeGhostRoot(root) {
+  if (!root) return;
+  scene.remove(root);
+  root.traverse?.(child => {
+    if (child.geometry) child.geometry.dispose?.();
+  });
+}
+
+function addGhostPart(meshGroup, wireGroup, assetId, { x = 0, y = 0, z = 0, ry = 0, scaleX = 1, scaleY = 1, scaleZ = 1 } = {}) {
   const geo = makeGeo(assetId);
-  const edgeGeo = new THREE.EdgesGeometry(geo, 1);
-  _ghostMesh = new THREE.Mesh(geo, _ghostMat);
-  _ghostWire = new THREE.LineSegments(edgeGeo, _ghostWireMat);
+  const mesh = new THREE.Mesh(geo, _ghostMat);
+  const wire = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 1), _ghostWireMat);
+  mesh.position.set(x, y, z);
+  wire.position.set(x, y, z);
+  mesh.rotation.y = ry;
+  wire.rotation.y = ry;
+  mesh.scale.set(scaleX, scaleY, scaleZ);
+  wire.scale.set(scaleX, scaleY, scaleZ);
+  mesh.frustumCulled = false;
+  wire.frustumCulled = false;
+  mesh.renderOrder = 10;
+  wire.renderOrder = 11;
+  meshGroup.add(mesh);
+  wireGroup.add(wire);
+}
+
+function rebuildGhost(assetId) {
+  disposeGhostRoot(_ghostMesh);
+  disposeGhostRoot(_ghostWire);
+  _ghostMesh = new THREE.Group();
+  _ghostWire = new THREE.Group();
   _ghostMesh.frustumCulled = false;
   _ghostWire.frustumCulled = false;
-  _ghostMesh.renderOrder = 10;
-  _ghostWire.renderOrder = 11;
+
+  const asset = getAsset(assetId);
+  if (isPrefabAsset(asset)) {
+    for (const item of asset.prefabItems) {
+      const subAsset = getAsset(item.assetId);
+      const itemScale = getPlacedScale({
+        assetId: item.assetId,
+        scaleX: item.scaleX ?? 1,
+        scaleY: item.scaleY ?? 1,
+        scaleZ: item.scaleZ ?? 1,
+      });
+      addGhostPart(_ghostMesh, _ghostWire, item.assetId, {
+        x: Number(item.x) || 0,
+        y: Number.isFinite(Number(item.y)) ? Number(item.y) : Number(subAsset?.yOffset ?? 0.5) * itemScale.y,
+        z: Number(item.z) || 0,
+        ry: Number(item.ry) || 0,
+        scaleX: itemScale.x,
+        scaleY: itemScale.y,
+        scaleZ: itemScale.z,
+      });
+    }
+  } else {
+    addGhostPart(_ghostMesh, _ghostWire, assetId);
+  }
+
   scene.add(_ghostMesh);
   scene.add(_ghostWire);
   _currentAssetId = assetId;
 }
 
+function setGhostMaterial(blocked = false) {
+  const mat = blocked ? _ghostBlockedMat : _ghostMat;
+  _ghostMesh?.traverse?.(child => { if (child.isMesh) child.material = mat; });
+}
+
 // ── Placed-object registry ─────────────────────────────────────────────────────
 const _placedMeshes = [];
+const _selectionHelpers = [];
+const _selectionHelperMatColor = 0x58a6ff;
+
+function clearSelectionHelpers() {
+  for (const helper of _selectionHelpers) {
+    scene.remove(helper);
+    helper.geometry?.dispose?.();
+    helper.material?.dispose?.();
+  }
+  _selectionHelpers.length = 0;
+}
+
+function rebuildSelectionHelpers() {
+  clearSelectionHelpers();
+  for (const mesh of _placedMeshes) {
+    if (!isObjectSelected(mesh.userData?.placedObject)) continue;
+    const helper = new THREE.BoxHelper(mesh, _selectionHelperMatColor);
+    helper.renderOrder = 18;
+    scene.add(helper);
+    _selectionHelpers.push(helper);
+  }
+}
+
+function refreshSelection() {
+  ensurePlacedObjectMetadata();
+  rebuildSelectionHelpers();
+  notifySelectionChanged();
+}
 
 function materialForAsset(asset, obj = null) {
   return new THREE.MeshStandardMaterial({
@@ -610,6 +730,7 @@ function removePlacedMesh(mesh) {
   else if (meshIndex < list.length) list.splice(meshIndex, 1);
   state.params.placedObjects = list;
   rebuildPlacedObjects();
+  notifySelectionChanged();
   return true;
 }
 
@@ -618,6 +739,64 @@ function removePlacedObjectByAim() {
   if (!hits.length) return false;
   return removePlacedMesh(hits[0].object);
 }
+
+function selectPlacedObjectByAim({ toggle = true, additive = true } = {}) {
+  const hits = _raycaster.intersectObjects(_placedMeshes, false);
+  if (!hits.length) {
+    if (!additive) clearPlacedObjectSelection();
+    return false;
+  }
+
+  ensurePlacedObjectMetadata();
+  const obj = hits[0].object.userData?.placedObject;
+  if (!obj?.objectId) return false;
+
+  const selected = new Set(state.selectedPlacedObjectIds || []);
+  if (!additive) selected.clear();
+  if (toggle && selected.has(obj.objectId)) selected.delete(obj.objectId);
+  else selected.add(obj.objectId);
+  state.selectedPlacedObjectIds = Array.from(selected);
+  rebuildSelectionHelpers();
+  notifySelectionChanged();
+  return true;
+}
+
+export function getSelectedPlacedObjectCount() {
+  ensurePlacedObjectMetadata();
+  return (state.selectedPlacedObjectIds || []).length;
+}
+
+export function clearPlacedObjectSelection() {
+  state.selectedPlacedObjectIds = [];
+  rebuildSelectionHelpers();
+  notifySelectionChanged();
+}
+
+export function selectAllPlacedObjects() {
+  ensurePlacedObjectMetadata();
+  state.selectedPlacedObjectIds = (state.params.placedObjects || [])
+    .map(obj => obj.objectId)
+    .filter(Boolean);
+  rebuildSelectionHelpers();
+  notifySelectionChanged();
+}
+
+export function deleteSelectedPlacedObjects() {
+  ensurePlacedObjectMetadata();
+  const selected = new Set(state.selectedPlacedObjectIds || []);
+  if (!selected.size) return 0;
+  const before = (state.params.placedObjects || []).length;
+  state.params.placedObjects = (state.params.placedObjects || [])
+    .filter(obj => !selected.has(obj.objectId));
+  state.selectedPlacedObjectIds = [];
+  rebuildPlacedObjects();
+  notifySelectionChanged();
+  return before - state.params.placedObjects.length;
+}
+
+window.__deleteSelectedPlacedObjects = deleteSelectedPlacedObjects;
+window.__clearPlacedObjectSelection = clearPlacedObjectSelection;
+window.__selectAllPlacedObjects = selectAllPlacedObjects;
 
 function removePlacedObjectAtFootprint(sx, sz, assetId, ry, scaleSource = null) {
   const asset = getAsset(assetId);
@@ -847,6 +1026,7 @@ function addDangerDecals(mesh, obj, asset) {
 }
 
 function createPlacedMesh(obj, asset) {
+  if (!obj.objectId) obj.objectId = nextPlacedObjectId();
   const mesh = new THREE.Mesh(makeGeo(asset.id), materialForAsset(asset, obj));
   mesh.userData.placedObject = obj;
   const scale = getPlacedScale(obj);
@@ -864,37 +1044,85 @@ function createPlacedMesh(obj, asset) {
 }
 
 export function rebuildPlacedObjects() {
+  clearSelectionHelpers();
   for (const m of _placedMeshes) {
     disposePlacedMesh(m);
   }
   _placedMeshes.length = 0;
 
   const list = state.params.placedObjects || [];
+  ensurePlacedObjectMetadata();
   for (const obj of list) {
     const asset = getAsset(obj.assetId);
+    if (isPrefabAsset(asset)) continue;
     const mesh = createPlacedMesh(obj, asset);
     scene.add(mesh);
     _placedMeshes.push(mesh);
   }
+  rebuildSelectionHelpers();
+}
+
+function makePlacedObject(assetId, x, z, ry, scaleSource = null, placementY = null, metadata = {}) {
+  const asset = getAsset(assetId);
+  const scale = scaleSource ? getPlacedScale(scaleSource) : getCurrentPlacerScale();
+  const y = Number.isFinite(Number(placementY))
+    ? Number(placementY)
+    : getPlacementY(x, z, assetId, ry, scale);
+  const color = normalizeHexColor(metadata.color) || resolvePlacedColor(null, asset);
+  const cleanMetadata = { ...metadata };
+  delete cleanMetadata.color;
+  return {
+    objectId: cleanMetadata.objectId || nextPlacedObjectId(),
+    assetId, x, y, z, ry,
+    scaleX: scale.x, scaleY: scale.y, scaleZ: scale.z,
+    ...cleanMetadata,
+    color,
+  };
 }
 
 function placeObject(sx, sz, placementY = null) {
   const assetId = state.params.placerSelectedAsset || 'box';
-  const asset   = getAsset(assetId);
   const scale   = getCurrentPlacerScale();
   const ry      = getCurrentPlacerRotation();
-  const y       = Number.isFinite(Number(placementY)) ? Number(placementY) : getPlacementY(sx, sz, assetId, ry, scale);
-
-  const color = resolvePlacedColor(null, asset);
-  const placed = {
-    assetId, x: sx, y, z: sz, ry, color,
-    scaleX: scale.x, scaleY: scale.y, scaleZ: scale.z,
-  };
+  const placed = makePlacedObject(assetId, sx, sz, ry, scale, placementY);
   const list = state.params.placedObjects || [];
   list.push(placed);
   state.params.placedObjects = list;
-
   rebuildPlacedObjects();
+}
+
+function placePrefab(asset, sx, sz, ry) {
+  if (!isPrefabAsset(asset)) return false;
+  const list = state.params.placedObjects || [];
+  const groupId = nextPrefabGroupId();
+
+  for (const item of asset.prefabItems) {
+    const itemAssetId = item.assetId || 'box';
+    const itemAsset = getAsset(itemAssetId);
+    if (isPrefabAsset(itemAsset)) continue;
+    const off = rotatePrefabOffset(Number(item.x) || 0, Number(item.z) || 0, ry);
+    const itemRy = (ry + (Number(item.ry) || 0)) % (Math.PI * 2);
+    const itemScale = getPlacedScale({
+      assetId: itemAssetId,
+      scaleX: item.scaleX ?? 1,
+      scaleY: item.scaleY ?? 1,
+      scaleZ: item.scaleZ ?? 1,
+    });
+    const x = sx + off.x;
+    const z = sz + off.z;
+    const y = Number.isFinite(Number(item.y))
+      ? Number(item.y)
+      : getPlacementY(x, z, itemAssetId, itemRy, itemScale);
+    list.push(makePlacedObject(itemAssetId, x, z, itemRy, itemScale, y, {
+      groupId,
+      prefabId: asset.id,
+      color: item.color,
+    }));
+  }
+
+  state.params.placedObjects = list;
+  rebuildPlacedObjects();
+  return true;
 }
 
 export function clearPlacedObjects() {
@@ -902,7 +1130,10 @@ export function clearPlacedObjects() {
     disposePlacedMesh(m);
   }
   _placedMeshes.length = 0;
+  clearSelectionHelpers();
+  state.selectedPlacedObjectIds = [];
   state.params.placedObjects = [];
+  notifySelectionChanged();
 }
 
 // ── HUD slot indicator ─────────────────────────────────────────────────────────
@@ -965,6 +1196,8 @@ export function updatePlacer(delta = 1 / 60) {
   const slot     = state.activeSlot ?? 0;
   const placerOn = slot === 1;
   const assetId  = state.params.placerSelectedAsset || 'box';
+  const asset    = getAsset(assetId);
+  const prefabOn = isPrefabAsset(asset);
 
   // ADS is disabled while placer is active; the reticle switches to placement-dot mode.
   if (placerOn) state.isAiming = false;
@@ -974,9 +1207,10 @@ export function updatePlacer(delta = 1 / 60) {
   const slotEl = getSlotEl();
   slotEl.style.display = state.paused ? 'none' : '';
   if (!state.paused) {
+    const selectedCount = getSelectedPlacedObjectCount();
     slotEl.textContent = slot === 0
       ? '[ LASER ]  placer'
-      : 'laser  [ PLACER ]  ·  R transform  ·  F pick  ·  Right-click remove';
+      : `laser  [ PLACER ]  ·  R transform  ·  F pick  ·  Ctrl-click select  ·  Del remove selected${selectedCount ? ` (${selectedCount})` : ''}`;
   }
 
   // Hide ghost when not in placer mode
@@ -991,11 +1225,12 @@ export function updatePlacer(delta = 1 / 60) {
   // Rebuild ghost if asset changed
   if (assetId !== _currentAssetId) rebuildGhost(assetId);
   if (!_ghostMesh) rebuildGhost(assetId);
-  syncGhostColor(getAsset(assetId));
+  syncGhostColor(asset);
 
-  // Apply current transform to ghost
+  // Apply current transform to ghost. Prefabs rotate as a group but keep their
+  // authored component scale, so a prefab does not unintentionally distort every part.
   const ry = getCurrentPlacerRotation();
-  const scale = getCurrentPlacerScale();
+  const scale = prefabOn ? { x: 1, y: 1, z: 1 } : getCurrentPlacerScale();
   _ghostMesh.rotation.y = ry;
   _ghostWire.rotation.y = ry;
   _ghostMesh.scale.set(scale.x, scale.y, scale.z);
@@ -1004,6 +1239,19 @@ export function updatePlacer(delta = 1 / 60) {
   // Raycast camera centre → placed objects first, then floor plane.
   camera.updateMatrixWorld(true);
   _raycaster.setFromCamera(_ndc, camera);
+
+  if (state.placerSelectionRequest) {
+    const request = state.placerSelectionRequest;
+    state.placerSelectionRequest = null;
+    selectPlacedObjectByAim({
+      toggle: request.toggle !== false,
+      additive: request.additive !== false,
+    });
+    _firePrev = state.primaryFire;
+    _secondaryPrev = state.secondaryFire;
+    return;
+  }
+
   const removePressed = !!state.secondaryFire && !_secondaryPrev;
   if (removePressed && removePlacedObjectByAim()) {
     _firePrev = state.primaryFire;
@@ -1014,21 +1262,24 @@ export function updatePlacer(delta = 1 / 60) {
   const hit = _raycaster.ray.intersectPlane(_floorPlane, _hitPoint);
 
   if (hit) {
-    // Footprint-aware snap: aligns base edges to grid lines
+    // Footprint-aware snap: aligns base edges to grid lines. Prefab footprint
+    // comes from the prefab asset, but individual components are serialized as
+    // normal placed objects on placement.
     const { sx, sz } = snapToFootprint(_hitPoint.x, _hitPoint.z, assetId, ry, scale);
-    const placementY = getPlacementY(sx, sz, assetId, ry, scale);
+    const placementY = prefabOn ? 0 : getPlacementY(sx, sz, assetId, ry, scale);
 
     _ghostMesh.position.set(sx, placementY, sz);
     _ghostWire.position.copy(_ghostMesh.position);
 
-    _ghostMesh.material = _ghostMat;
+    setGhostMaterial(false);
     _ghostMesh.visible  = true;
     _ghostWire.visible  = true;
 
     if (removePressed) {
       removePlacedObjectAtFootprint(sx, sz, assetId, ry, scale);
     } else if (state.primaryFire && !_firePrev) {
-      placeObject(sx, sz, placementY);
+      if (prefabOn) placePrefab(asset, sx, sz, ry);
+      else placeObject(sx, sz, placementY);
     }
   } else {
     _ghostMesh.visible = false;

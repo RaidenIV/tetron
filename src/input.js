@@ -109,11 +109,17 @@ renderer.domElement.addEventListener('pointerdown', event => {
     updatePointerAimFromClient(event.clientX, event.clientY);
   }
 
+  const placerActive = (state.activeSlot ?? 0) === 1;
+
   if (event.button === 0 && isViewportTarget(event.target)) {
+    if (placerActive && (event.ctrlKey || event.metaKey)) {
+      state.primaryFire = false;
+      state.placerSelectionRequest = { toggle: true, additive: true };
+      event.preventDefault();
+      return;
+    }
     state.primaryFire = true;
   }
-
-  const placerActive = (state.activeSlot ?? 0) === 1;
 
   // Right-click removes placed objects while the placer is active; otherwise it enters ADS.
   if (event.button === 2 && isViewportTarget(event.target)) {
@@ -195,7 +201,15 @@ document.addEventListener('mousemove', event => {
 document.addEventListener('mousedown', event => {
   if (state.paused) return;
   if (document.pointerLockElement !== renderer.domElement) return;
-  if (event.button === 0) state.primaryFire = true;
+  if (event.button === 0) {
+    if ((state.activeSlot ?? 0) === 1 && (event.ctrlKey || event.metaKey)) {
+      state.primaryFire = false;
+      state.placerSelectionRequest = { toggle: true, additive: true };
+      event.preventDefault();
+      return;
+    }
+    state.primaryFire = true;
+  }
   if (event.button === 2) {
     if ((state.activeSlot ?? 0) === 1) {
       state.secondaryFire = true;
@@ -271,6 +285,25 @@ window.addEventListener('keydown', e => {
   if (state.paused) return;
 
   const k = e.key.toLowerCase();
+
+  if ((state.activeSlot ?? 0) === 1) {
+    if ((e.ctrlKey || e.metaKey) && k === 'a' && !e.repeat) {
+      e.preventDefault();
+      window.__selectAllPlacedObjects?.();
+      return;
+    }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !e.repeat) {
+      e.preventDefault();
+      window.__deleteSelectedPlacedObjects?.();
+      return;
+    }
+    if (k === 'c' && !e.repeat && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      window.__clearPlacedObjectSelection?.();
+      return;
+    }
+  }
+
   if (k === 'w' || k === 'arrowup')    state.keys.w = true;
   if (k === 's' || k === 'arrowdown')  state.keys.s = true;
   if (k === 'a' || k === 'arrowleft')  state.keys.a = true;

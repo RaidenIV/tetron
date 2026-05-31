@@ -13,7 +13,11 @@ import { setFloorVisible, setGridVisible, setFloorColor, setGridColor } from '..
 import { spawnEnemiesFromSettings, clearEnemies, applyTagSettings } from '../enemies.js';
 import { clearGameplayInput } from '../input.js';
 import { ASSET_CATALOGUE, ASSET_CATEGORY_LABELS } from '../assets-catalogue.js';
-import { clearPlacedObjects, rebuildPlacedObjects } from '../placer.js';
+import {
+  clearPlacedObjects, rebuildPlacedObjects,
+  getSelectedPlacedObjectCount, deleteSelectedPlacedObjects,
+  clearPlacedObjectSelection, selectAllPlacedObjects,
+} from '../placer.js';
 
 const sidebar = document.getElementById('sidebar');
 
@@ -2936,7 +2940,7 @@ function buildAssets(body) {
   // Current slot indicator
   const slotInfo = document.createElement('div');
   slotInfo.style.cssText = 'font-size:10px;color:var(--sb-muted);padding:2px 0 8px;line-height:1.5;';
-  slotInfo.textContent = 'Scroll wheel switches between Laser and Placer. F key opens asset picker. Right-click removes the targeted placed object.';
+  slotInfo.textContent = 'Scroll wheel switches between Laser and Placer. F opens asset picker. Ctrl-click selects objects. Ctrl+A selects all. C clears selection. Delete removes selected.';
   body.appendChild(slotInfo);
 
   body.appendChild(assetSelectRow());
@@ -2945,10 +2949,48 @@ function buildAssets(body) {
     rebuildPlacedObjects();
   }));
 
+  const selectedRow = document.createElement('div');
+  selectedRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;font-size:11px;color:var(--sb-muted);letter-spacing:0.06em;';
+  const selectedLabel = document.createElement('span');
+  selectedLabel.textContent = 'Selected Objects';
+  const selectedValue = document.createElement('span');
+  selectedValue.id = 'placed-selection-count';
+  selectedValue.style.cssText = 'color:var(--sb-text);font-weight:700;';
+  selectedValue.textContent = String(getSelectedPlacedObjectCount());
+  selectedRow.appendChild(selectedLabel);
+  selectedRow.appendChild(selectedValue);
+  body.appendChild(selectedRow);
+
+  const selectionButtons = document.createElement('div');
+  selectionButtons.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0;';
+  selectionButtons.appendChild(btn('Select All', 'sb-btn-muted', () => {
+    selectAllPlacedObjects();
+    selectedValue.textContent = String(getSelectedPlacedObjectCount());
+    notify('Selected all placed objects ✓');
+  }));
+  selectionButtons.appendChild(btn('Clear Selection', 'sb-btn-muted', () => {
+    clearPlacedObjectSelection();
+    selectedValue.textContent = '0';
+    notify('Selection cleared ✓');
+  }));
+  body.appendChild(selectionButtons);
+
+  body.appendChild(btn('🗑 Delete Selected', 'sb-btn-muted', () => {
+    const removed = deleteSelectedPlacedObjects();
+    selectedValue.textContent = String(getSelectedPlacedObjectCount());
+    notify(removed ? `Deleted ${removed} selected object${removed === 1 ? '' : 's'} ✓` : 'No selected objects');
+  }));
+
   body.appendChild(btn('🗑 Clear All Placed', 'sb-btn-muted', () => {
     clearPlacedObjects();
+    selectedValue.textContent = '0';
     notify('Placed objects cleared ✓');
   }));
+
+  window.addEventListener('placed-selection-changed', event => {
+    if (!selectedValue.isConnected) return;
+    selectedValue.textContent = String(event.detail?.count ?? getSelectedPlacedObjectCount());
+  });
 }
 
 

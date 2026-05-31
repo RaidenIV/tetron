@@ -13,6 +13,8 @@ export const state = {
   isAiming: false,          // true while right-mouse / L2 held
   activeSlot: 0,            // 0 = laser, 1 = object placer
   placerRotation: 0,        // current ghost rotation in radians (multiples of π/2)
+  selectedPlacedObjectIds: [],
+  placerSelectionRequest: null,
   primaryFire: false,
   secondaryFire: false,       // right-click / L2 remove action while object placer is active
   jumpQueued: false,
