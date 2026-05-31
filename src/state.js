@@ -8,7 +8,7 @@ export const state = {
   slowTimer: 0,
   slowScale: 0.35,
   slowRequested: false,
-  activePreset: 'g11',
+  activePreset: 'g14',
   mouseLookActive: false,
   isAiming: false,          // true while right-mouse / L2 held
   activeSlot: 0,            // 0 = laser, 1 = object placer
@@ -25,6 +25,8 @@ export const state = {
   pointerAimY: 0,
   keys: { w: false, a: false, s: false, d: false, space: false },
   sidebarWidth: 320,
+  sidebarScrollTop: 0,
+  explosionSplashEvents: [],
 
   // Controller runtime state
   controllerConnected: false,
@@ -56,7 +58,7 @@ export const state = {
         "third2BodyFrameHeight": 1.35,
         "third2BodyScreenY": 0.45,
         "third2MinEyeHeight": 0.15,
-        "thirdAzimuth": 0.9581853071794288,
+        "thirdAzimuth": 2.00637061435906,
         "thirdLookAhead": 3.8,
         "thirdSmoothPos": 10,
         "thirdSmoothLook": 12,
@@ -68,18 +70,18 @@ export const state = {
         "aimSmooth": 10,
         "thirdMouseSensitivityX": 0.003,
         "thirdMouseSensitivityY": 0.0024,
-        "thirdPitch": -0.13359999999999644,
+        "thirdPitch": 0.02240000000000423,
         "thirdOffsetMode": "parallel",
         "thirdOffsetX": 1.25,
         "thirdOffsetY": -0.25,
         "thirdOffsetZ": -0.25,
         "cameraShakeEnabled": true,
-        "cameraShakeIntensity": 0.28,
-        "cameraShakeDuration": 0.35,
-        "cameraShakeFrequency": 28,
+        "cameraShakeIntensity": 1.5,
+        "cameraShakeDuration": 1,
+        "cameraShakeFrequency": 40,
         "cameraShakeProximity": true,
-        "cameraShakeRadius": 24,
-        "cameraShakeMinFactor": 0.12,
+        "cameraShakeRadius": 30,
+        "cameraShakeMinFactor": 0.25,
         "playerSpeed": 7,
         "playerColor": "#0044cc",
         "playerMetalness": 0.67,
@@ -188,7 +190,8 @@ export const state = {
                         "ry": 0,
                         "scaleX": 1,
                         "scaleY": 1,
-                        "scaleZ": 1
+                        "scaleZ": 1,
+                        "objectId": "placed_mptudxwh_1"
                 },
                 {
                         "assetId": "ramp",
@@ -198,7 +201,8 @@ export const state = {
                         "ry": 0,
                         "scaleX": 1,
                         "scaleY": 1,
-                        "scaleZ": 1
+                        "scaleZ": 1,
+                        "objectId": "placed_mptudxwh_2"
                 },
                 {
                         "assetId": "tall_box",
@@ -208,7 +212,8 @@ export const state = {
                         "ry": 0,
                         "scaleX": 1,
                         "scaleY": 1,
-                        "scaleZ": 1
+                        "scaleZ": 1,
+                        "objectId": "placed_mptudxwh_3"
                 },
                 {
                         "assetId": "tall_box",
@@ -218,7 +223,8 @@ export const state = {
                         "ry": 0,
                         "scaleX": 1,
                         "scaleY": 1,
-                        "scaleZ": 1
+                        "scaleZ": 1,
+                        "objectId": "placed_mptudxwh_4"
                 },
                 {
                         "assetId": "tall_box",
@@ -228,7 +234,8 @@ export const state = {
                         "ry": 0,
                         "scaleX": 1,
                         "scaleY": 1,
-                        "scaleZ": 1
+                        "scaleZ": 1,
+                        "objectId": "placed_mptudxwh_5"
                 },
                 {
                         "assetId": "tall_box",
@@ -238,7 +245,8 @@ export const state = {
                         "ry": 0,
                         "scaleX": 1,
                         "scaleY": 1,
-                        "scaleZ": 1
+                        "scaleZ": 1,
+                        "objectId": "placed_mptudxwh_6"
                 },
                 {
                         "assetId": "tall_box",
@@ -248,7 +256,8 @@ export const state = {
                         "ry": 0,
                         "scaleX": 1,
                         "scaleY": 1,
-                        "scaleZ": 1
+                        "scaleZ": 1,
+                        "objectId": "placed_mptudxwh_7"
                 },
                 {
                         "assetId": "tall_box",
@@ -258,7 +267,8 @@ export const state = {
                         "ry": 0,
                         "scaleX": 1,
                         "scaleY": 1,
-                        "scaleZ": 1
+                        "scaleZ": 1,
+                        "objectId": "placed_mptudxwh_8"
                 },
                 {
                         "assetId": "tall_box",
@@ -268,7 +278,8 @@ export const state = {
                         "ry": 0,
                         "scaleX": 1,
                         "scaleY": 1,
-                        "scaleZ": 1
+                        "scaleZ": 1,
+                        "objectId": "placed_mptudxwh_9"
                 },
                 {
                         "assetId": "tall_box",
@@ -278,7 +289,8 @@ export const state = {
                         "ry": 0,
                         "scaleX": 1,
                         "scaleY": 1,
-                        "scaleZ": 1
+                        "scaleZ": 1,
+                        "objectId": "placed_mptudxwh_a"
                 },
                 {
                         "assetId": "tall_box",
@@ -288,7 +300,8 @@ export const state = {
                         "ry": 0,
                         "scaleX": 1,
                         "scaleY": 1,
-                        "scaleZ": 1
+                        "scaleZ": 1,
+                        "objectId": "placed_mptudxwh_b"
                 },
                 {
                         "assetId": "tall_box",
@@ -298,7 +311,8 @@ export const state = {
                         "ry": 0,
                         "scaleX": 1,
                         "scaleY": 1,
-                        "scaleZ": 1
+                        "scaleZ": 1,
+                        "objectId": "placed_mptudxwh_c"
                 },
                 {
                         "assetId": "tall_box",
@@ -308,7 +322,8 @@ export const state = {
                         "ry": 0,
                         "scaleX": 1,
                         "scaleY": 1,
-                        "scaleZ": 1
+                        "scaleZ": 1,
+                        "objectId": "placed_mptudxwh_d"
                 },
                 {
                         "assetId": "tall_box",
@@ -318,7 +333,8 @@ export const state = {
                         "ry": 0,
                         "scaleX": 1,
                         "scaleY": 1,
-                        "scaleZ": 1
+                        "scaleZ": 1,
+                        "objectId": "placed_mptudxwh_e"
                 },
                 {
                         "assetId": "tall_box",
@@ -328,7 +344,8 @@ export const state = {
                         "ry": 0,
                         "scaleX": 1,
                         "scaleY": 1,
-                        "scaleZ": 1
+                        "scaleZ": 1,
+                        "objectId": "placed_mptudxwh_f"
                 },
                 {
                         "assetId": "tall_box",
@@ -338,10 +355,35 @@ export const state = {
                         "ry": 0,
                         "scaleX": 1,
                         "scaleY": 1,
-                        "scaleZ": 1
+                        "scaleZ": 1,
+                        "objectId": "placed_mptudxwh_g"
+                },
+                {
+                        "objectId": "placed_mptuf6o1_r",
+                        "assetId": "destructible_crate",
+                        "x": -65.5,
+                        "y": 0.5,
+                        "z": -17.5,
+                        "ry": 0,
+                        "scaleX": 1,
+                        "scaleY": 1,
+                        "scaleZ": 1,
+                        "color": "#445566"
+                },
+                {
+                        "objectId": "placed_mptuh5w7_16",
+                        "assetId": "destructible_crate",
+                        "x": -40.5,
+                        "y": 0.5,
+                        "z": 21.5,
+                        "ry": 0,
+                        "scaleX": 1,
+                        "scaleY": 1,
+                        "scaleZ": 1,
+                        "color": "#445566"
                 }
         ],
-        "placerSelectedAsset": "tall_box",
+        "placerSelectedAsset": "destructible_crate",
         "radarEnabled": true,
         "radarRadius": 60,
         "radarRange": 60,
@@ -375,56 +417,56 @@ export const state = {
         "destructionRusherParticleGlow": 24,
         "destructionRusherColor": "#ff0000",
         "destructionRusherPhysics": "gravity",
-        "destructionRusherDespawnTime": 3.0,
+        "destructionRusherDespawnTime": 3,
         "destructionOrbiterParticleCount": 40,
         "destructionOrbiterParticleSize": 0.32,
         "destructionOrbiterParticleSpeed": 1.25,
         "destructionOrbiterParticleGlow": 8,
         "destructionOrbiterColor": "#00cc44",
         "destructionOrbiterPhysics": "gravity",
-        "destructionOrbiterDespawnTime": 3.0,
+        "destructionOrbiterDespawnTime": 3,
         "destructionTankerParticleCount": 40,
         "destructionTankerParticleSize": 0.32,
         "destructionTankerParticleSpeed": 1.25,
         "destructionTankerParticleGlow": 8,
         "destructionTankerColor": "#2b2b2b",
         "destructionTankerPhysics": "gravity",
-        "destructionTankerDespawnTime": 3.0,
+        "destructionTankerDespawnTime": 3,
         "destructionSniperParticleCount": 40,
         "destructionSniperParticleSize": 0.32,
         "destructionSniperParticleSpeed": 1.25,
         "destructionSniperParticleGlow": 8,
         "destructionSniperColor": "#9b30ff",
         "destructionSniperPhysics": "gravity",
-        "destructionSniperDespawnTime": 3.0,
+        "destructionSniperDespawnTime": 3,
         "destructionTeleporterParticleCount": 40,
         "destructionTeleporterParticleSize": 0.32,
         "destructionTeleporterParticleSpeed": 1.25,
         "destructionTeleporterParticleGlow": 8,
         "destructionTeleporterColor": "#e0e0e0",
         "destructionTeleporterPhysics": "gravity",
-        "destructionTeleporterDespawnTime": 3.0,
+        "destructionTeleporterDespawnTime": 3,
         "destructionShieldedParticleCount": 40,
         "destructionShieldedParticleSize": 0.32,
         "destructionShieldedParticleSpeed": 1.25,
         "destructionShieldedParticleGlow": 8,
         "destructionShieldedColor": "#4aa3ff",
         "destructionShieldedPhysics": "gravity",
-        "destructionShieldedDespawnTime": 3.0,
+        "destructionShieldedDespawnTime": 3,
         "destructionSplitterParticleCount": 100,
         "destructionSplitterParticleSize": 0.5,
         "destructionSplitterParticleSpeed": 1.75,
         "destructionSplitterParticleGlow": 12,
         "destructionSplitterColor": "#80fb37",
         "destructionSplitterPhysics": "gravity",
-        "destructionSplitterDespawnTime": 3.0,
+        "destructionSplitterDespawnTime": 3,
         "destructionBossParticleCount": 100,
         "destructionBossParticleSize": 0.5,
         "destructionBossParticleSpeed": 1.75,
         "destructionBossParticleGlow": 12,
         "destructionBossColor": "#111111",
         "destructionBossPhysics": "gravity",
-        "destructionBossDespawnTime": 3.0,
+        "destructionBossDespawnTime": 3,
         "destructionDestructibleParticleCount": 40,
         "destructionDestructibleParticleSize": 0.32,
         "destructionDestructibleParticleSpeed": 1.25,
@@ -440,7 +482,13 @@ export const state = {
         "placerTransformModalY": 22,
         "soundSfx_jump": 1,
         "soundSfx_enemy_grunt": 1,
-        "soundSfx_object_explode": 1
+        "soundSfx_object_explode": 1,
+        "destructionDestructibleShockwaveSpeed": 10,
+        "destructionDestructibleShockwaveColor": "#ffd400",
+        "destructionDestructibleShockwaveFadeTime": 0.45,
+        "destructionDestructibleShockwaveDelay": 0,
+        "destructionDestructibleSplashDamage": 45
+}
 },
 };
 

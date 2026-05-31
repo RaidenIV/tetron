@@ -58,6 +58,9 @@ const DESTRUCTIBLE_PARTICLE_GRAVITY = 9;
 const _destructibleParticles = [];
 const _destructibleParticlePool = [];
 const _destructibleParticleGeo = new THREE.BoxGeometry(1, 1, 1);
+const _destructibleShockwaves = [];
+const _destructibleShockwaveGeo = new THREE.SphereGeometry(1, 32, 16);
+let _destructibleShockwaveId = 1;
 
 let _objectExplosionEl = null;
 function playObjectExplosionSound() {
@@ -840,6 +843,11 @@ function getDestructibleExplosionConfig() {
     glow: Math.max(0, Number(destructionParam('destructionDestructible', 'ParticleGlow', p.enemyDestructionParticleGlow ?? 8)) || 0),
     color: hexToNumber(destructionParam('destructionDestructible', 'Color', '#ffd400'), 0xffd400),
     physics: destructionParam('destructionDestructible', 'Physics', p.enemyDestructionPhysics === false ? 'ethereal' : 'gravity'),
+    shockwaveSpeed: clamp(Number(destructionParam('destructionDestructible', 'ShockwaveSpeed', 10)) || 0, 0, 40),
+    shockwaveColor: hexToNumber(destructionParam('destructionDestructible', 'ShockwaveColor', destructionParam('destructionDestructible', 'Color', '#ffd400')), 0xffd400),
+    shockwaveFadeTime: clamp(Number(destructionParam('destructionDestructible', 'ShockwaveFadeTime', 0.45)) || 0.45, 0.05, 3),
+    shockwaveDelay: clamp(Number(destructionParam('destructionDestructible', 'ShockwaveDelay', 0)) || 0, 0, 3),
+    splashDamage: clamp(Number(destructionParam('destructionDestructible', 'SplashDamage', 45)) || 0, 0, 500),
   };
 }
 
@@ -866,35 +874,116 @@ function releaseDestructibleParticle(particle) {
   _destructibleParticlePool.push(particle.mesh);
 }
 
+function spawnDestructibleShockwave(cx, cy, cz, cfg) {
+  const speed = Math.max(0, Number(cfg.shockwaveSpeed) || 0);
+  const fadeTime = clamp(Number(cfg.shockwaveFadeTime) || 0.45, 0.05, 3);
+  const maxRadius = Math.max(0, speed * fadeTime);
+  const damage = Math.max(0, Number(cfg.splashDamage) || 0);
+  if (maxRadius <= 0 && damage <= 0) return;
+
+  const event = {
+    id: `destructible_splash_${_destructibleShockwaveId++}`,
+    x: cx, y: cy, z: cz,
+    currentRadius: 0,
+    maxRadius,
+    damage,
+    active: false,
+    hitEnemyIds: [],
+  };
+  state.explosionSplashEvents = state.explosionSplashEvents || [];
+  state.explosionSplashEvents.push(event);
+
+  const material = new THREE.MeshBasicMaterial({
+    color: cfg.shockwaveColor,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+  });
+  const mesh = new THREE.Mesh(_destructibleShockwaveGeo, material);
+  mesh.name = 'DestructibleShockwaveSphere';
+  mesh.position.set(cx, cy, cz);
+  mesh.scale.setScalar(0.001);
+  mesh.visible = false;
+  scene.add(mesh);
+
+  _destructibleShockwaves.push({
+    mesh, event,
+    age: -clamp(Number(cfg.shockwaveDelay) || 0, 0, 3),
+    fadeTime, speed, maxRadius,
+  });
+}
+
+function releaseDestructibleShockwave(shockwave) {
+  scene.remove(shockwave.mesh);
+  shockwave.mesh.geometry = _destructibleShockwaveGeo;
+  shockwave.mesh.material.dispose?.();
+  state.explosionSplashEvents = (state.explosionSplashEvents || []).filter(event => event !== shockwave.event);
+}
+
+function updateDestructibleShockwaves(delta = 1 / 60) {
+  for (let i = _destructibleShockwaves.length - 1; i >= 0; i--) {
+    const shockwave = _destructibleShockwaves[i];
+    shockwave.age += delta;
+
+    if (shockwave.age < 0) {
+      shockwave.mesh.visible = false;
+      shockwave.event.active = false;
+      shockwave.event.currentRadius = 0;
+      continue;
+    }
+
+    const t = clamp(shockwave.age / shockwave.fadeTime, 0, 1);
+    const radius = Math.max(0.001, Math.min(shockwave.maxRadius, shockwave.speed * shockwave.age));
+    shockwave.mesh.visible = true;
+    shockwave.mesh.scale.setScalar(radius);
+    shockwave.mesh.material.opacity = 0.34 * (1 - t);
+    shockwave.event.active = true;
+    shockwave.event.currentRadius = radius;
+
+    if (shockwave.age >= shockwave.fadeTime) {
+      if (shockwave.expired) {
+        _destructibleShockwaves.splice(i, 1);
+        releaseDestructibleShockwave(shockwave);
+      } else {
+        shockwave.expired = true;
+      }
+    }
+  }
+}
+
 function spawnPlacedObjectExplosion(obj, asset) {
   if (state.params.enemyDestructionEnabled === false) return;
   const cfg = getDestructibleExplosionConfig();
-  if (cfg.count <= 0) return;
   const bounds = placedObjectBounds(obj);
   const cx = Number(obj.x) || 0;
   const cy = (bounds.minY + bounds.maxY) * 0.5;
   const cz = Number(obj.z) || 0;
-  for (let i = 0; i < cfg.count; i++) {
-    const mesh = acquireDestructibleParticle(cfg.color);
-    const baseRadius = (0.08 + Math.random() * 0.14) * cfg.size;
-    const yaw = Math.random() * Math.PI * 2;
-    const pitch = (Math.random() - 0.2) * Math.PI * 0.75;
-    const speed = (3.5 + Math.random() * 8.5) * cfg.speed;
-    const maxLife = 0.65 + Math.random() * 0.7;
-    mesh.position.set(cx, cy, cz);
-    mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-    mesh.scale.setScalar(baseRadius);
-    _destructibleParticles.push({
-      mesh, baseRadius,
-      vx: Math.cos(yaw) * Math.cos(pitch) * speed,
-      vy: Math.sin(pitch) * speed + (cfg.physics === 'gravity' ? 2.25 * cfg.speed : 0.65 * cfg.speed),
-      vz: Math.sin(yaw) * Math.cos(pitch) * speed,
-      rx: (Math.random() - 0.5) * 8,
-      ry: (Math.random() - 0.5) * 8,
-      rz: (Math.random() - 0.5) * 8,
-      life: maxLife, maxLife, glowCap: cfg.glow, physics: cfg.physics,
-    });
+  if (cfg.count > 0) {
+    for (let i = 0; i < cfg.count; i++) {
+      const mesh = acquireDestructibleParticle(cfg.color);
+      const baseRadius = (0.08 + Math.random() * 0.14) * cfg.size;
+      const yaw = Math.random() * Math.PI * 2;
+      const pitch = (Math.random() - 0.2) * Math.PI * 0.75;
+      const speed = (3.5 + Math.random() * 8.5) * cfg.speed;
+      const maxLife = 0.65 + Math.random() * 0.7;
+      mesh.position.set(cx, cy, cz);
+      mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+      mesh.scale.setScalar(baseRadius);
+      _destructibleParticles.push({
+        mesh, baseRadius,
+        vx: Math.cos(yaw) * Math.cos(pitch) * speed,
+        vy: Math.sin(pitch) * speed + (cfg.physics === 'gravity' ? 2.25 * cfg.speed : 0.65 * cfg.speed),
+        vz: Math.sin(yaw) * Math.cos(pitch) * speed,
+        rx: (Math.random() - 0.5) * 8,
+        ry: (Math.random() - 0.5) * 8,
+        rz: (Math.random() - 0.5) * 8,
+        life: maxLife, maxLife, glowCap: cfg.glow, physics: cfg.physics,
+      });
+    }
   }
+  spawnDestructibleShockwave(cx, cy, cz, cfg);
 }
 
 function updateDestructibleParticles(delta = 1 / 60) {
@@ -928,6 +1017,7 @@ function updateDestructibleParticles(delta = 1 / 60) {
     particle.mesh.material.opacity = t;
     particle.mesh.material.emissiveIntensity = Math.min(t * 5, particle.glowCap);
   }
+  updateDestructibleShockwaves(delta);
 }
 
 function destroyPlacedObject(obj) {

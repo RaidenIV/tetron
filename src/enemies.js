@@ -75,6 +75,7 @@ const FIRE_RATE_SECONDS = {
 
 let _enemyGruntEl = null;
 const _corpseBox = new THREE.Box3();
+const _splashVec = new THREE.Vector3();
 
 function playEnemyGruntSound() {
   if (state.params.soundMuted) return;
@@ -995,6 +996,37 @@ export function damageEnemiesAt(position, radius = 0.45, amount = 34) {
   return false;
 }
 
+function applyExplosionSplashDamage() {
+  const events = state.explosionSplashEvents || [];
+  if (!events.length) return;
+
+  for (const event of events) {
+    if (!event?.active) continue;
+    const amount = Math.max(0, Number(event.damage) || 0);
+    const radius = Math.max(0, Number(event.currentRadius) || 0);
+    if (amount <= 0 || radius <= 0) continue;
+
+    const hitEnemyIds = Array.isArray(event.hitEnemyIds) ? event.hitEnemyIds : [];
+    event.hitEnemyIds = hitEnemyIds;
+    const hitSet = new Set(hitEnemyIds);
+    const origin = _tmpVec.set(Number(event.x) || 0, Number(event.y) || 0, Number(event.z) || 0);
+
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const enemy = enemies[i];
+      const id = enemy.group?.uuid;
+      if (!id || hitSet.has(id)) continue;
+
+      _splashVec.copy(enemy.group.position);
+      _splashVec.y = enemy.mesh.position.y;
+      if (_splashVec.distanceTo(origin) <= radius + Math.max(0.45, enemy.radius || 0)) {
+        hitSet.add(id);
+        hitEnemyIds.push(id);
+        damageEnemy(enemy, amount);
+      }
+    }
+  }
+}
+
 // ── Grouped movement (GROUPING.md) ────────────────────────────────────────────
 function updateEnemyMovement(enemy, delta) {
   const behavior = getEffectiveBehavior(enemy);
@@ -1162,6 +1194,7 @@ function updateEnemyBullets(delta) {
 
 export function updateEnemies(delta, elapsedTime = 0) {
   syncPlayerHud();
+  applyExplosionSplashDamage();
 
   // Step 1: Rebuild spatial hash before movement (for separation queries)
   _spatialHash.rebuild(enemies);
