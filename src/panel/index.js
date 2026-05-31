@@ -152,6 +152,15 @@ const PRESET_SETTINGS = [
   "enemyDamage": 10,
   "enemyPlacement": "random",
   "enemyWeaponType": "contact",
+  "allyType": "rusher",
+  "allyCount": 0,
+  "allyHealth": 100,
+  "allyInvincible": false,
+  "allyBehavior": "guard",
+  "allyMoveSpeed": 2.2,
+  "allyDamage": 10,
+  "allyPlacement": "random",
+  "allyWeaponType": "none",
   "enemyDestructionEnabled": true,
   "enemyDestructionStandardCount": 10,
   "enemyDestructionStandardSize": 0.25,
@@ -482,8 +491,8 @@ const PRESET_SETTINGS = [
   "destructionDestructibleShockwaveColor": "#ffd400",
   "destructionDestructibleShockwaveFadeTime": 0.45,
   "destructionDestructibleShockwaveDelay": 0,
-  "destructionDestructibleShockwaveTransparency": 0.34,
   "destructionDestructibleSplashDamage": 45,
+  "destructionDestructibleShockwaveTransparency": 0.34,
   "destructionDestructibleSplashRadius": 8,
   "destructionDestructibleSplashFalloff": 1,
   "destructionDestructibleSplashMinFactor": 0.15
@@ -2604,6 +2613,30 @@ const ENEMY_WEAPON_OPTIONS = [
   ['sniper', 'Sniper'],
 ];
 
+const ENEMY_JSON_KEYS = [
+  'enemyType',
+  'enemyCount',
+  'enemyHealth',
+  'enemyInvincible',
+  'enemyBehavior',
+  'enemyMoveSpeed',
+  'enemyDamage',
+  'enemyPlacement',
+  'enemyWeaponType',
+];
+
+const ALLY_JSON_KEYS = [
+  'allyType',
+  'allyCount',
+  'allyHealth',
+  'allyInvincible',
+  'allyBehavior',
+  'allyMoveSpeed',
+  'allyDamage',
+  'allyPlacement',
+  'allyWeaponType',
+];
+
 
 // ── DOM helpers ────────────────────────────────────────────────────────────────
 
@@ -3131,7 +3164,61 @@ function buildHUD(body) {
   body.appendChild(slider({ key: 'radarOpacity', label: 'Opacity', min: 0, max: 1, step: 0.05, dec: 2 }));
 }
 
+function pickParamSubset(keys) {
+  return keys.reduce((out, key) => {
+    out[key] = state.params[key];
+    return out;
+  }, {});
+}
+
+function downloadJsonFile(filename, payload) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  Object.assign(document.createElement('a'), { href: url, download: filename }).click();
+  URL.revokeObjectURL(url);
+}
+
+function importJsonFileForKeys(keys, onDone) {
+  const allowed = new Set(keys);
+  const inp = Object.assign(document.createElement('input'), { type: 'file', accept: '.json' });
+  inp.addEventListener('change', () => {
+    if (!inp.files?.[0]) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const parsed = JSON.parse(e.target.result);
+        const next = {};
+        Object.keys(parsed || {}).forEach(key => {
+          if (allowed.has(key)) next[key] = parsed[key];
+        });
+        Object.assign(state.params, next);
+        state.activePreset = 'custom';
+        applyAllParams();
+        rebuildPanel();
+        onDone?.();
+      } catch {
+        notify('⚠ Invalid JSON');
+      }
+    };
+    reader.readAsText(inp.files[0]);
+  });
+  inp.click();
+}
+
+function buildScopedJsonControls(body, label, keys, filename) {
+  const wrap = document.createElement('div');
+  wrap.className = 'sb-export-row sb-section-json-row';
+  wrap.appendChild(btn(`⬇ Export ${label} JSON`, 'sb-btn-accent', () => {
+    downloadJsonFile(filename, pickParamSubset(keys));
+  }));
+  wrap.appendChild(btn(`⬆ Import ${label} JSON`, '', () => {
+    importJsonFileForKeys(keys, () => notify(`${label} JSON imported ✓`));
+  }));
+  body.appendChild(wrap);
+}
+
 function buildEnemies(body) {
+  buildScopedJsonControls(body, 'Enemies', ENEMY_JSON_KEYS, 'enemies.json');
   body.appendChild(select('Enemy Type', 'enemyType', ENEMY_TYPE_OPTIONS));
   body.appendChild(slider({ key: 'enemyCount', label: 'Number of Enemies', min: 0, max: 50, step: 1, dec: 0 }));
   body.appendChild(slider({ key: 'enemyHealth', label: 'Health Amount', min: 1, max: 1000, step: 1, dec: 0 }));
@@ -3398,11 +3485,16 @@ function buildController(body) {
 
 
 function buildAllies(body) {
-  body.appendChild(subhdr('Coming Soon'));
-  const note = document.createElement('div');
-  note.style.cssText = 'padding:8px 4px;font-size:11px;color:var(--sb-muted);line-height:1.5;';
-  note.textContent = 'Ally configuration will appear here.';
-  body.appendChild(note);
+  buildScopedJsonControls(body, 'Allies', ALLY_JSON_KEYS, 'allies.json');
+  body.appendChild(select('Ally Type', 'allyType', ENEMY_TYPE_OPTIONS));
+  body.appendChild(slider({ key: 'allyCount', label: 'Number of Allies', min: 0, max: 50, step: 1, dec: 0 }));
+  body.appendChild(slider({ key: 'allyHealth', label: 'Health Amount', min: 1, max: 1000, step: 1, dec: 0 }));
+  body.appendChild(toggle('Ally Invincible', 'allyInvincible'));
+  body.appendChild(select('Behavior', 'allyBehavior', ENEMY_BEHAVIOR_OPTIONS));
+  body.appendChild(slider({ key: 'allyMoveSpeed', label: 'Movement Speed', min: 0, max: 12, step: 0.1, dec: 1 }));
+  body.appendChild(slider({ key: 'allyDamage', label: 'Damage Amount', min: 0, max: 250, step: 1, dec: 0 }));
+  body.appendChild(select('Placement', 'allyPlacement', ENEMY_PLACEMENT_OPTIONS));
+  body.appendChild(select('Weapon Type', 'allyWeaponType', ENEMY_WEAPON_OPTIONS));
 }
 
 
@@ -3788,6 +3880,18 @@ function applyAllParams() {
     const numeric = Number(value);
     return Math.min(max, Math.max(min, Number.isFinite(numeric) ? numeric : fallback));
   };
+  const normalizeChoice = (value, options, fallback) => (
+    options.some(([key]) => key === value) ? value : fallback
+  );
+  p.allyType = normalizeChoice(p.allyType, ENEMY_TYPE_OPTIONS, 'rusher');
+  p.allyCount = Math.round(clampSetting(p.allyCount, 0, 50, 0));
+  p.allyHealth = Math.round(clampSetting(p.allyHealth, 1, 1000, 100));
+  p.allyInvincible = p.allyInvincible === true;
+  p.allyBehavior = normalizeChoice(p.allyBehavior, ENEMY_BEHAVIOR_OPTIONS, 'guard');
+  p.allyMoveSpeed = clampSetting(p.allyMoveSpeed, 0, 12, 2.2);
+  p.allyDamage = Math.round(clampSetting(p.allyDamage, 0, 250, 10));
+  p.allyPlacement = normalizeChoice(p.allyPlacement, ENEMY_PLACEMENT_OPTIONS, 'random');
+  p.allyWeaponType = normalizeChoice(p.allyWeaponType, ENEMY_WEAPON_OPTIONS, 'none');
   p.cameraShakeEnabled = p.cameraShakeEnabled !== false;
   p.cameraShakeIntensity = clampSetting(p.cameraShakeIntensity, 0, 1.5, 0.28);
   p.cameraShakeDuration = clampSetting(p.cameraShakeDuration, 0.05, 2, 0.35);

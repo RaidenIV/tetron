@@ -897,6 +897,7 @@ function spawnDestructibleShockwave(cx, cy, cz, cfg) {
     minDamageFactor: clamp(Number(cfg.splashMinFactor) || 0, 0, 1),
     active: false,
     hitEnemyIds: [],
+    hitObjectIds: [],
     hitPlayer: false,
   };
   state.explosionSplashEvents = state.explosionSplashEvents || [];
@@ -934,6 +935,42 @@ function releaseDestructibleShockwave(shockwave) {
   state.explosionSplashEvents = (state.explosionSplashEvents || []).filter(event => event !== shockwave.event);
 }
 
+function getExplosionDistanceToPlacedBounds(event, bounds) {
+  const ex = Number(event.x) || 0;
+  const ez = Number(event.z) || 0;
+  const closestX = clamp(ex, bounds.minX, bounds.maxX);
+  const closestZ = clamp(ez, bounds.minZ, bounds.maxZ);
+  return Math.hypot(ex - closestX, ez - closestZ);
+}
+
+function applyExplosionSplashToDestructibleObjects(event) {
+  if (!event?.active) return;
+  const damage = Math.max(0, Number(event.damage) || 0);
+  const radius = Math.max(0, Number(event.currentRadius) || 0);
+  if (damage <= 0 || radius <= 0) return;
+
+  const hitObjectIds = Array.isArray(event.hitObjectIds) ? event.hitObjectIds : [];
+  event.hitObjectIds = hitObjectIds;
+  const hitSet = new Set(hitObjectIds);
+  const list = state.params.placedObjects || [];
+
+  for (let i = list.length - 1; i >= 0; i--) {
+    const obj = list[i];
+    if (!obj) continue;
+    const asset = getAsset(obj.assetId);
+    if (asset?.destructible !== true) continue;
+    const id = obj.objectId || `${obj.assetId}:${obj.x}:${obj.y}:${obj.z}:${i}`;
+    if (hitSet.has(id)) continue;
+
+    const distance = getExplosionDistanceToPlacedBounds(event, placedObjectBounds(obj));
+    if (distance <= radius) {
+      hitSet.add(id);
+      hitObjectIds.push(id);
+      destroyPlacedObject(obj);
+    }
+  }
+}
+
 function updateDestructibleShockwaves(delta = 1 / 60) {
   for (let i = _destructibleShockwaves.length - 1; i >= 0; i--) {
     const shockwave = _destructibleShockwaves[i];
@@ -954,6 +991,7 @@ function updateDestructibleShockwaves(delta = 1 / 60) {
     shockwave.mesh.material.opacity = shockwave.opacity * (1 - t);
     shockwave.event.active = true;
     shockwave.event.currentRadius = damageRadius;
+    applyExplosionSplashToDestructibleObjects(shockwave.event);
 
     if (shockwave.age >= shockwave.fadeTime) {
       if (shockwave.expired) {

@@ -201,7 +201,7 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
 }
 .sb-slider::-webkit-slider-thumb {
   -webkit-appearance: none; width: 12px; height: 12px;
-  border-radius: 0; background: var(--sb-accent);
+  border-radius: 50%; background: var(--sb-accent);
 }
 .sb-slider::-moz-range-thumb {
   width: 12px; height: 12px; border: none;

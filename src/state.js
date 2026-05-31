@@ -8,7 +8,7 @@ export const state = {
   slowTimer: 0,
   slowScale: 0.35,
   slowRequested: false,
-  activePreset: 'g15',
+  activePreset: 'g14',
   mouseLookActive: false,
   isAiming: false,          // true while right-mouse / L2 held
   activeSlot: 0,            // 0 = laser, 1 = object placer
@@ -157,6 +157,15 @@ export const state = {
         "enemyDamage": 10,
         "enemyPlacement": "random",
         "enemyWeaponType": "contact",
+        "allyType": "rusher",
+        "allyCount": 0,
+        "allyHealth": 100,
+        "allyInvincible": false,
+        "allyBehavior": "guard",
+        "allyMoveSpeed": 2.2,
+        "allyDamage": 10,
+        "allyPlacement": "random",
+        "allyWeaponType": "none",
         "enemyDestructionEnabled": true,
         "enemyDestructionStandardCount": 10,
         "enemyDestructionStandardSize": 0.25,
@@ -493,6 +502,7 @@ export const state = {
         "destructionDestructibleSplashFalloff": 1,
         "destructionDestructibleSplashMinFactor": 0.15
 }
+},
 };
 
 // Snapshot taken at startup — used by Reset button
