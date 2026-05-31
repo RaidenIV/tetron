@@ -97,6 +97,130 @@ function applyPlayerContactShadow() {
 
 applyPlayerContactShadow();
 
+// ── Right-hand player weapon visual ───────────────────────────────────────────
+// The weapon is a lightweight geometric prop attached to the player capsule. The
+// rifle uses a 1.5-unit rectangular prism and sits on the player's right side.
+const playerWeaponGroup = new THREE.Group();
+playerWeaponGroup.name = 'PlayerWeapon_RightHand';
+playerGroup.add(playerWeaponGroup);
+
+const playerWeaponMat = new THREE.MeshStandardMaterial({
+  color: 0x20242b,
+  metalness: 0.55,
+  roughness: 0.38,
+});
+
+const playerWeaponMuzzle = new THREE.Object3D();
+playerWeaponGroup.add(playerWeaponMuzzle);
+
+let playerWeaponMesh = null;
+let playerWeaponModelKey = '';
+let playerWeaponLength = 1.5;
+
+function getPlayerWeaponType() {
+  const type = state.params.playerWeaponType;
+  return ['pistol', 'rifle', 'shotgun', 'sniperRifle', 'grenades', 'rocketLauncher'].includes(type)
+    ? type
+    : 'rifle';
+}
+
+function getPlayerWeaponSpec(type = getPlayerWeaponType()) {
+  switch (type) {
+    case 'pistol':
+      return { kind: 'box', width: 0.18, height: 0.16, length: 0.65, grip: 0.12 };
+    case 'shotgun':
+      return { kind: 'box', width: 0.2, height: 0.14, length: 1.35, grip: 0.16 };
+    case 'sniperRifle':
+      return { kind: 'box', width: 0.14, height: 0.12, length: 1.8, grip: 0.18 };
+    case 'grenades':
+      return { kind: 'sphere', width: 0.24, height: 0.24, length: 0.35, grip: 0.08 };
+    case 'rocketLauncher':
+      return { kind: 'cylinder', width: 0.28, height: 0.28, length: 1.35, grip: 0.2 };
+    case 'rifle':
+    default:
+      return { kind: 'box', width: 0.16, height: 0.12, length: 1.5, grip: 0.16 };
+  }
+}
+
+function disposePlayerWeaponMesh() {
+  if (!playerWeaponMesh) return;
+  playerWeaponGroup.remove(playerWeaponMesh);
+  playerWeaponMesh.geometry?.dispose?.();
+  playerWeaponMesh = null;
+}
+
+function rebuildPlayerWeaponVisual(type = getPlayerWeaponType()) {
+  const spec = getPlayerWeaponSpec(type);
+  disposePlayerWeaponMesh();
+
+  let geo;
+  if (spec.kind === 'sphere') {
+    geo = new THREE.SphereGeometry(spec.width * 0.5, 16, 10);
+  } else if (spec.kind === 'cylinder') {
+    geo = new THREE.CylinderGeometry(spec.width * 0.5, spec.width * 0.5, spec.length, 14);
+  } else {
+    geo = new THREE.BoxGeometry(spec.width, spec.height, spec.length);
+  }
+
+  playerWeaponMesh = new THREE.Mesh(geo, playerWeaponMat);
+  playerWeaponMesh.name = `PlayerWeapon_${type}`;
+  playerWeaponMesh.castShadow = true;
+  playerWeaponMesh.receiveShadow = true;
+
+  if (spec.kind === 'cylinder') {
+    playerWeaponMesh.rotation.x = Math.PI / 2;
+    playerWeaponMesh.position.z = -spec.length * 0.5 + spec.grip;
+  } else if (spec.kind === 'sphere') {
+    playerWeaponMesh.position.z = -spec.length * 0.5;
+  } else {
+    playerWeaponMesh.position.z = -spec.length * 0.5 + spec.grip;
+  }
+
+  playerWeaponLength = spec.length;
+  playerWeaponMuzzle.position.set(0, 0, -spec.length + spec.grip);
+  playerWeaponGroup.add(playerWeaponMesh);
+  playerWeaponModelKey = type;
+}
+
+export function applyPlayerWeaponSettings() {
+  const type = getPlayerWeaponType();
+  if (playerWeaponModelKey !== type || !playerWeaponMesh) {
+    rebuildPlayerWeaponVisual(type);
+  }
+  playerWeaponMat.needsUpdate = true;
+}
+
+function updatePlayerWeaponVisual() {
+  applyPlayerWeaponSettings();
+  const type = getPlayerWeaponType();
+  const p = state.params;
+  const az = Number(p.thirdAzimuth) || 0;
+  const radius = Math.max(0.25, Number(p.playerRadius) || 0.4);
+  const length = Math.max(0.4, Number(p.playerLength) || 1.2);
+  const forwardX = -Math.sin(az);
+  const forwardZ = -Math.cos(az);
+  const rightX = Math.cos(az);
+  const rightZ = -Math.sin(az);
+  const rightOffset = radius + (type === 'grenades' ? 0.22 : 0.42);
+  const forwardOffset = type === 'grenades' ? 0.02 : 0.12;
+
+  playerWeaponGroup.position.set(
+    rightX * rightOffset + forwardX * forwardOffset,
+    radius + length * 0.56,
+    rightZ * rightOffset + forwardZ * forwardOffset
+  );
+  playerWeaponGroup.rotation.set(0, az, 0);
+  playerWeaponGroup.visible = true;
+}
+
+export function getPlayerWeaponMuzzle(out = new THREE.Vector3()) {
+  updatePlayerWeaponVisual();
+  playerWeaponMuzzle.getWorldPosition(out);
+  return out;
+}
+
+applyPlayerWeaponSettings();
+
 
 // ── Hex shield ────────────────────────────────────────────────────────────────
 // Flat-top hex grid mapped onto a sphere.
@@ -496,6 +620,7 @@ export function rebuildPlayerGeo() {
   playerMesh.position.y = p.playerRadius + p.playerLength / 2;
   applyPlayerContactShadow();
   applyShieldSettings();
+  applyPlayerWeaponSettings();
 }
 
 // ── Apply material from params ─────────────────────────────────────────────────
@@ -636,6 +761,7 @@ export function updatePlayer(delta, moveForward, moveRight) {
   const p = state.params;
   updateJump(delta);
   applyPlayerContactShadow();
+  updatePlayerWeaponVisual();
 
   // Walking — poll state.keys each frame + analogue controller left stick
   _v.set(0, 0, 0);
