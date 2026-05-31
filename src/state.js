@@ -489,7 +489,7 @@ export const state = {
         "destructionDestructibleShockwaveDelay": 0,
         "destructionDestructibleSplashDamage": 45
 }
-},
+};
 
 // Snapshot taken at startup — used by Reset button
 export const defaultParams = JSON.parse(JSON.stringify(state.params));
