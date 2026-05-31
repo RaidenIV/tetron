@@ -9,7 +9,7 @@
 //   - Hard decollision pass (after movement, spatial-hash-accelerated)
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { scene, triggerCameraShake } from './renderer.js';
+import { scene } from './renderer.js';
 import { state } from './state.js';
 import { playerGroup } from './player.js';
 import { getSfxVolume } from './audio.js';
@@ -843,15 +843,15 @@ function spawnEnemyCorpse(enemy, cfg = getDestructionConfig(enemy)) {
   scene.add(mesh);
   liftCorpseAboveFloor({ mesh });
   const yaw = Math.random() * Math.PI * 2;
-  const speed = (1.4 + Math.random() * 2.6) * Math.max(0.3, cfg.speed);
+  const speed = (0.45 + Math.random() * 1.0) * Math.max(0.15, cfg.speed);
   enemyCorpses.push({
     mesh,
     vx: Math.cos(yaw) * speed,
-    vy: cfg.physics === 'gravity' ? 2.5 + Math.random() * 2.5 : 0.4 + Math.random() * 0.8,
+    vy: cfg.physics === 'gravity' ? 0.65 + Math.random() * 1.0 : 0.15 + Math.random() * 0.35,
     vz: Math.sin(yaw) * speed,
-    rx: (Math.random() - 0.5) * 7,
-    ry: (Math.random() - 0.5) * 7,
-    rz: (Math.random() - 0.5) * 7,
+    rx: (Math.random() - 0.5) * 2.2,
+    ry: (Math.random() - 0.5) * 2.2,
+    rz: (Math.random() - 0.5) * 2.2,
     life: cfg.despawnTime,
     maxLife: cfg.despawnTime,
     physics: cfg.physics,
@@ -893,9 +893,9 @@ function updateEnemyCorpses(delta) {
     if (corpse.physics === 'gravity') {
       corpse.vy -= PARTICLE_GRAVITY * delta;
       if (liftCorpseAboveFloor(corpse)) {
-        corpse.vy = Math.abs(corpse.vy) * 0.18;
-        corpse.vx *= 0.76;
-        corpse.vz *= 0.76;
+        corpse.vy = Math.abs(corpse.vy) * 0.08;
+        corpse.vx *= 0.55;
+        corpse.vz *= 0.55;
       }
     } else {
       corpse.vy += 0.1 * delta;
@@ -913,8 +913,6 @@ function enemyBaseHeight(mesh) {
 function destroyEnemy(enemy) {
   playEnemyGruntSound(enemy.group.position);
   const cfg = getDestructionConfig(enemy);
-  const shakeForce = enemy.type === ENEMY_TYPE.BOSS ? 1.6 : enemy.type === ENEMY_TYPE.SPLITTER ? 1.25 : 1;
-  triggerCameraShake(enemy.group.position, shakeForce);
   spawnEnemyCorpse(enemy, cfg);
   spawnDestructionParticles(enemy, cfg);
   if (!enemy.isAlly && enemy.type === ENEMY_TYPE.SPLITTER) spawnSplitChildren(enemy);

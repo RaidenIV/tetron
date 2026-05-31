@@ -10,7 +10,7 @@ import { updateSunPosition } from './lighting.js';
 import { updateChunks } from './terrain.js';
 import { playerGroup, updatePlayer, updateDashStreaks } from './player.js';
 import { updateLaserProjectiles, resolveAimTarget, aimResult } from './weapons.js';
-import { updateEnemies, getEnemyMeshes, tagEnemy, getEnemies } from './enemies.js';
+import { updateEnemies, getEnemyMeshes, tagEnemy, getEnemies, getAllies } from './enemies.js';
 import { updatePlacer } from './placer.js';
 import { updateController } from './input.js';
 
@@ -54,6 +54,7 @@ function updateRadar() {
   const opacity    = Math.max(0, Math.min(1, Number(p.radarOpacity) ?? 0.82));
   const bgColor    = p.radarBgColor      || '#0a1628';
   const enemyColor = p.radarEnemyColor   || '#ff3030';
+  const allyColor  = '#35ff00';
   const tagColor   = p.radarTaggedColor  || '#ffee44';
 
   // Resize canvas if needed
@@ -116,6 +117,28 @@ function updateRadar() {
       ctx.fill();
       ctx.restore();
     }
+  }
+
+  for (const ally of getAllies()) {
+    if (!ally || !ally.group) continue;
+    const dx = ally.group.position.x - px;
+    const dz = ally.group.position.z - pz;
+    const dist = Math.hypot(dx, dz);
+    if (dist > range) continue;
+
+    const angle = Math.atan2(dx, dz) - camAzimuth;
+    const sc = (dist / range) * (radius - 6);
+    const ax = radius + Math.sin(angle) * sc;
+    const ay = radius - Math.cos(angle) * sc;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur = 4;
+    ctx.fillStyle = allyColor;
+    ctx.beginPath();
+    ctx.arc(ax, ay, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
 
   ctx.restore();
