@@ -12,6 +12,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { scene, triggerCameraShake } from './renderer.js';
 import { state } from './state.js';
 import { playerGroup } from './player.js';
+import { getSfxVolume } from './audio.js';
 import { resolveCircleAgainstPlacedObjects, isPlacedObjectHit } from './placer.js';
 
 export const ENEMY_TYPE = Object.freeze({
@@ -77,11 +78,9 @@ let _enemyGruntEl = null;
 const _corpseBox = new THREE.Box3();
 const _splashVec = new THREE.Vector3();
 
-function playEnemyGruntSound() {
-  if (state.params.soundMuted) return;
-  const master = Number(state.params.soundSfxVolume ?? 1);
-  const grunt = Number(state.params.soundSfx_enemy_grunt ?? state.params.soundSfx_standard_hit ?? 1);
-  const volume = Math.max(0, Math.min(1, master * grunt));
+function playEnemyGruntSound(sourcePosition = null) {
+  const fallback = Number(state.params.soundSfx_standard_hit ?? 1);
+  const volume = getSfxVolume('soundSfx_enemy_grunt', fallback, sourcePosition);
   if (volume <= 0) return;
   if (!_enemyGruntEl) _enemyGruntEl = new Audio('./assets/grunt.wav');
   const sound = _enemyGruntEl.cloneNode();
@@ -350,6 +349,7 @@ function applyHardEnemyDecollision() {
 
 // ── Core data ─────────────────────────────────────────────────────────────────
 const enemies = [];
+const allies = [];
 const enemyBullets = [];
 const destructionParticles = [];
 const enemyCorpses = [];
@@ -602,10 +602,11 @@ export function applyTagSettings() {
 }
 
 
-function makeEnemy(type, position, index = 0) {
+function makeEnemy(type, position, index = 0, options = {}) {
   const def = getDef(type);
   const group = new THREE.Group();
-  group.name = `Enemy_${type}`;
+  const team = options.team === 'ally' ? 'ally' : 'enemy';
+  group.name = team === 'ally' ? `Ally_${type}` : `Enemy_${type}`;
   group.position.set(position.x, 0, position.z);
 
   const material = makeEnemyMaterial(def);
@@ -617,9 +618,10 @@ function makeEnemy(type, position, index = 0) {
   group.add(mesh);
   scene.add(group);
 
-  const maxHp = Math.max(1, Number(state.params.enemyHealth) || 100);
+  const healthKey = team === 'ally' ? 'allyHealth' : 'enemyHealth';
+  const maxHp = Math.max(1, Number(options.health ?? state.params[healthKey]) || 100);
   const enemy = {
-    type, def, group, mesh, material, maxHp,
+    type, def, group, mesh, material, maxHp, team, isAlly: team === 'ally',
     hp: maxHp,
     radius: BASE_RADIUS * def.sizeMult,
     sizeMult: def.sizeMult,
@@ -635,7 +637,7 @@ function makeEnemy(type, position, index = 0) {
     slotTimer: randomRange(0, 0.5), // stagger initial slot assignment
     lastSteer: null,
   };
-  makeTagMarker(enemy);
+  if (!enemy.isAlly) makeTagMarker(enemy);
   return enemy;
 }
 
@@ -653,10 +655,10 @@ function disposeEnemyBullet(bullet) {
   scene.remove(bullet.mesh);
 }
 
-function getSpawnPosition(index, count) {
-  const placement = state.params.enemyPlacement || 'random';
+function getSpawnPosition(index, count, options = {}) {
+  const placement = options.placement || state.params.enemyPlacement || 'random';
   const origin = playerGroup.position;
-  const existingPositions = enemies.map(e => e.group.position);
+  const existingPositions = options.existingPositions || enemies.map(e => e.group.position);
 
   if (placement === 'grouped') {
     const angle = (index / Math.max(1, count)) * Math.PI * 2;
@@ -701,11 +703,19 @@ export function getEnemies() {
   return enemies;
 }
 
+export function getAllies() {
+  return allies;
+}
+
 export function clearEnemies() {
   while (enemies.length) disposeEnemy(enemies.pop());
   while (enemyBullets.length) disposeEnemyBullet(enemyBullets.pop());
   while (destructionParticles.length) releaseParticle(destructionParticles.pop());
   while (enemyCorpses.length) disposeEnemyCorpse(enemyCorpses.pop());
+}
+
+export function clearAllies() {
+  while (allies.length) disposeEnemy(allies.pop());
 }
 
 const ENEMY_DESTRUCTION_PREFIX = Object.freeze({
@@ -901,7 +911,7 @@ function enemyBaseHeight(mesh) {
 }
 
 function destroyEnemy(enemy) {
-  playEnemyGruntSound();
+  playEnemyGruntSound(enemy.group.position);
   const cfg = getDestructionConfig(enemy);
   const shakeForce = enemy.type === ENEMY_TYPE.BOSS ? 1.6 : enemy.type === ENEMY_TYPE.SPLITTER ? 1.25 : 1;
   triggerCameraShake(enemy.group.position, shakeForce);
@@ -921,6 +931,24 @@ export function spawnEnemiesFromSettings() {
     enemies.push(makeEnemy(type, getSpawnPosition(i, count), i));
   }
   return enemies.length;
+}
+
+export function spawnAlliesFromSettings() {
+  clearAllies();
+  const type = state.params.allyType || ENEMY_TYPE.RUSHER;
+  const count = clamp(Math.round(Number(state.params.allyCount) || 0), 0, 100);
+  const existingPositions = [...enemies, ...allies].map(e => e.group.position);
+  for (let i = 0; i < count; i++) {
+    allies.push(makeEnemy(type, getSpawnPosition(i, count, {
+      placement: state.params.allyPlacement || 'random',
+      existingPositions,
+    }), i, {
+      team: 'ally',
+      health: state.params.allyHealth,
+    }));
+    existingPositions.push(allies[allies.length - 1].group.position);
+  }
+  return allies.length;
 }
 
 function getEffectiveBehavior(enemy) {
@@ -1215,9 +1243,91 @@ function updateEnemyBullets(delta) {
   }
 }
 
+
+function findNearestEnemy(position) {
+  let nearest = null;
+  let best = Infinity;
+  for (const enemy of enemies) {
+    const dx = enemy.group.position.x - position.x;
+    const dz = enemy.group.position.z - position.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < best) { best = d2; nearest = enemy; }
+  }
+  return nearest;
+}
+
+function updateAllyMovement(ally, delta, elapsedTime, index) {
+  const behavior = state.params.allyBehavior || 'guard';
+  const speed = Math.max(0, Number(state.params.allyMoveSpeed) || BASE_SPEED);
+  const playerPos = playerGroup.position;
+  let moveX = 0, moveZ = 0;
+
+  if (behavior === 'rush' && enemies.length) {
+    const target = findNearestEnemy(ally.group.position);
+    if (target) {
+      const dx = target.group.position.x - ally.group.position.x;
+      const dz = target.group.position.z - ally.group.position.z;
+      const d = Math.max(0.001, Math.hypot(dx, dz));
+      if (d > Math.max(1.2, ally.radius + (target.radius || 0.45))) {
+        moveX = dx / d; moveZ = dz / d;
+      }
+    }
+  } else if (behavior === 'orbit') {
+    const dx = playerPos.x - ally.group.position.x;
+    const dz = playerPos.z - ally.group.position.z;
+    const d = Math.max(0.001, Math.hypot(dx, dz));
+    const radial = clamp((d - 4.5) / 2.0, -1, 1) * 0.7;
+    moveX = (-dz / d) * 0.9 + (dx / d) * radial;
+    moveZ = ( dx / d) * 0.9 + (dz / d) * radial;
+  } else if (behavior === 'teleport') {
+    const dx = playerPos.x - ally.group.position.x;
+    const dz = playerPos.z - ally.group.position.z;
+    const d = Math.hypot(dx, dz);
+    if (d > 16) {
+      const angle = (index / Math.max(1, allies.length)) * Math.PI * 2;
+      const r = 3.2 + (index % 3) * 0.7;
+      ally.group.position.x = playerPos.x + Math.cos(angle) * r;
+      ally.group.position.z = playerPos.z + Math.sin(angle) * r;
+    }
+  } else {
+    const slotAngle = (index / Math.max(1, allies.length)) * Math.PI * 2;
+    const desiredRadius = behavior === 'keepDistance' ? 6.5 : 3.25 + (index % 3) * 0.45;
+    const targetX = playerPos.x + Math.cos(slotAngle) * desiredRadius;
+    const targetZ = playerPos.z + Math.sin(slotAngle) * desiredRadius;
+    const dx = targetX - ally.group.position.x;
+    const dz = targetZ - ally.group.position.z;
+    const d = Math.max(0.001, Math.hypot(dx, dz));
+    if (d > 0.2) { moveX = dx / d; moveZ = dz / d; }
+  }
+
+  const len = Math.hypot(moveX, moveZ);
+  if (len > 0.001) {
+    ally.group.position.x += (moveX / len) * speed * delta;
+    ally.group.position.z += (moveZ / len) * speed * delta;
+    ally.group.rotation.y = Math.atan2(moveX, moveZ);
+  } else {
+    const target = findNearestEnemy(ally.group.position);
+    const look = target?.group?.position || playerPos;
+    ally.group.rotation.y = Math.atan2(look.x - ally.group.position.x, look.z - ally.group.position.z);
+  }
+  resolveCircleAgainstPlacedObjects(ally.group.position, ally.radius);
+  ally.spawnFlashTimer = Math.max(0, ally.spawnFlashTimer - delta);
+  ally.mesh.position.y = (BASE_RADIUS + BASE_LENGTH / 2) * ally.sizeMult
+    + Math.sin(elapsedTime * 3 + ally.bobOffset) * 0.05;
+  ally.material.opacity = ally.spawnFlashTimer > 0 ? clamp(1 - ally.spawnFlashTimer / 0.65, 0.25, 1) : 1;
+  ally.material.transparent = ally.spawnFlashTimer > 0;
+}
+
+function updateAllies(delta, elapsedTime = 0) {
+  for (let i = allies.length - 1; i >= 0; i--) {
+    updateAllyMovement(allies[i], delta, elapsedTime, i);
+  }
+}
+
 export function updateEnemies(delta, elapsedTime = 0) {
   syncPlayerHud();
   applyExplosionSplashDamage();
+  updateAllies(delta, elapsedTime);
 
   // Step 1: Rebuild spatial hash before movement (for separation queries)
   _spatialHash.rebuild(enemies);

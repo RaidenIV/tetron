@@ -411,7 +411,7 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
 .reticle-ring {
   width: var(--reticle-size); height: var(--reticle-size);
   border: var(--reticle-thickness) solid var(--reticle-color);
-  border-radius: 50%;
+  border-radius: 0;
 }
 #target-reticle.reticle-glow {
   filter: drop-shadow(0 0 6px var(--reticle-color));
@@ -524,9 +524,8 @@ body.is-paused * {
   right: calc(var(--sb-width, 320px) + 28px);
   z-index: 24;
   pointer-events: none;
-  border-radius: 50%;
+  border-radius: 0;
   display: block;
-  border: 1px solid rgba(255,255,255,0.12);
   box-shadow: 0 0 8px rgba(0,0,0,0.6);
 }
 

@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { scene, camera, triggerCameraShake } from './renderer.js';
 import { state } from './state.js';
 import { ASSET_CATALOGUE } from './assets-catalogue.js';
+import { getSfxVolume } from './audio.js';
 
 // ── Geometry factories (Three.js — kept here, not in catalogue) ───────────────
 const _geoFactories = {
@@ -63,11 +64,9 @@ const _destructibleShockwaveGeo = new THREE.SphereGeometry(1, 32, 16);
 let _destructibleShockwaveId = 1;
 
 let _objectExplosionEl = null;
-function playObjectExplosionSound() {
-  if (state.params.soundMuted) return;
-  const master = Number(state.params.soundSfxVolume ?? 1);
-  const objectVol = Number(state.params.soundSfx_object_explode ?? state.params.soundSfx_explode ?? 1);
-  const volume = Math.max(0, Math.min(1, master * objectVol));
+function playObjectExplosionSound(sourcePosition = null) {
+  const fallback = Number(state.params.soundSfx_explode ?? 1);
+  const volume = getSfxVolume('soundSfx_object_explode', fallback, sourcePosition);
   if (volume <= 0) return;
   if (!_objectExplosionEl) _objectExplosionEl = new Audio('./assets/xpl1.wav');
   const sound = _objectExplosionEl.cloneNode();
@@ -1077,12 +1076,13 @@ function destroyPlacedObject(obj) {
   if (dataIndex === -1) return false;
   const asset = getAsset(obj.assetId);
   if (asset.destructible !== true) return false;
-  playObjectExplosionSound();
-  triggerCameraShake(new THREE.Vector3(
+  const explosionOrigin = new THREE.Vector3(
     Number(obj.x) || 0,
     ((placedObjectBounds(obj).minY + placedObjectBounds(obj).maxY) * 0.5) || Number(obj.y) || 0.5,
     Number(obj.z) || 0
-  ), 1);
+  );
+  playObjectExplosionSound(explosionOrigin);
+  triggerCameraShake(explosionOrigin, 1);
   spawnPlacedObjectExplosion(obj, asset);
   list.splice(dataIndex, 1);
   state.params.placedObjects = list;
