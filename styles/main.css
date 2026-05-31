@@ -428,7 +428,6 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
 .reticle-svg .reticle-stroke {
   stroke: currentColor;
   fill: none;
-  vector-effect: non-scaling-stroke;
 }
 .reticle-svg .reticle-fill {
   fill: currentColor;
@@ -589,7 +588,7 @@ body.is-paused * {
 
 
 .weapon-reticle-modal {
-  position: fixed; inset: 0; z-index: 80;
+  position: fixed; inset: 0; z-index: 10000;
   display: flex; align-items: center; justify-content: center;
   background: rgba(0,0,0,0.52); backdrop-filter: blur(3px);
 }

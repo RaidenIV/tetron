@@ -5853,7 +5853,6 @@ function buildWeaponControls(body, spec) {
     body.appendChild(slider({ key: weaponKey(prefix, 'Radius'), label: 'Radius', min: 0.5, max: 60, step: 0.5, dec: 1 }));
   }
   body.appendChild(reticlePickerRow(spec));
-  body.appendChild(subhdr('Projectile'));
   body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileSpeed'), label: 'Projectile Speed', min: 1, max: 250, step: 1, dec: 0 }));
   body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileSize'), label: 'Projectile Size', min: 0.05, max: 2, step: 0.01, dec: 2 }));
   body.appendChild(colorPicker('Projectile Color', weaponKey(prefix, 'ProjectileColor')));
