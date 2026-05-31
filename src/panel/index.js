@@ -509,6 +509,9 @@ const PRESET_SETTINGS = [
   "weaponPistolProjectileSize": 0.28,
   "weaponPistolProjectileColor": "#d8dde6",
   "weaponPistolProjectileBloom": false,
+  "weaponPistolProjectileLength": 0.65,
+  "weaponPistolProjectileBloomIntensity": 1.0,
+  "weaponPistolProjectileBloomSize": 1.0,
   "weaponPistolReticleType": "dot",
       "weaponPistolReticleSize": 24,
       "weaponPistolReticleWeight": 2,
@@ -520,6 +523,9 @@ const PRESET_SETTINGS = [
   "weaponRifleProjectileSize": 0.36,
   "weaponRifleProjectileColor": "#ff1100",
   "weaponRifleProjectileBloom": true,
+  "weaponRifleProjectileLength": 0.84,
+  "weaponRifleProjectileBloomIntensity": 1.0,
+  "weaponRifleProjectileBloomSize": 1.0,
   "weaponRifleReticleType": "triSpoke",
       "weaponRifleReticleSize": 24,
       "weaponRifleReticleWeight": 2,
@@ -532,6 +538,9 @@ const PRESET_SETTINGS = [
   "weaponShotgunProjectileSize": 0.32,
   "weaponShotgunProjectileColor": "#d8dde6",
   "weaponShotgunProjectileBloom": false,
+  "weaponShotgunProjectileLength": 0.75,
+  "weaponShotgunProjectileBloomIntensity": 1.0,
+  "weaponShotgunProjectileBloomSize": 1.0,
   "weaponShotgunReticleType": "crossDot",
       "weaponShotgunReticleSize": 24,
       "weaponShotgunReticleWeight": 2,
@@ -543,6 +552,9 @@ const PRESET_SETTINGS = [
   "weaponSniperProjectileSize": 0.24,
   "weaponSniperProjectileColor": "#d975ff",
   "weaponSniperProjectileBloom": true,
+  "weaponSniperProjectileLength": 0.56,
+  "weaponSniperProjectileBloomIntensity": 1.0,
+  "weaponSniperProjectileBloomSize": 1.0,
   "weaponSniperReticleType": "cross",
       "weaponSniperReticleSize": 24,
       "weaponSniperReticleWeight": 2,
@@ -554,6 +566,9 @@ const PRESET_SETTINGS = [
   "weaponGrenadeProjectileSize": 0.25,
   "weaponGrenadeProjectileColor": "#ff8844",
   "weaponGrenadeProjectileBloom": false,
+  "weaponGrenadeProjectileLength": 0.27,
+  "weaponGrenadeProjectileBloomIntensity": 1.0,
+  "weaponGrenadeProjectileBloomSize": 1.0,
   "weaponGrenadeRadius": 5,
   "weaponGrenadeReticleType": "ring",
       "weaponGrenadeReticleSize": 24,
@@ -566,6 +581,9 @@ const PRESET_SETTINGS = [
   "weaponRocketProjectileSize": 0.42,
   "weaponRocketProjectileColor": "#ff3333",
   "weaponRocketProjectileBloom": true,
+  "weaponRocketProjectileLength": 1.33,
+  "weaponRocketProjectileBloomIntensity": 1.0,
+  "weaponRocketProjectileBloomSize": 1.0,
   "weaponRocketRadius": 6,
   "weaponRocketReticleType": "ring"
 } },
@@ -5929,8 +5947,11 @@ function buildWeaponControls(body, spec) {
   body.appendChild(slider({ key: weaponReticleWeightKey(spec), label: 'Reticle Weight', min: 0.5, max: 12, step: 0.1, dec: 1, onChange: syncActiveReticle }));
   body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileSpeed'), label: 'Projectile Speed', min: 1, max: 250, step: 1, dec: 0 }));
   body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileSize'), label: 'Projectile Size', min: 0.05, max: 2, step: 0.01, dec: 2 }));
+  body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileLength'), label: 'Projectile Length', min: 0.05, max: 8, step: 0.01, dec: 2 }));
   body.appendChild(colorPicker('Projectile Color', weaponKey(prefix, 'ProjectileColor')));
   body.appendChild(toggle('Projectile Bloom', weaponKey(prefix, 'ProjectileBloom')));
+  body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileBloomIntensity'), label: 'Bloom Intensity', min: 0, max: 3, step: 0.05, dec: 2 }));
+  body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileBloomSize'), label: 'Bloom Size', min: 0.25, max: 4, step: 0.05, dec: 2 }));
 }
 
 function buildWeapons(body) {
@@ -6617,12 +6638,12 @@ function applyAllParams() {
   const hexSetting = (value, fallback) => (/^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : fallback);
   const boolSetting = (value, fallback = false) => (value === true || value === false ? value : fallback);
   const weaponDefaults = {
-    Pistol: { damage: 24, range: 55, spread: 0.01, fireRate: 3.6, speed: 70, size: 0.28, color: '#d8dde6', bloom: false, reticle: 'dot', reticleSize: 24, reticleWeight: 2 },
-    Rifle: { damage: 34, range: Number(p.laserRange) || 42, spread: 0.003, fireRate: Number(p.laserFireRate) || 5, speed: Number(p.laserProjectileSpeed) || 80, size: 0.36, color: p.laserBloomColor || '#ff1100', bloom: p.laserBloom !== false, reticle: 'triSpoke', reticleSize: 24, reticleWeight: 2 },
-    Shotgun: { damage: 12, range: 28, spread: 0.16, fireRate: 1.15, speed: 60, size: 0.32, color: '#d8dde6', bloom: false, reticle: 'crossDot', reticleSize: 24, reticleWeight: 2 },
-    Sniper: { damage: 120, range: 180, spread: 0.002, fireRate: 0.65, speed: 130, size: 0.24, color: '#d975ff', bloom: true, reticle: 'cross', reticleSize: 24, reticleWeight: 2 },
-    Grenade: { damage: 95, range: 60, spread: 0.01, fireRate: 0.72, speed: 16, size: 0.25, color: '#ff8844', bloom: false, reticle: 'ring', radius: 5, reticleSize: 24, reticleWeight: 2 },
-    Rocket: { damage: 130, range: 95, spread: 0.004, fireRate: 0.68, speed: 34, size: 0.42, color: '#ff3333', bloom: true, reticle: 'ring', radius: 6, reticleSize: 24, reticleWeight: 2 },
+    Pistol: { damage: 24, range: 55, spread: 0.01, fireRate: 3.6, speed: 70, size: 0.28, length: 0.65, bloomIntensity: 1, bloomSize: 1, color: '#d8dde6', bloom: false, reticle: 'dot', reticleSize: 24, reticleWeight: 2 },
+    Rifle: { damage: 34, range: Number(p.laserRange) || 42, spread: 0.003, fireRate: Number(p.laserFireRate) || 5, speed: Number(p.laserProjectileSpeed) || 80, size: 0.36, length: 0.84, bloomIntensity: 1, bloomSize: 1, color: p.laserBloomColor || '#ff1100', bloom: p.laserBloom !== false, reticle: 'triSpoke', reticleSize: 24, reticleWeight: 2 },
+    Shotgun: { damage: 12, range: 28, spread: 0.16, fireRate: 1.15, speed: 60, size: 0.32, length: 0.75, bloomIntensity: 1, bloomSize: 1, color: '#d8dde6', bloom: false, reticle: 'crossDot', reticleSize: 24, reticleWeight: 2 },
+    Sniper: { damage: 120, range: 180, spread: 0.002, fireRate: 0.65, speed: 130, size: 0.24, length: 0.56, bloomIntensity: 1, bloomSize: 1, color: '#d975ff', bloom: true, reticle: 'cross', reticleSize: 24, reticleWeight: 2 },
+    Grenade: { damage: 95, range: 60, spread: 0.01, fireRate: 0.72, speed: 16, size: 0.25, length: 0.27, bloomIntensity: 1, bloomSize: 1, color: '#ff8844', bloom: false, reticle: 'ring', radius: 5, reticleSize: 24, reticleWeight: 2 },
+    Rocket: { damage: 130, range: 95, spread: 0.004, fireRate: 0.68, speed: 34, size: 0.42, length: 1.33, bloomIntensity: 1, bloomSize: 1, color: '#ff3333', bloom: true, reticle: 'ring', radius: 6, reticleSize: 24, reticleWeight: 2 },
   };
   WEAPON_CONTROL_SPECS.forEach(spec => {
     const d = weaponDefaults[spec.prefix];
@@ -6632,8 +6653,11 @@ function applyAllParams() {
     p[weaponKey(spec.prefix, 'FireRate')] = clampSetting(p[weaponKey(spec.prefix, 'FireRate')], 0.1, 30, d.fireRate);
     p[weaponKey(spec.prefix, 'ProjectileSpeed')] = clampSetting(p[weaponKey(spec.prefix, 'ProjectileSpeed')], 1, 250, d.speed);
     p[weaponKey(spec.prefix, 'ProjectileSize')] = clampSetting(p[weaponKey(spec.prefix, 'ProjectileSize')], 0.05, 2, d.size);
+    p[weaponKey(spec.prefix, 'ProjectileLength')] = clampSetting(p[weaponKey(spec.prefix, 'ProjectileLength')], 0.05, 8, d.length);
     p[weaponKey(spec.prefix, 'ProjectileColor')] = hexSetting(p[weaponKey(spec.prefix, 'ProjectileColor')], d.color);
     p[weaponKey(spec.prefix, 'ProjectileBloom')] = boolSetting(p[weaponKey(spec.prefix, 'ProjectileBloom')], d.bloom);
+    p[weaponKey(spec.prefix, 'ProjectileBloomIntensity')] = clampSetting(p[weaponKey(spec.prefix, 'ProjectileBloomIntensity')], 0, 3, d.bloomIntensity);
+    p[weaponKey(spec.prefix, 'ProjectileBloomSize')] = clampSetting(p[weaponKey(spec.prefix, 'ProjectileBloomSize')], 0.25, 4, d.bloomSize);
     p[weaponReticleKey(spec)] = RETICLE_MARKUP[p[weaponReticleKey(spec)]] ? p[weaponReticleKey(spec)] : d.reticle;
     p[weaponReticleSizeKey(spec)] = clampSetting(p[weaponReticleSizeKey(spec)], 4, 96, d.reticleSize);
     p[weaponReticleWeightKey(spec)] = clampSetting(p[weaponReticleWeightKey(spec)], 0.5, 12, d.reticleWeight);

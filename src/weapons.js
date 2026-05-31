@@ -117,8 +117,19 @@ function weaponBloom(prefix, fallback = false) {
   return boolParam(state.params[`weapon${prefix}ProjectileBloom`], fallback);
 }
 
+function weaponBloomIntensity(prefix, fallback = 1) {
+  return weaponValue(prefix, 'ProjectileBloomIntensity', fallback, 0, 3);
+}
+
+function weaponBloomSize(prefix, fallback = 1) {
+  return weaponValue(prefix, 'ProjectileBloomSize', fallback, 0.25, 4);
+}
+
 function makeWeaponConfig(type, prefix, defaults, extra = {}) {
   const projectileSize = weaponValue(prefix, 'ProjectileSize', defaults.projectileSize, 0.05, 2);
+  const projectileLength = weaponValue(prefix, 'ProjectileLength', defaults.projectileLength, 0.05, 8);
+  const projectileBloomIntensity = weaponBloomIntensity(prefix, defaults.projectileBloomIntensity ?? 1);
+  const projectileBloomSize = weaponBloomSize(prefix, defaults.projectileBloomSize ?? 1);
   return {
     type,
     fireRate: weaponValue(prefix, 'FireRate', defaults.fireRate, 0.1, 30),
@@ -127,8 +138,11 @@ function makeWeaponConfig(type, prefix, defaults, extra = {}) {
     damage: weaponValue(prefix, 'Damage', defaults.damage, 0, 1000),
     hitRadius: projectileSize,
     projectileSize,
+    projectileLength,
     projectileColor: weaponColor(prefix, defaults.projectileColor),
     projectileBloom: weaponBloom(prefix, defaults.projectileBloom),
+    projectileBloomIntensity,
+    projectileBloomSize,
     pellets: 1,
     spread: weaponValue(prefix, 'Spread', defaults.spread, 0, 1),
     visual: defaults.visual,
@@ -156,21 +170,21 @@ function getSelectedWeaponType() {
 function getWeaponConfig(type = getSelectedWeaponType()) {
   switch (type) {
     case 'pistol':
-      return makeWeaponConfig('pistol', 'Pistol', { fireRate: 3.6, speed: 70, range: 55, damage: 24, spread: 0.01, projectileSize: 0.28, projectileColor: '#d8dde6', projectileBloom: false, visual: 'solid' });
+      return makeWeaponConfig('pistol', 'Pistol', { fireRate: 3.6, speed: 70, range: 55, damage: 24, spread: 0.01, projectileSize: 0.28, projectileLength: 0.65, projectileBloomIntensity: 1, projectileBloomSize: 1, projectileColor: '#d8dde6', projectileBloom: false, visual: 'solid' });
     case 'shotgun': {
-      const cfg = makeWeaponConfig('shotgun', 'Shotgun', { fireRate: 1.15, speed: 60, range: 28, damage: 12, spread: 0.16, projectileSize: 0.32, projectileColor: '#d8dde6', projectileBloom: false, visual: 'solid' });
+      const cfg = makeWeaponConfig('shotgun', 'Shotgun', { fireRate: 1.15, speed: 60, range: 28, damage: 12, spread: 0.16, projectileSize: 0.32, projectileLength: 0.75, projectileBloomIntensity: 1, projectileBloomSize: 1, projectileColor: '#d8dde6', projectileBloom: false, visual: 'solid' });
       cfg.pellets = Math.max(1, Math.min(24, Math.round(Number(state.params.weaponShotgunPellets) || 8)));
       return cfg;
     }
     case 'sniperRifle':
-      return makeWeaponConfig('sniperRifle', 'Sniper', { fireRate: 0.65, speed: 130, range: 180, damage: 120, spread: 0.002, projectileSize: 0.24, projectileColor: '#d975ff', projectileBloom: true, visual: 'laser' });
+      return makeWeaponConfig('sniperRifle', 'Sniper', { fireRate: 0.65, speed: 130, range: 180, damage: 120, spread: 0.002, projectileSize: 0.24, projectileLength: 0.56, projectileBloomIntensity: 1, projectileBloomSize: 1, projectileColor: '#d975ff', projectileBloom: true, visual: 'laser' });
     case 'grenades': {
-      const cfg = makeWeaponConfig('grenades', 'Grenade', { fireRate: 0.72, speed: 16, range: 60, damage: 95, spread: 0.01, projectileSize: 0.25, projectileColor: '#ff8844', projectileBloom: false, visual: 'grenade' }, { ballistic: true, explosive: true, fuse: 2.2 });
+      const cfg = makeWeaponConfig('grenades', 'Grenade', { fireRate: 0.72, speed: 16, range: 60, damage: 95, spread: 0.01, projectileSize: 0.25, projectileLength: 0.27, projectileBloomIntensity: 1, projectileBloomSize: 1, projectileColor: '#ff8844', projectileBloom: false, visual: 'grenade' }, { ballistic: true, explosive: true, fuse: 2.2 });
       cfg.radius = weaponValue('Grenade', 'Radius', 5, 0.5, 50);
       return cfg;
     }
     case 'rocketLauncher': {
-      const cfg = makeWeaponConfig('rocketLauncher', 'Rocket', { fireRate: 0.68, speed: 34, range: 95, damage: 130, spread: 0.004, projectileSize: 0.42, projectileColor: '#ff3333', projectileBloom: true, visual: 'rocket' }, { explosive: true, fuse: 4.0 });
+      const cfg = makeWeaponConfig('rocketLauncher', 'Rocket', { fireRate: 0.68, speed: 34, range: 95, damage: 130, spread: 0.004, projectileSize: 0.42, projectileLength: 1.33, projectileBloomIntensity: 1, projectileBloomSize: 1, projectileColor: '#ff3333', projectileBloom: true, visual: 'rocket' }, { explosive: true, fuse: 4.0 });
       cfg.radius = weaponValue('Rocket', 'Radius', 6, 0.5, 60);
       return cfg;
     }
@@ -183,6 +197,9 @@ function getWeaponConfig(type = getSelectedWeaponType()) {
         damage: 34,
         spread: 0.003,
         projectileSize: 0.36,
+        projectileLength: 0.84,
+        projectileBloomIntensity: 1,
+        projectileBloomSize: 1,
         projectileColor: state.params.laserBloomColor || '#ff1100',
         projectileBloom: state.params.laserBloom !== false,
         visual: 'laser',
@@ -197,10 +214,14 @@ function createProjectileVisual(config) {
   const projectileColor = new THREE.Color(config.projectileColor || '#ffffff');
   const baseMat = config.visual === 'laser' ? _laserCoreMat : config.visual === 'grenade' ? _grenadeMat : _solidProjectileMat;
   const coreMat = baseMat.clone();
+  const bloomIntensityValue = Number(config.projectileBloomIntensity);
+  const bloomSizeValue = Number(config.projectileBloomSize);
+  const bloomIntensity = clamp(Number.isFinite(bloomIntensityValue) ? bloomIntensityValue : 1, 0, 3);
+  const bloomSize = clamp(Number.isFinite(bloomSizeValue) ? bloomSizeValue : 1, 0.25, 4);
   coreMat.color?.copy?.(projectileColor);
   if (coreMat.emissive) {
     coreMat.emissive.copy(projectileColor);
-    coreMat.emissiveIntensity = config.projectileBloom ? 0.55 : Math.min(coreMat.emissiveIntensity ?? 0.08, 0.08);
+    coreMat.emissiveIntensity = config.projectileBloom ? 0.55 * bloomIntensity : Math.min(coreMat.emissiveIntensity ?? 0.08, 0.08);
   }
 
   let core;
@@ -217,6 +238,11 @@ function createProjectileVisual(config) {
   group.add(core);
 
   const sizeScale = clamp((Number(config.projectileSize) || 0.3) / 0.3, 0.15, 4);
+  const baseLength = config.visual === 'rocket' ? 0.95 : config.visual === 'grenade' ? 0.32 : 0.7;
+  const fallbackLength = baseLength * sizeScale;
+  const desiredLength = clamp(Number(config.projectileLength) || fallbackLength, 0.05, 8);
+  const lengthScale = clamp(desiredLength / Math.max(0.001, fallbackLength), 0.1, 12);
+  core.scale.y = lengthScale;
   group.scale.setScalar(sizeScale);
 
   let glow = null;
@@ -224,10 +250,12 @@ function createProjectileVisual(config) {
   if (config.projectileBloom) {
     glowMat = _laserGlowMat.clone();
     glowMat.color.copy(projectileColor);
-    glowMat.opacity = clamp(0.55 * getOverallBloomFactor(), 0, 3);
+    glowMat.opacity = clamp(0.55 * bloomIntensity * getOverallBloomFactor(), 0, 3);
     glow = new THREE.Mesh(config.visual === 'rocket' ? _rocketGeo : config.visual === 'grenade' ? _grenadeGeo : _projectileGeo, glowMat);
     glow.name = 'ProjectileGlow';
-    glow.scale.set(config.visual === 'rocket' ? 1.45 : 1.85, config.visual === 'rocket' ? 1.08 : 1.18, config.visual === 'rocket' ? 1.45 : 1.85);
+    const glowScaleX = config.visual === 'rocket' ? 1.45 : 1.85;
+    const glowScaleY = config.visual === 'rocket' ? 1.08 : 1.18;
+    glow.scale.set(glowScaleX * bloomSize, glowScaleY * bloomSize * lengthScale, glowScaleX * bloomSize);
     glow.castShadow = false;
     glow.receiveShadow = false;
     group.add(glow);
@@ -402,7 +430,7 @@ function createProjectile(config, dir) {
   visual.group.position.copy(_spawnPos);
   _tmpQuat.setFromUnitVectors(_up, dir);
   visual.group.quaternion.copy(_tmpQuat);
-  if (visual.glow) visual.glow.visible = !!state.params.laserBloom;
+  if (visual.glow) visual.glow.visible = config.projectileBloom !== false;
 
   if (config.ballistic) {
     _velocity.copy(dir).multiplyScalar(config.speed);
