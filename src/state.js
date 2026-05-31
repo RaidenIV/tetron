@@ -484,7 +484,6 @@ export const state = {
       "enemyAwarenessRange": 40,
       "allyAwarenessRange": 40
 }
-},
 };
 
 // Snapshot taken at startup — used by Reset button
