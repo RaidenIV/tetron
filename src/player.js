@@ -138,7 +138,7 @@ function getPlayerWeaponSpec(type = getPlayerWeaponType()) {
       return { kind: 'cylinder', width: 0.28, height: 0.28, length: 1.35, grip: 0.2 };
     case 'rifle':
     default:
-      return { kind: 'box', width: 0.16, height: 0.12, length: 1.5, grip: 0.16 };
+      return { kind: 'box', width: 0.08, height: 0.18, length: 1.5, grip: 0.16 };
   }
 }
 
@@ -201,7 +201,7 @@ function updatePlayerWeaponVisual() {
   const forwardZ = -Math.cos(az);
   const rightX = Math.cos(az);
   const rightZ = -Math.sin(az);
-  const weaponSideGap = type === 'rifle' ? 0.21 : (type === 'grenades' ? 0.22 : 0.42);
+  const weaponSideGap = type === 'rifle' ? 0.105 : (type === 'grenades' ? 0.22 : 0.42);
   const rightOffset = radius + weaponSideGap;
   const forwardOffset = type === 'grenades' ? 0.02 : 0.12;
 
