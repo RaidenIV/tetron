@@ -78,6 +78,16 @@ let _enemyGruntEl = null;
 const _corpseBox = new THREE.Box3();
 const _splashVec = new THREE.Vector3();
 
+// Same rectangular rifle proportions used by the player rifle visual. NPC rifles
+// are shown only while that NPC's effective weapon is set to laser.
+const NPC_RIFLE = Object.freeze({ width: 0.08, height: 0.18, length: 1.5, grip: 0.16, sideGap: 0.105, forwardOffset: 0.12 });
+const _npcRifleGeo = new THREE.BoxGeometry(NPC_RIFLE.width, NPC_RIFLE.height, NPC_RIFLE.length);
+const _npcRifleMat = new THREE.MeshStandardMaterial({
+  color: 0x20242b,
+  metalness: 0.55,
+  roughness: 0.38,
+});
+
 function playEnemyGruntSound(sourcePosition = null) {
   const fallback = Number(state.params.soundSfx_standard_hit ?? 1);
   const volume = getSfxVolume('soundSfx_enemy_grunt', fallback, sourcePosition);
@@ -572,21 +582,26 @@ function makeTagMarker(enemy) {
 
 
 function makeNpcHealthBar(npc) {
+  const teamColor = npc.isAlly ? '#35ff00' : '#ff3030';
+  const trackColor = npc.isAlly ? 'rgba(77,255,99,0.18)' : 'rgba(255,48,48,0.18)';
+
   const el = document.createElement('div');
-  el.className = 'npc-health-bar';
+  el.className = 'npc-health-bar game-hud-track';
   el.style.cssText = [
-    'width:46px', 'height:6px', 'box-sizing:border-box',
-    'padding:1px', 'border:1px solid rgba(255,255,255,0.78)',
-    'background:rgba(0,0,0,0.72)', 'border-radius:0px',
-    'box-shadow:0 1px 5px rgba(0,0,0,0.65)',
-    'pointer-events:none', 'display:flex', 'align-items:stretch',
+    'width:92px', 'height:10px', 'box-sizing:border-box',
+    `background:${trackColor}`,
+    'border:none', 'border-radius:3px', 'overflow:hidden',
+    'pointer-events:none', 'display:block', 'margin-top:0',
+    'box-shadow:0 0 0 1px rgba(0,0,0,0.95), 1px 2px 4px rgba(0,0,0,0.9)',
+    'filter:drop-shadow(0 0 3px rgba(0,0,0,0.95))',
   ].join(';');
 
   const fill = document.createElement('div');
-  fill.className = 'npc-health-bar-fill';
+  fill.className = 'npc-health-bar-fill game-hud-fill';
   fill.style.cssText = [
-    'height:100%', 'width:100%', 'background:#ff3030',
-    'transition:width 0.08s linear', 'border-radius:0px',
+    'display:block', 'height:100%', 'width:100%',
+    `background:${teamColor}`, 'border-radius:inherit',
+    'box-shadow:none', 'transition:width 0.08s linear',
   ].join(';');
   el.appendChild(fill);
 
@@ -605,14 +620,57 @@ function makeNpcHealthBar(npc) {
 function updateNpcHealthBar(npc) {
   if (!npc?._healthBarEl || !npc._healthBarFill) return;
   const enabled = state.params.hudVisible !== false && state.params.hudNpcHealthBars !== false;
-  npc._healthBarEl.style.display = enabled ? 'flex' : 'none';
+  npc._healthBarEl.style.display = enabled ? 'block' : 'none';
   if (!enabled) return;
 
   const ratio = clamp((Number(npc.hp) || 0) / Math.max(1, Number(npc.maxHp) || 1), 0, 1);
+  const teamColor = npc.isAlly ? '#35ff00' : '#ff3030';
+  const trackColor = npc.isAlly ? 'rgba(77,255,99,0.18)' : 'rgba(255,48,48,0.18)';
+  npc._healthBarEl.style.background = trackColor;
   npc._healthBarFill.style.width = `${ratio * 100}%`;
-  npc._healthBarFill.style.background = npc.isAlly ? '#35ff00' : '#ff3030';
+  npc._healthBarFill.style.background = teamColor;
   npc._healthBarEl.style.opacity = ratio > 0 ? '1' : '0';
 }
+
+function makeNpcRifleVisual(npc) {
+  const weaponGroup = new THREE.Group();
+  weaponGroup.name = npc.isAlly ? 'AllyWeapon_Rifle_RightHand' : 'EnemyWeapon_Rifle_RightHand';
+
+  const rifle = new THREE.Mesh(_npcRifleGeo, _npcRifleMat);
+  rifle.name = npc.isAlly ? 'AllyRifle' : 'EnemyRifle';
+  rifle.castShadow = true;
+  rifle.receiveShadow = true;
+  rifle.position.z = NPC_RIFLE.length * 0.5 - NPC_RIFLE.grip;
+  weaponGroup.add(rifle);
+
+  const muzzle = new THREE.Object3D();
+  muzzle.name = npc.isAlly ? 'AllyRifleMuzzle' : 'EnemyRifleMuzzle';
+  muzzle.position.set(0, 0, NPC_RIFLE.length - NPC_RIFLE.grip);
+  weaponGroup.add(muzzle);
+
+  npc.group.add(weaponGroup);
+  npc._weaponGroup = weaponGroup;
+  npc._weaponMuzzle = muzzle;
+  updateNpcWeaponVisual(npc);
+}
+
+function updateNpcWeaponVisual(npc) {
+  if (!npc?._weaponGroup) return;
+  const weapon = getEffectiveWeapon(npc);
+  const visible = weapon === 'laser';
+  npc._weaponGroup.visible = visible;
+  if (!visible) return;
+
+  const radius = Math.max(0.25, Number(npc.radius) || BASE_RADIUS);
+  const bodyLength = Math.max(0.5, BASE_LENGTH * (Number(npc.sizeMult) || 1));
+  npc._weaponGroup.position.set(
+    radius + NPC_RIFLE.sideGap,
+    radius + bodyLength * 0.56,
+    NPC_RIFLE.forwardOffset,
+  );
+  npc._weaponGroup.rotation.set(0, 0, 0);
+}
+
 
 // Call from loop.js when dwell threshold is reached
 export function tagEnemy(enemy) {
@@ -689,6 +747,7 @@ function makeEnemy(type, position, index = 0, options = {}) {
   };
   if (!enemy.isAlly) makeTagMarker(enemy);
   makeNpcHealthBar(enemy);
+  makeNpcRifleVisual(enemy);
   return enemy;
 }
 
@@ -1390,8 +1449,13 @@ function fireEnemyBullet(enemy, targetNpc = null) {
   const color = weapon === 'sniper' ? 0xd975ff : weapon === 'laser' ? 0xff3333 : enemy.def.projectileColor;
   const mesh = new THREE.Mesh(_enemyBulletGeo, getBulletMaterial(color));
   mesh.name = enemy.isAlly ? 'AllyProjectile' : 'EnemyProjectile';
-  mesh.position.copy(enemy.group.position);
-  mesh.position.y = enemy.mesh.position.y;
+  if (weapon === 'laser' && enemy._weaponMuzzle) {
+    updateNpcWeaponVisual(enemy);
+    enemy._weaponMuzzle.getWorldPosition(mesh.position);
+  } else {
+    mesh.position.copy(enemy.group.position);
+    mesh.position.y = enemy.mesh.position.y;
+  }
 
   const targetPosition = targetNpc?.group?.position || playerGroup.position;
   const targetY = targetNpc?.mesh?.position?.y ?? Math.max(0.6, Number(state.params.playerRadius) || 0.4);
@@ -1570,6 +1634,7 @@ function updateAllyMovement(ally, delta, elapsedTime, index, target = null) {
     ally.material.emissive.set(ally.def.color);
     ally.material.emissiveIntensity = 0.06;
   }
+  updateNpcWeaponVisual(ally);
   updateNpcHealthBar(ally);
 }
 
@@ -1614,6 +1679,7 @@ export function updateEnemies(delta, elapsedTime = 0) {
       enemy.material.emissive.set(enemy.def.color);
       enemy.material.emissiveIntensity = 0.06;
     }
+    updateNpcWeaponVisual(enemy);
     updateNpcHealthBar(enemy);
   }
 
