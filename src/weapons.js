@@ -89,11 +89,58 @@ function getOverallBloomFactor() {
   return clamp(Number.isFinite(raw) ? raw : 1, 0, 4);
 }
 
-function applyLaserMaterials() {
+function hexColor(value, fallback = '#ffffff') {
+  const color = typeof value === 'string' && value.trim() ? value : fallback;
+  return /^#[0-9a-f]{6}$/i.test(color) ? color : fallback;
+}
+
+function boolParam(value, fallback = false) {
+  if (value === true || value === false) return value;
+  return fallback;
+}
+
+function numParam(value, fallback, min = -Infinity, max = Infinity) {
+  const numeric = Number(value);
+  const resolved = Number.isFinite(numeric) ? numeric : fallback;
+  return clamp(resolved, min, max);
+}
+
+function weaponValue(prefix, field, fallback, min = -Infinity, max = Infinity) {
+  return numParam(state.params[`weapon${prefix}${field}`], fallback, min, max);
+}
+
+function weaponColor(prefix, fallback) {
+  return hexColor(state.params[`weapon${prefix}ProjectileColor`], fallback);
+}
+
+function weaponBloom(prefix, fallback = false) {
+  return boolParam(state.params[`weapon${prefix}ProjectileBloom`], fallback);
+}
+
+function makeWeaponConfig(type, prefix, defaults, extra = {}) {
+  const projectileSize = weaponValue(prefix, 'ProjectileSize', defaults.projectileSize, 0.05, 2);
+  return {
+    type,
+    fireRate: weaponValue(prefix, 'FireRate', defaults.fireRate, 0.1, 30),
+    speed: weaponValue(prefix, 'ProjectileSpeed', defaults.speed, 1, 250),
+    range: weaponValue(prefix, 'Range', defaults.range, 1, 500),
+    damage: weaponValue(prefix, 'Damage', defaults.damage, 0, 1000),
+    hitRadius: projectileSize,
+    projectileSize,
+    projectileColor: weaponColor(prefix, defaults.projectileColor),
+    projectileBloom: weaponBloom(prefix, defaults.projectileBloom),
+    pellets: 1,
+    spread: weaponValue(prefix, 'Spread', defaults.spread, 0, 1),
+    visual: defaults.visual,
+    ...extra,
+  };
+}
+
+function applyLaserMaterials(config = null) {
   const p = state.params;
   const bloomIntensity = Number(p.laserBloomIntensity);
-  _laserGlowMat.color.set(p.laserBloomColor || '#ff1100');
-  _laserGlowMat.opacity = p.laserBloom
+  _laserGlowMat.color.set(config?.projectileColor || p.laserBloomColor || '#ff1100');
+  _laserGlowMat.opacity = (config ? config.projectileBloom !== false : p.laserBloom)
     ? clamp((Number.isFinite(bloomIntensity) ? bloomIntensity : 0.55) * getOverallBloomFactor(), 0, 3)
     : 0;
   _laserGlowMat.needsUpdate = true;
@@ -107,21 +154,39 @@ function getSelectedWeaponType() {
 }
 
 function getWeaponConfig(type = getSelectedWeaponType()) {
-  const p = state.params;
   switch (type) {
     case 'pistol':
-      return { type, fireRate: 3.6, speed: 70, range: 55, damage: Number(p.weaponPistolDamage) || 24, hitRadius: 0.28, pellets: 1, spread: 0.01, visual: 'solid' };
-    case 'shotgun':
-      return { type, fireRate: 1.15, speed: 60, range: 28, damage: Number(p.weaponShotgunDamage) || 12, hitRadius: 0.32, pellets: Math.round(Number(p.weaponShotgunPellets) || 8), spread: Number(p.weaponShotgunSpread) || 0.16, visual: 'solid' };
+      return makeWeaponConfig('pistol', 'Pistol', { fireRate: 3.6, speed: 70, range: 55, damage: 24, spread: 0.01, projectileSize: 0.28, projectileColor: '#d8dde6', projectileBloom: false, visual: 'solid' });
+    case 'shotgun': {
+      const cfg = makeWeaponConfig('shotgun', 'Shotgun', { fireRate: 1.15, speed: 60, range: 28, damage: 12, spread: 0.16, projectileSize: 0.32, projectileColor: '#d8dde6', projectileBloom: false, visual: 'solid' });
+      cfg.pellets = Math.max(1, Math.min(24, Math.round(Number(state.params.weaponShotgunPellets) || 8)));
+      return cfg;
+    }
     case 'sniperRifle':
-      return { type, fireRate: 0.65, speed: 130, range: 180, damage: Number(p.weaponSniperDamage) || 120, hitRadius: 0.24, pellets: 1, spread: 0.002, visual: 'laser' };
-    case 'grenades':
-      return { type, fireRate: 0.72, speed: 16, range: 60, damage: Number(p.weaponGrenadeDamage) || 95, radius: Number(p.weaponGrenadeRadius) || 5, hitRadius: 0.25, pellets: 1, spread: 0.01, visual: 'grenade', ballistic: true, explosive: true, fuse: 2.2 };
-    case 'rocketLauncher':
-      return { type, fireRate: 0.68, speed: 34, range: 95, damage: Number(p.weaponRocketDamage) || 130, radius: Number(p.weaponRocketRadius) || 6, hitRadius: 0.42, pellets: 1, spread: 0.004, visual: 'rocket', explosive: true, fuse: 4.0 };
+      return makeWeaponConfig('sniperRifle', 'Sniper', { fireRate: 0.65, speed: 130, range: 180, damage: 120, spread: 0.002, projectileSize: 0.24, projectileColor: '#d975ff', projectileBloom: true, visual: 'laser' });
+    case 'grenades': {
+      const cfg = makeWeaponConfig('grenades', 'Grenade', { fireRate: 0.72, speed: 16, range: 60, damage: 95, spread: 0.01, projectileSize: 0.25, projectileColor: '#ff8844', projectileBloom: false, visual: 'grenade' }, { ballistic: true, explosive: true, fuse: 2.2 });
+      cfg.radius = weaponValue('Grenade', 'Radius', 5, 0.5, 50);
+      return cfg;
+    }
+    case 'rocketLauncher': {
+      const cfg = makeWeaponConfig('rocketLauncher', 'Rocket', { fireRate: 0.68, speed: 34, range: 95, damage: 130, spread: 0.004, projectileSize: 0.42, projectileColor: '#ff3333', projectileBloom: true, visual: 'rocket' }, { explosive: true, fuse: 4.0 });
+      cfg.radius = weaponValue('Rocket', 'Radius', 6, 0.5, 60);
+      return cfg;
+    }
     case 'rifle':
     default:
-      return { type: 'rifle', fireRate: Math.max(0.1, Number(p.laserFireRate) || 5), speed: Math.max(1, Number(p.laserProjectileSpeed) || 80), range: Math.max(1, Number(p.laserRange) || 42), damage: Number(p.weaponRifleDamage) || 34, hitRadius: 0.36, pellets: 1, spread: 0.003, visual: 'laser' };
+      return makeWeaponConfig('rifle', 'Rifle', {
+        fireRate: Math.max(0.1, Number(state.params.laserFireRate) || 5),
+        speed: Math.max(1, Number(state.params.laserProjectileSpeed) || 80),
+        range: Math.max(1, Number(state.params.laserRange) || 42),
+        damage: 34,
+        spread: 0.003,
+        projectileSize: 0.36,
+        projectileColor: state.params.laserBloomColor || '#ff1100',
+        projectileBloom: state.params.laserBloom !== false,
+        visual: 'laser',
+      });
   }
 }
 
@@ -129,22 +194,38 @@ function createProjectileVisual(config) {
   const group = new THREE.Group();
   group.name = `PlayerProjectile_${config.type}`;
 
+  const projectileColor = new THREE.Color(config.projectileColor || '#ffffff');
+  const baseMat = config.visual === 'laser' ? _laserCoreMat : config.visual === 'grenade' ? _grenadeMat : _solidProjectileMat;
+  const coreMat = baseMat.clone();
+  coreMat.color?.copy?.(projectileColor);
+  if (coreMat.emissive) {
+    coreMat.emissive.copy(projectileColor);
+    coreMat.emissiveIntensity = config.projectileBloom ? 0.55 : Math.min(coreMat.emissiveIntensity ?? 0.08, 0.08);
+  }
+
   let core;
   if (config.visual === 'grenade') {
-    core = new THREE.Mesh(_grenadeGeo, _grenadeMat);
+    core = new THREE.Mesh(_grenadeGeo, coreMat);
   } else if (config.visual === 'rocket') {
-    core = new THREE.Mesh(_rocketGeo, _solidProjectileMat);
+    core = new THREE.Mesh(_rocketGeo, coreMat);
   } else {
-    core = new THREE.Mesh(_projectileGeo, config.visual === 'laser' ? _laserCoreMat : _solidProjectileMat);
+    core = new THREE.Mesh(_projectileGeo, coreMat);
   }
   core.name = 'ProjectileCore';
   core.castShadow = config.visual !== 'laser';
   core.receiveShadow = false;
   group.add(core);
 
+  const sizeScale = clamp((Number(config.projectileSize) || 0.3) / 0.3, 0.15, 4);
+  group.scale.setScalar(sizeScale);
+
   let glow = null;
-  if (config.visual === 'laser' || config.visual === 'rocket') {
-    glow = new THREE.Mesh(config.visual === 'rocket' ? _rocketGeo : _projectileGeo, _laserGlowMat);
+  let glowMat = null;
+  if (config.projectileBloom) {
+    glowMat = _laserGlowMat.clone();
+    glowMat.color.copy(projectileColor);
+    glowMat.opacity = clamp(0.55 * getOverallBloomFactor(), 0, 3);
+    glow = new THREE.Mesh(config.visual === 'rocket' ? _rocketGeo : config.visual === 'grenade' ? _grenadeGeo : _projectileGeo, glowMat);
     glow.name = 'ProjectileGlow';
     glow.scale.set(config.visual === 'rocket' ? 1.45 : 1.85, config.visual === 'rocket' ? 1.08 : 1.18, config.visual === 'rocket' ? 1.45 : 1.85);
     glow.castShadow = false;
@@ -153,11 +234,12 @@ function createProjectileVisual(config) {
   }
 
   scene.add(group);
-  return { group, core, glow };
+  return { group, core, glow, materials: glowMat ? [coreMat, glowMat] : [coreMat] };
 }
 
 function disposeProjectile(projectile) {
   scene.remove(projectile.visual.group);
+  projectile.visual.materials?.forEach(material => material?.dispose?.());
 }
 
 function spawnExplosionFlash(position, radius) {
@@ -371,10 +453,9 @@ function fireWeapon() {
 
 export function updateLaserProjectiles(delta, projectileDelta = delta) {
   const p = state.params;
-  applyLaserMaterials();
-  updateExplosionFlashes(delta);
-
   const config = getWeaponConfig();
+  applyLaserMaterials(config);
+  updateExplosionFlashes(delta);
   const fireRate = Math.max(0.1, Number(config.fireRate) || 1);
   const interval = 1 / fireRate;
 
@@ -406,7 +487,7 @@ export function updateLaserProjectiles(delta, projectileDelta = delta) {
       _tmpQuat.setFromUnitVectors(_up, projectile.velocity.clone().normalize());
       visual.group.quaternion.copy(_tmpQuat);
     }
-    if (visual.glow) visual.glow.visible = !!p.laserBloom;
+    if (visual.glow) visual.glow.visible = projectileConfig.projectileBloom !== false;
 
     const hitGround = projectileConfig.ballistic && projectile.age > 0.08 && visual.group.position.y <= 0.09;
     const laserThroughFloor = projectileConfig.visual === 'laser' && visual.group.position.y <= 0.02;

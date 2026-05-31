@@ -151,6 +151,7 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
 .sb-section-body { display: none; padding: 6px 10px 10px; }
 .sb-section-body.open { display: block; }
 .sb-section.open .sb-section-title { color: var(--sb-accent); }
+.sb-section.open .sb-icon { color: var(--sb-accent); }
 .sidebar.minimized .sb-section-body { display: none !important; }
 .sb-section-error { color: #ff8a8a; font-size: 11px; line-height: 1.35; padding: 6px 0; }
 
@@ -567,3 +568,43 @@ body.is-paused * {
   #instructions { bottom: 20px; }
 }
 
+
+
+.weapon-reticle-modal {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.52); backdrop-filter: blur(3px);
+}
+.weapon-reticle-card {
+  width: min(460px, calc(100vw - 40px));
+  background: #0d1117; border: 1px solid #30363d; border-radius: 14px;
+  box-shadow: 0 18px 54px rgba(0,0,0,0.52); padding: 14px;
+}
+.weapon-reticle-header {
+  display: flex; align-items: center; justify-content: space-between;
+  color: var(--sb-accent); font-size: 12px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 12px;
+}
+.weapon-reticle-close {
+  width: 28px; height: 28px; border-radius: 8px;
+  border: 1px solid #30363d; background: #161b22; color: var(--sb-muted);
+  cursor: pointer; font-size: 18px; line-height: 1;
+}
+.weapon-reticle-close:hover { color: var(--sb-accent); border-color: var(--sb-accent); }
+.weapon-reticle-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.weapon-reticle-option {
+  min-height: 84px; border: 1px solid #30363d; border-radius: 12px;
+  background: #10161f; color: var(--sb-muted); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; font-size: 10px; letter-spacing: 0.06em;
+}
+.weapon-reticle-option:hover, .weapon-reticle-option.selected {
+  color: var(--sb-accent); border-color: var(--sb-accent); background: #132033;
+}
+.reticle-picker-preview {
+  --reticle-color: currentColor; --reticle-size: 24px; --reticle-thickness: 2px;
+  --reticle-dot-size: 4px; --reticle-opacity: 1;
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; color: currentColor; opacity: var(--reticle-opacity);
+}
+.sb-reticle-picker-btn { width: 100%; justify-content: center; }

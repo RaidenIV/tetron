@@ -500,16 +500,63 @@ const PRESET_SETTINGS = [
   "destructionDestructibleParticleDespawnTime": 1,
   "overallBloomIntensity": 1.8,
   "playerWeaponType": "rifle",
-  "weaponRifleDamage": 34,
   "weaponPistolDamage": 24,
+  "weaponPistolRange": 55,
+  "weaponPistolSpread": 0.01,
+  "weaponPistolFireRate": 3.6,
+  "weaponPistolProjectileSpeed": 70,
+  "weaponPistolProjectileSize": 0.28,
+  "weaponPistolProjectileColor": "#d8dde6",
+  "weaponPistolProjectileBloom": false,
+  "weaponPistolReticleType": "dot",
+  "weaponRifleDamage": 34,
+  "weaponRifleRange": 42,
+  "weaponRifleSpread": 0.003,
+  "weaponRifleFireRate": 5,
+  "weaponRifleProjectileSpeed": 80,
+  "weaponRifleProjectileSize": 0.36,
+  "weaponRifleProjectileColor": "#ff1100",
+  "weaponRifleProjectileBloom": true,
+  "weaponRifleReticleType": "triSpoke",
   "weaponShotgunDamage": 12,
-  "weaponShotgunPellets": 8,
+  "weaponShotgunRange": 28,
   "weaponShotgunSpread": 0.16,
+  "weaponShotgunFireRate": 1.15,
+  "weaponShotgunPellets": 8,
+  "weaponShotgunProjectileSpeed": 60,
+  "weaponShotgunProjectileSize": 0.32,
+  "weaponShotgunProjectileColor": "#d8dde6",
+  "weaponShotgunProjectileBloom": false,
+  "weaponShotgunReticleType": "crossDot",
   "weaponSniperDamage": 120,
+  "weaponSniperRange": 180,
+  "weaponSniperSpread": 0.002,
+  "weaponSniperFireRate": 0.65,
+  "weaponSniperProjectileSpeed": 130,
+  "weaponSniperProjectileSize": 0.24,
+  "weaponSniperProjectileColor": "#d975ff",
+  "weaponSniperProjectileBloom": true,
+  "weaponSniperReticleType": "cross",
   "weaponGrenadeDamage": 95,
+  "weaponGrenadeRange": 60,
+  "weaponGrenadeSpread": 0.01,
+  "weaponGrenadeFireRate": 0.72,
+  "weaponGrenadeProjectileSpeed": 16,
+  "weaponGrenadeProjectileSize": 0.25,
+  "weaponGrenadeProjectileColor": "#ff8844",
+  "weaponGrenadeProjectileBloom": false,
   "weaponGrenadeRadius": 5,
+  "weaponGrenadeReticleType": "ring",
   "weaponRocketDamage": 130,
-  "weaponRocketRadius": 6
+  "weaponRocketRange": 95,
+  "weaponRocketSpread": 0.004,
+  "weaponRocketFireRate": 0.68,
+  "weaponRocketProjectileSpeed": 34,
+  "weaponRocketProjectileSize": 0.42,
+  "weaponRocketProjectileColor": "#ff3333",
+  "weaponRocketProjectileBloom": true,
+  "weaponRocketRadius": 6,
+  "weaponRocketReticleType": "ring"
 } },
   { key: 'g20', label: 'G20', path: './presets/G20.json', data: {
   "cameraMode": "third2",
@@ -4927,6 +4974,36 @@ const PLAYER_WEAPON_OPTIONS = [
 
 const NPC_WEAPON_OPTIONS = PLAYER_WEAPON_OPTIONS;
 
+const RETICLE_TYPE_OPTIONS = [
+  ['dot', 'Dot'],
+  ['cross', 'Crosshair'],
+  ['ring', 'Ring'],
+  ['crossDot', 'Cross + Dot'],
+  ['triSpoke', 'Tri-Spoke'],
+];
+
+const WEAPON_CONTROL_SPECS = [
+  { type: 'pistol', label: 'Pistol', prefix: 'Pistol', reticleDefault: 'dot' },
+  { type: 'rifle', label: 'Rifle', prefix: 'Rifle', reticleDefault: 'triSpoke' },
+  { type: 'shotgun', label: 'Shotgun', prefix: 'Shotgun', reticleDefault: 'crossDot', extra: 'pellets' },
+  { type: 'sniperRifle', label: 'Sniper Rifle', prefix: 'Sniper', reticleDefault: 'cross' },
+  { type: 'grenades', label: 'Grenades', prefix: 'Grenade', reticleDefault: 'ring', radius: true },
+  { type: 'rocketLauncher', label: 'Rocket Launcher', prefix: 'Rocket', reticleDefault: 'ring', radius: true },
+];
+
+function weaponSpecForType(type) {
+  return WEAPON_CONTROL_SPECS.find(spec => spec.type === type) || WEAPON_CONTROL_SPECS[1];
+}
+
+function weaponKey(prefix, field) {
+  return `weapon${prefix}${field}`;
+}
+
+function weaponReticleKey(spec) {
+  return weaponKey(spec.prefix, 'ReticleType');
+}
+
+
 const ENEMY_JSON_KEYS = [
   'enemyType',
   'enemyCount',
@@ -5625,60 +5702,168 @@ function buildAbilities(body) {
   body.appendChild(toggle('Double Jump', 'doubleJumpEnabled'));
 }
 
+function createManualSubsection(title, buildFn, open = false) {
+  const wrap = document.createElement('div');
+  wrap.className = 'sb-subsection';
+
+  const hdr = document.createElement('button');
+  hdr.type = 'button';
+  hdr.className = 'sb-subsection-hdr';
+  hdr.innerHTML = `<span>${title}</span><span class="arrow">${open ? '▴' : '▾'}</span>`;
+
+  const subBody = document.createElement('div');
+  subBody.className = 'sb-subsection-body';
+  subBody.classList.toggle('open', open);
+
+  hdr.addEventListener('click', () => {
+    const isOpen = subBody.classList.toggle('open');
+    hdr.querySelector('.arrow').textContent = isOpen ? '▴' : '▾';
+  });
+
+  wrap.appendChild(hdr);
+  wrap.appendChild(subBody);
+  buildFn(subBody);
+  return wrap;
+}
+
+function getReticleLabel(type) {
+  return RETICLE_TYPE_OPTIONS.find(([key]) => key === type)?.[1] || 'Dot';
+}
+
+function syncReticleToCurrentWeapon() {
+  const spec = weaponSpecForType(state.params.playerWeaponType);
+  const key = weaponReticleKey(spec);
+  const reticleType = RETICLE_MARKUP[state.params[key]] ? state.params[key] : spec.reticleDefault;
+  state.params[key] = reticleType;
+  state.params.reticleType = reticleType;
+  return reticleType;
+}
+
+function makeReticlePreview(type) {
+  const preview = document.createElement('span');
+  preview.className = 'reticle-picker-preview';
+  preview.dataset.reticleType = type;
+  preview.innerHTML = RETICLE_MARKUP[type] || RETICLE_MARKUP.dot;
+  return preview;
+}
+
+function openWeaponReticleModal(spec, triggerButton = null) {
+  const modal = document.createElement('div');
+  modal.className = 'weapon-reticle-modal';
+
+  const card = document.createElement('div');
+  card.className = 'weapon-reticle-card';
+
+  const header = document.createElement('div');
+  header.className = 'weapon-reticle-header';
+  const title = document.createElement('div');
+  title.textContent = `${spec.label} Reticle`;
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'weapon-reticle-close';
+  close.textContent = '×';
+  header.appendChild(title);
+  header.appendChild(close);
+  card.appendChild(header);
+
+  const grid = document.createElement('div');
+  grid.className = 'weapon-reticle-grid';
+  const key = weaponReticleKey(spec);
+  const current = RETICLE_MARKUP[state.params[key]] ? state.params[key] : spec.reticleDefault;
+
+  RETICLE_TYPE_OPTIONS.forEach(([type, label]) => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'weapon-reticle-option';
+    option.classList.toggle('selected', type === current);
+    option.appendChild(makeReticlePreview(type));
+    const text = document.createElement('span');
+    text.textContent = label;
+    option.appendChild(text);
+    option.addEventListener('click', () => {
+      state.params[key] = type;
+      if (state.params.playerWeaponType === spec.type) {
+        syncReticleToCurrentWeapon();
+        applyReticleSettings();
+      }
+      if (triggerButton) triggerButton.textContent = getReticleLabel(type);
+      document.body.removeChild(modal);
+    });
+    grid.appendChild(option);
+  });
+
+  card.appendChild(grid);
+  modal.appendChild(card);
+  const closeModal = () => { if (modal.parentNode) document.body.removeChild(modal); };
+  close.addEventListener('click', closeModal);
+  modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
+  document.body.appendChild(modal);
+}
+
+function reticlePickerRow(spec) {
+  const key = weaponReticleKey(spec);
+  if (!RETICLE_MARKUP[state.params[key]]) state.params[key] = spec.reticleDefault;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'sb-btn sb-reticle-picker-btn';
+  button.textContent = getReticleLabel(state.params[key]);
+  button.addEventListener('click', () => openWeaponReticleModal(spec, button));
+  return row('Reticle', button);
+}
+
+function buildWeaponControls(body, spec) {
+  const prefix = spec.prefix;
+  body.appendChild(slider({ key: weaponKey(prefix, 'Damage'), label: 'Damage', min: 0, max: 1000, step: 1, dec: 0 }));
+  body.appendChild(slider({ key: weaponKey(prefix, 'Range'), label: 'Range', min: 1, max: 500, step: 1, dec: 0 }));
+  body.appendChild(slider({ key: weaponKey(prefix, 'Spread'), label: 'Spread', min: 0, max: 1, step: 0.001, dec: 3 }));
+  body.appendChild(slider({ key: weaponKey(prefix, 'FireRate'), label: 'Fire Rate', min: 0.1, max: 30, step: 0.1, dec: 1 }));
+  if (spec.extra === 'pellets') {
+    body.appendChild(slider({ key: 'weaponShotgunPellets', label: 'Pellets', min: 1, max: 24, step: 1, dec: 0 }));
+  }
+  if (spec.radius) {
+    body.appendChild(slider({ key: weaponKey(prefix, 'Radius'), label: 'Radius', min: 0.5, max: 60, step: 0.5, dec: 1 }));
+  }
+  body.appendChild(reticlePickerRow(spec));
+
+  body.appendChild(createManualSubsection('Projectile', projectileBody => {
+    projectileBody.appendChild(slider({ key: weaponKey(prefix, 'ProjectileSpeed'), label: 'Projectile Speed', min: 1, max: 250, step: 1, dec: 0 }));
+    projectileBody.appendChild(slider({ key: weaponKey(prefix, 'ProjectileSize'), label: 'Size', min: 0.05, max: 2, step: 0.01, dec: 2 }));
+    projectileBody.appendChild(colorPicker('Color', weaponKey(prefix, 'ProjectileColor')));
+    projectileBody.appendChild(toggle('Bloom', weaponKey(prefix, 'ProjectileBloom')));
+  }, false));
+}
+
 function buildWeapons(body) {
-  body.appendChild(subhdr('Player Weapon'));
-  body.appendChild(select('Player Weapon', 'playerWeaponType', PLAYER_WEAPON_OPTIONS, () => applyPlayerWeaponSettings()));
-  body.appendChild(slider({ key: 'weaponRifleDamage', label: 'Rifle Damage', min: 1, max: 250, step: 1, dec: 0 }));
-  body.appendChild(slider({ key: 'weaponPistolDamage', label: 'Pistol Damage', min: 1, max: 250, step: 1, dec: 0 }));
-  body.appendChild(slider({ key: 'weaponShotgunDamage', label: 'Shotgun Pellet Damage', min: 1, max: 100, step: 1, dec: 0 }));
-  body.appendChild(slider({ key: 'weaponShotgunPellets', label: 'Shotgun Pellets', min: 1, max: 24, step: 1, dec: 0 }));
-  body.appendChild(slider({ key: 'weaponShotgunSpread', label: 'Shotgun Spread', min: 0.01, max: 0.45, step: 0.01, dec: 2 }));
-  body.appendChild(slider({ key: 'weaponSniperDamage', label: 'Sniper Damage', min: 1, max: 500, step: 1, dec: 0 }));
-  body.appendChild(slider({ key: 'weaponGrenadeDamage', label: 'Grenade Damage', min: 1, max: 500, step: 1, dec: 0 }));
-  body.appendChild(slider({ key: 'weaponGrenadeRadius', label: 'Grenade Radius', min: 0.5, max: 20, step: 0.5, dec: 1 }));
-  body.appendChild(slider({ key: 'weaponRocketDamage', label: 'Rocket Damage', min: 1, max: 500, step: 1, dec: 0 }));
-  body.appendChild(slider({ key: 'weaponRocketRadius', label: 'Rocket Radius', min: 0.5, max: 24, step: 0.5, dec: 1 }));
+  body.appendChild(createManualSubsection('Current Weapon', currentBody => {
+    currentBody.appendChild(toggle('Weapons Enabled', 'laserEnabled'));
+    currentBody.appendChild(select('Player Weapon', 'playerWeaponType', PLAYER_WEAPON_OPTIONS, () => {
+      applyPlayerWeaponSettings();
+      syncReticleToCurrentWeapon();
+      applyReticleSettings();
+    }));
+  }, true));
 
-  body.appendChild(subhdr('Reticle'));
-  body.appendChild(toggle('Show Reticle', 'reticleVisible', () => applyReticleSettings()));
-  body.appendChild(select('Type', 'reticleType', [
-    ['dot', 'Dot'],
-    ['cross', 'Crosshair'],
-    ['ring', 'Ring'],
-    ['crossDot', 'Cross + Dot'],
-    ['triSpoke', 'Tri-Spoke'],
-  ], () => applyReticleSettings()));
-  body.appendChild(colorPicker('Color', 'reticleColor', () => applyReticleSettings()));
-  body.appendChild(slider({
-    key: 'reticleSize', label: 'Size', min: 2, max: 48, step: 1, dec: 0,
-    onChange: () => applyReticleSettings(),
-  }));
-  body.appendChild(slider({
-    key: 'reticleThickness', label: 'Thickness', min: 1, max: 8, step: 1, dec: 0,
-    onChange: () => applyReticleSettings(),
-  }));
-  body.appendChild(slider({
-    key: 'reticleOpacity', label: 'Opacity', min: 0.1, max: 1, step: 0.05, dec: 2,
-    onChange: () => applyReticleSettings(),
-  }));
-  body.appendChild(toggle('Glow', 'reticleGlow', () => applyReticleSettings()));
+  WEAPON_CONTROL_SPECS.forEach(spec => {
+    body.appendChild(createManualSubsection(spec.label, sectionBody => buildWeaponControls(sectionBody, spec), spec.type === state.params.playerWeaponType));
+  });
 
-  body.appendChild(subhdr('Laser Gun'));
-  body.appendChild(toggle('Laser Enabled', 'laserEnabled'));
-  body.appendChild(toggle('Bloom', 'laserBloom'));
-  body.appendChild(colorPicker('Bloom Color', 'laserBloomColor'));
-  body.appendChild(slider({
-    key: 'laserBloomIntensity', label: 'Bloom Intensity', min: 0, max: 1, step: 0.05, dec: 2,
-  }));
-  body.appendChild(slider({
-    key: 'laserProjectileSpeed', label: 'Projectile Speed', min: 1, max: 80, step: 1, dec: 0,
-  }));
-  body.appendChild(slider({
-    key: 'laserRange', label: 'Range', min: 2, max: 160, step: 1, dec: 0,
-  }));
-  body.appendChild(slider({
-    key: 'laserFireRate', label: 'Fire Rate', min: 0.5, max: 20, step: 0.5, dec: 1,
-  }));
+  body.appendChild(createManualSubsection('Reticle Display', reticleBody => {
+    reticleBody.appendChild(toggle('Show Reticle', 'reticleVisible', () => applyReticleSettings()));
+    reticleBody.appendChild(colorPicker('Color', 'reticleColor', () => applyReticleSettings()));
+    reticleBody.appendChild(slider({
+      key: 'reticleSize', label: 'Size', min: 2, max: 48, step: 1, dec: 0,
+      onChange: () => applyReticleSettings(),
+    }));
+    reticleBody.appendChild(slider({
+      key: 'reticleThickness', label: 'Thickness', min: 1, max: 8, step: 1, dec: 0,
+      onChange: () => applyReticleSettings(),
+    }));
+    reticleBody.appendChild(slider({
+      key: 'reticleOpacity', label: 'Opacity', min: 0.1, max: 1, step: 0.05, dec: 2,
+      onChange: () => applyReticleSettings(),
+    }));
+    reticleBody.appendChild(toggle('Glow', 'reticleGlow', () => applyReticleSettings()));
+  }, false));
 }
 
 // Ambience audio element — created once, persists across panel rebuilds.
@@ -6039,11 +6224,37 @@ function buildExportImport(container) {
 }
 
 function applyParamObject(params) {
+  const incoming = params || {};
   Object.assign(
     state.params,
     JSON.parse(JSON.stringify(defaultParams)),
-    params || {}
+    incoming
   );
+
+  // Older JSON files only had one global reticleType. Preserve that import by
+  // copying it to the selected weapon's reticle when no per-weapon reticle keys
+  // are present in the imported object.
+  if (!Object.prototype.hasOwnProperty.call(incoming, 'weaponRifleRange') && Object.prototype.hasOwnProperty.call(incoming, 'laserRange')) {
+    state.params.weaponRifleRange = incoming.laserRange;
+  }
+  if (!Object.prototype.hasOwnProperty.call(incoming, 'weaponRifleFireRate') && Object.prototype.hasOwnProperty.call(incoming, 'laserFireRate')) {
+    state.params.weaponRifleFireRate = incoming.laserFireRate;
+  }
+  if (!Object.prototype.hasOwnProperty.call(incoming, 'weaponRifleProjectileSpeed') && Object.prototype.hasOwnProperty.call(incoming, 'laserProjectileSpeed')) {
+    state.params.weaponRifleProjectileSpeed = incoming.laserProjectileSpeed;
+  }
+  if (!Object.prototype.hasOwnProperty.call(incoming, 'weaponRifleProjectileColor') && Object.prototype.hasOwnProperty.call(incoming, 'laserBloomColor')) {
+    state.params.weaponRifleProjectileColor = incoming.laserBloomColor;
+  }
+  if (!Object.prototype.hasOwnProperty.call(incoming, 'weaponRifleProjectileBloom') && Object.prototype.hasOwnProperty.call(incoming, 'laserBloom')) {
+    state.params.weaponRifleProjectileBloom = incoming.laserBloom;
+  }
+
+  const hasWeaponReticle = WEAPON_CONTROL_SPECS.some(spec => Object.prototype.hasOwnProperty.call(incoming, weaponReticleKey(spec)));
+  if (!hasWeaponReticle && incoming.reticleType && RETICLE_MARKUP[incoming.reticleType]) {
+    const spec = weaponSpecForType(state.params.playerWeaponType);
+    state.params[weaponReticleKey(spec)] = incoming.reticleType;
+  }
 }
 
 function applyPreset(key) {
@@ -6112,6 +6323,7 @@ function applyReticleSettings() {
   if (!el) return;
 
   const p = state.params;
+  syncReticleToCurrentWeapon();
   setReticleType(el, p.reticleType || 'dot');
   el.style.display = p.hudVisible && p.reticleVisible ? '' : 'none';
   el.style.setProperty('--reticle-color', p.reticleColor);
@@ -6255,16 +6467,31 @@ function applyAllParams() {
     return normalizeChoice(value, NPC_WEAPON_OPTIONS, 'rifle');
   };
   p.playerWeaponType = normalizeChoice(p.playerWeaponType, PLAYER_WEAPON_OPTIONS, 'rifle');
-  p.weaponRifleDamage = Math.round(clampSetting(p.weaponRifleDamage, 1, 250, 34));
-  p.weaponPistolDamage = Math.round(clampSetting(p.weaponPistolDamage, 1, 250, 24));
-  p.weaponShotgunDamage = Math.round(clampSetting(p.weaponShotgunDamage, 1, 100, 12));
+  const hexSetting = (value, fallback) => (/^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : fallback);
+  const boolSetting = (value, fallback = false) => (value === true || value === false ? value : fallback);
+  const weaponDefaults = {
+    Pistol: { damage: 24, range: 55, spread: 0.01, fireRate: 3.6, speed: 70, size: 0.28, color: '#d8dde6', bloom: false, reticle: 'dot' },
+    Rifle: { damage: 34, range: Number(p.laserRange) || 42, spread: 0.003, fireRate: Number(p.laserFireRate) || 5, speed: Number(p.laserProjectileSpeed) || 80, size: 0.36, color: p.laserBloomColor || '#ff1100', bloom: p.laserBloom !== false, reticle: 'triSpoke' },
+    Shotgun: { damage: 12, range: 28, spread: 0.16, fireRate: 1.15, speed: 60, size: 0.32, color: '#d8dde6', bloom: false, reticle: 'crossDot' },
+    Sniper: { damage: 120, range: 180, spread: 0.002, fireRate: 0.65, speed: 130, size: 0.24, color: '#d975ff', bloom: true, reticle: 'cross' },
+    Grenade: { damage: 95, range: 60, spread: 0.01, fireRate: 0.72, speed: 16, size: 0.25, color: '#ff8844', bloom: false, reticle: 'ring', radius: 5 },
+    Rocket: { damage: 130, range: 95, spread: 0.004, fireRate: 0.68, speed: 34, size: 0.42, color: '#ff3333', bloom: true, reticle: 'ring', radius: 6 },
+  };
+  WEAPON_CONTROL_SPECS.forEach(spec => {
+    const d = weaponDefaults[spec.prefix];
+    p[weaponKey(spec.prefix, 'Damage')] = Math.round(clampSetting(p[weaponKey(spec.prefix, 'Damage')], 0, 1000, d.damage));
+    p[weaponKey(spec.prefix, 'Range')] = clampSetting(p[weaponKey(spec.prefix, 'Range')], 1, 500, d.range);
+    p[weaponKey(spec.prefix, 'Spread')] = clampSetting(p[weaponKey(spec.prefix, 'Spread')], 0, 1, d.spread);
+    p[weaponKey(spec.prefix, 'FireRate')] = clampSetting(p[weaponKey(spec.prefix, 'FireRate')], 0.1, 30, d.fireRate);
+    p[weaponKey(spec.prefix, 'ProjectileSpeed')] = clampSetting(p[weaponKey(spec.prefix, 'ProjectileSpeed')], 1, 250, d.speed);
+    p[weaponKey(spec.prefix, 'ProjectileSize')] = clampSetting(p[weaponKey(spec.prefix, 'ProjectileSize')], 0.05, 2, d.size);
+    p[weaponKey(spec.prefix, 'ProjectileColor')] = hexSetting(p[weaponKey(spec.prefix, 'ProjectileColor')], d.color);
+    p[weaponKey(spec.prefix, 'ProjectileBloom')] = boolSetting(p[weaponKey(spec.prefix, 'ProjectileBloom')], d.bloom);
+    p[weaponReticleKey(spec)] = RETICLE_MARKUP[p[weaponReticleKey(spec)]] ? p[weaponReticleKey(spec)] : d.reticle;
+    if (spec.radius) p[weaponKey(spec.prefix, 'Radius')] = clampSetting(p[weaponKey(spec.prefix, 'Radius')], 0.5, 60, d.radius);
+  });
   p.weaponShotgunPellets = Math.round(clampSetting(p.weaponShotgunPellets, 1, 24, 8));
-  p.weaponShotgunSpread = clampSetting(p.weaponShotgunSpread, 0.01, 0.45, 0.16);
-  p.weaponSniperDamage = Math.round(clampSetting(p.weaponSniperDamage, 1, 500, 120));
-  p.weaponGrenadeDamage = Math.round(clampSetting(p.weaponGrenadeDamage, 1, 500, 95));
-  p.weaponGrenadeRadius = clampSetting(p.weaponGrenadeRadius, 0.5, 20, 5);
-  p.weaponRocketDamage = Math.round(clampSetting(p.weaponRocketDamage, 1, 500, 130));
-  p.weaponRocketRadius = clampSetting(p.weaponRocketRadius, 0.5, 24, 6);
+  syncReticleToCurrentWeapon();
   applyPlayerWeaponSettings();
   p.allyType = normalizeChoice(p.allyType, ENEMY_TYPE_OPTIONS, 'rusher');
   p.allyCount = Math.round(clampSetting(p.allyCount, 0, 50, 0));
