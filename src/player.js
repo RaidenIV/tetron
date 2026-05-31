@@ -206,7 +206,7 @@ function updatePlayerWeaponVisual() {
 
   playerWeaponGroup.position.set(
     rightX * rightOffset + forwardX * forwardOffset,
-    radius + length * 0.01,
+    radius + length * 0.56,
     rightZ * rightOffset + forwardZ * forwardOffset
   );
   playerWeaponGroup.rotation.set(0, az, 0);

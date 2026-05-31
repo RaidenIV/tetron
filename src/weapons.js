@@ -1,18 +1,15 @@
 // src/weapons.js
-// Screen-aimed player laser gun. The visual follows the two-mesh laser pattern:
-// a bright white core plus a larger additive glow shell whose colour is exposed
-// through the Weapons sidebar controls.
-//
-// Aiming uses a two-stage approach (per AIMING.md):
+// Screen-aimed player weapons. Aiming uses a two-stage approach:
 //   Stage 1: camera ray through reticle centre → resolve world aim target
 //            (enemy aim volumes first, then fallback to far point)
-//   Stage 2: projectile spawns at muzzle, then aims toward that resolved target
-// This keeps shots accurate at all distances regardless of camera offset.
+//   Stage 2: projectiles spawn at the right-hand weapon muzzle, then aim toward
+//            that resolved target. This keeps shots accurate at all distances
+//            regardless of camera offset.
 import * as THREE from 'three';
 import { state } from './state.js';
 import { scene, camera } from './renderer.js';
-import { playerGroup, playerMesh } from './player.js';
-import { damageEnemiesAt, getEnemies } from './enemies.js';
+import { playerGroup, getPlayerWeaponMuzzle } from './player.js';
+import { damageEnemiesAt, damageEnemiesInRadius, getEnemies } from './enemies.js';
 import { isPlacedObjectHit } from './placer.js';
 
 const _up = new THREE.Vector3(0, 1, 0);
@@ -25,6 +22,7 @@ const _aimNdc = new THREE.Vector2(0, 0); // always reticle centre
 const AIM_FALLBACK_DISTANCE = 1000;
 const AIM_ENEMY_RADIUS_PADDING = 0.15;
 const AIM_MIN_TARGET_DISTANCE = 0.75;
+const PROJECTILE_GRAVITY = 16;
 
 // ── Aim result cached each frame — shared between firing and reticle hover ───
 // Stored outside state so Three.js objects don't pollute serialisable state.
@@ -34,120 +32,12 @@ export const aimResult = {
   enemy: null,
 };
 
-// ── Player rifle visual ───────────────────────────────────────────────────────
-// A simple geometric rifle: a long barrel (cylinder) + a small body block.
-// It is parented to playerGroup so it inherits player position automatically.
-// Each frame updateRifle() repositions it flush against the capsule side and
-// rotates it to point toward the resolved aim target.
+// ── Projectile visuals ───────────────────────────────────────────────────────
+const _projectileGeo = new THREE.CapsuleGeometry(0.055, 0.7, 6, 12);
+const _rocketGeo = new THREE.CapsuleGeometry(0.09, 0.95, 8, 14);
+const _grenadeGeo = new THREE.SphereGeometry(0.16, 14, 10);
+const _explosionGeo = new THREE.SphereGeometry(1, 24, 12);
 
-const _rifleGroup = new THREE.Group();
-_rifleGroup.name = 'PlayerRifle';
-
-const _rifleMat = new THREE.MeshStandardMaterial({
-  color: 0x222222,
-  metalness: 0.82,
-  roughness: 0.22,
-});
-const _rifleAccentMat = new THREE.MeshStandardMaterial({
-  color: 0x0044cc,
-  metalness: 0.6,
-  roughness: 0.3,
-  emissive: 0x0044cc,
-  emissiveIntensity: 0.12,
-});
-
-// Barrel — CapsuleGeometry oriented along Y; rotated 90° in the group so it
-// aligns with the local Z-forward direction of the rifle.
-const _barrelGeo  = new THREE.CapsuleGeometry(0.045, 0.72, 4, 8);
-const _barrelMesh = new THREE.Mesh(_barrelGeo, _rifleMat);
-_barrelMesh.rotation.x = Math.PI / 2; // tip pointing toward +Z (forward)
-_barrelMesh.position.z = 0.36;        // centre barrel at half its length forward
-_barrelMesh.castShadow = false;
-_rifleGroup.add(_barrelMesh);
-
-// Body block
-const _bodyGeo  = new THREE.BoxGeometry(0.09, 0.11, 0.32);
-const _bodyMesh = new THREE.Mesh(_bodyGeo, _rifleMat);
-_bodyMesh.position.z = -0.04;
-_bodyMesh.castShadow = false;
-_rifleGroup.add(_bodyMesh);
-
-// Accent strip (gives it a blue glow matching player colour)
-const _accentGeo  = new THREE.BoxGeometry(0.04, 0.04, 0.28);
-const _accentMesh = new THREE.Mesh(_accentGeo, _rifleAccentMat);
-_accentMesh.position.set(0, 0.075, 0.0);
-_accentMesh.castShadow = false;
-_rifleGroup.add(_accentMesh);
-
-playerGroup.add(_rifleGroup);
-
-// Reusable vectors for rifle update — allocated once to avoid per-frame GC.
-const _rifleAimDir   = new THREE.Vector3();
-const _rifleRight    = new THREE.Vector3();
-const _rifleWorldPos = new THREE.Vector3();
-const _rifleQuat     = new THREE.Quaternion();
-const _rifleForward  = new THREE.Vector3(0, 0, 1); // rifle's local +Z = forward
-
-/**
- * Called every frame after resolveAimTarget().
- * Positions the rifle flush against the right side of the player capsule and
- * rotates it so the barrel points toward aimResult.point.
- */
-export function updateRifle() {
-  const p = state.params;
-  const radius = Math.max(0.25, Number(p.playerRadius) || 0.4);
-  const length = Math.max(0.1, Number(p.playerLength) || 1.2);
-
-  // Vertical centre of the capsule in local (group) space
-  const capsuleCentreY = radius + length / 2;
-  // Shoulder height — slightly above capsule centre, matching muzzle height
-  const shoulderY = capsuleCentreY + length * 0.15;
-
-  // Direction from player toward aim target (XZ plane for side offset)
-  playerGroup.getWorldPosition(_rifleWorldPos);
-  _rifleAimDir.copy(aimResult.point).sub(_rifleWorldPos);
-  _rifleAimDir.y = 0;
-  if (_rifleAimDir.lengthSq() < 0.0001) {
-    // Aim exactly at player — use last known forward
-    _rifleAimDir.set(Math.sin(playerGroup.rotation.y), 0, Math.cos(playerGroup.rotation.y));
-  }
-  _rifleAimDir.normalize();
-
-  // Right-hand perpendicular to aim direction (for side placement)
-  _rifleRight.set(_rifleAimDir.z, 0, -_rifleAimDir.x); // rotate aim 90° CW around Y
-
-  // Place rifle flush against the capsule surface on the right side
-  const sideOffset = radius + 0.055; // just outside capsule surface
-  _rifleGroup.position.set(
-    _rifleRight.x * sideOffset,
-    shoulderY,
-    _rifleRight.z * sideOffset,
-  );
-
-  // Point rifle barrel (local +Z) toward the world aim point
-  // Compute aim direction in player-group local space
-  _rifleGroup.getWorldPosition(_rifleWorldPos); // now rifle's world position
-  _rifleAimDir.copy(aimResult.point).sub(_rifleWorldPos).normalize();
-  if (_rifleAimDir.lengthSq() < 0.0001) _rifleAimDir.set(0, 0, 1);
-
-  _rifleQuat.setFromUnitVectors(_rifleForward, _rifleAimDir);
-
-  // Convert world-space quaternion to parent (playerGroup) local space
-  const parentQuat = playerGroup.quaternion;
-  _rifleGroup.quaternion.copy(parentQuat).invert().multiply(_rifleQuat);
-
-  // Accent emissive follows player colour
-  if (p.playerColor) _rifleAccentMat.emissive.set(p.playerColor);
-  _rifleAccentMat.emissiveIntensity = 0.18;
-
-  // Hide rifle while using object placer
-  _rifleGroup.visible = p.laserEnabled !== false && (state.activeSlot ?? 0) === 0;
-}
-
-
-
-// ── Laser pool ────────────────────────────────────────────────────────────────
-const _laserGeo = new THREE.CapsuleGeometry(0.055, 0.7, 6, 12);
 const _laserCoreMat = new THREE.MeshStandardMaterial({
   color: 0xffffff,
   emissive: 0xffffff,
@@ -163,10 +53,32 @@ const _laserGlowMat = new THREE.MeshBasicMaterial({
   blending: THREE.AdditiveBlending,
   toneMapped: false,
 });
+const _solidProjectileMat = new THREE.MeshStandardMaterial({
+  color: 0xd8dde6,
+  emissive: 0x111111,
+  emissiveIntensity: 0.08,
+  metalness: 0.2,
+  roughness: 0.36,
+});
+const _grenadeMat = new THREE.MeshStandardMaterial({
+  color: 0x2d332d,
+  emissive: 0x0b120b,
+  emissiveIntensity: 0.04,
+  metalness: 0.1,
+  roughness: 0.62,
+});
+const _explosionMat = new THREE.MeshBasicMaterial({
+  color: 0xffb24a,
+  transparent: true,
+  opacity: 0.55,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+  toneMapped: false,
+});
 
-const _activeLasers = [];
-const _laserPool = [];
-let _laserCooldown = 0;
+const _activeProjectiles = [];
+const _activeExplosions = [];
+let _weaponCooldown = 0;
 
 function clamp(v, min, max) {
   return Math.min(max, Math.max(min, v));
@@ -181,39 +93,96 @@ function applyLaserMaterials() {
   const p = state.params;
   const bloomIntensity = Number(p.laserBloomIntensity);
   _laserGlowMat.color.set(p.laserBloomColor || '#ff1100');
-  _laserGlowMat.opacity = p.laserBloom ? clamp((Number.isFinite(bloomIntensity) ? bloomIntensity : 0.55) * getOverallBloomFactor(), 0, 3) : 0;
+  _laserGlowMat.opacity = p.laserBloom
+    ? clamp((Number.isFinite(bloomIntensity) ? bloomIntensity : 0.55) * getOverallBloomFactor(), 0, 3)
+    : 0;
   _laserGlowMat.needsUpdate = true;
 }
 
-function createLaserVisual() {
-  const group = new THREE.Group();
-  group.name = 'PlayerLaserProjectile';
+function getSelectedWeaponType() {
+  const type = state.params.playerWeaponType;
+  return ['pistol', 'rifle', 'shotgun', 'sniperRifle', 'grenades', 'rocketLauncher'].includes(type)
+    ? type
+    : 'rifle';
+}
 
-  const core = new THREE.Mesh(_laserGeo, _laserCoreMat);
-  core.name = 'LaserCore';
-  core.castShadow = false;
+function getWeaponConfig(type = getSelectedWeaponType()) {
+  const p = state.params;
+  switch (type) {
+    case 'pistol':
+      return { type, fireRate: 3.6, speed: 70, range: 55, damage: Number(p.weaponPistolDamage) || 24, hitRadius: 0.28, pellets: 1, spread: 0.01, visual: 'solid' };
+    case 'shotgun':
+      return { type, fireRate: 1.15, speed: 60, range: 28, damage: Number(p.weaponShotgunDamage) || 12, hitRadius: 0.32, pellets: Math.round(Number(p.weaponShotgunPellets) || 8), spread: Number(p.weaponShotgunSpread) || 0.16, visual: 'solid' };
+    case 'sniperRifle':
+      return { type, fireRate: 0.65, speed: 130, range: 180, damage: Number(p.weaponSniperDamage) || 120, hitRadius: 0.24, pellets: 1, spread: 0.002, visual: 'laser' };
+    case 'grenades':
+      return { type, fireRate: 0.72, speed: 16, range: 60, damage: Number(p.weaponGrenadeDamage) || 95, radius: Number(p.weaponGrenadeRadius) || 5, hitRadius: 0.25, pellets: 1, spread: 0.01, visual: 'grenade', ballistic: true, explosive: true, fuse: 2.2 };
+    case 'rocketLauncher':
+      return { type, fireRate: 0.68, speed: 34, range: 95, damage: Number(p.weaponRocketDamage) || 130, radius: Number(p.weaponRocketRadius) || 6, hitRadius: 0.42, pellets: 1, spread: 0.004, visual: 'rocket', explosive: true, fuse: 4.0 };
+    case 'rifle':
+    default:
+      return { type: 'rifle', fireRate: Math.max(0.1, Number(p.laserFireRate) || 5), speed: Math.max(1, Number(p.laserProjectileSpeed) || 80), range: Math.max(1, Number(p.laserRange) || 42), damage: Number(p.weaponRifleDamage) || 34, hitRadius: 0.36, pellets: 1, spread: 0.003, visual: 'laser' };
+  }
+}
+
+function createProjectileVisual(config) {
+  const group = new THREE.Group();
+  group.name = `PlayerProjectile_${config.type}`;
+
+  let core;
+  if (config.visual === 'grenade') {
+    core = new THREE.Mesh(_grenadeGeo, _grenadeMat);
+  } else if (config.visual === 'rocket') {
+    core = new THREE.Mesh(_rocketGeo, _solidProjectileMat);
+  } else {
+    core = new THREE.Mesh(_projectileGeo, config.visual === 'laser' ? _laserCoreMat : _solidProjectileMat);
+  }
+  core.name = 'ProjectileCore';
+  core.castShadow = config.visual !== 'laser';
   core.receiveShadow = false;
   group.add(core);
 
-  const glow = new THREE.Mesh(_laserGeo, _laserGlowMat);
-  glow.name = 'LaserGlow';
-  glow.scale.set(1.85, 1.18, 1.85);
-  glow.castShadow = false;
-  glow.receiveShadow = false;
-  group.add(glow);
+  let glow = null;
+  if (config.visual === 'laser' || config.visual === 'rocket') {
+    glow = new THREE.Mesh(config.visual === 'rocket' ? _rocketGeo : _projectileGeo, _laserGlowMat);
+    glow.name = 'ProjectileGlow';
+    glow.scale.set(config.visual === 'rocket' ? 1.45 : 1.85, config.visual === 'rocket' ? 1.08 : 1.18, config.visual === 'rocket' ? 1.45 : 1.85);
+    glow.castShadow = false;
+    glow.receiveShadow = false;
+    group.add(glow);
+  }
 
-  group.visible = false;
   scene.add(group);
-  return { group, core, glow, dir: new THREE.Vector3(), distance: 0, maxRange: 0, speed: 0 };
+  return { group, core, glow };
 }
 
-function acquireLaser() {
-  return _laserPool.pop() || createLaserVisual();
+function disposeProjectile(projectile) {
+  scene.remove(projectile.visual.group);
 }
 
-function releaseLaser(laser) {
-  laser.group.visible = false;
-  _laserPool.push(laser);
+function spawnExplosionFlash(position, radius) {
+  const mesh = new THREE.Mesh(_explosionGeo, _explosionMat.clone());
+  mesh.name = 'PlayerWeaponExplosion';
+  mesh.position.copy(position);
+  mesh.scale.setScalar(0.01);
+  scene.add(mesh);
+  _activeExplosions.push({ mesh, radius: Math.max(0.25, radius), life: 0.22, maxLife: 0.22 });
+}
+
+function updateExplosionFlashes(delta) {
+  for (let i = _activeExplosions.length - 1; i >= 0; i--) {
+    const fx = _activeExplosions[i];
+    fx.life -= delta;
+    if (fx.life <= 0) {
+      scene.remove(fx.mesh);
+      fx.mesh.material?.dispose?.();
+      _activeExplosions.splice(i, 1);
+      continue;
+    }
+    const t = 1 - fx.life / fx.maxLife;
+    fx.mesh.scale.setScalar(Math.max(0.01, fx.radius * t));
+    fx.mesh.material.opacity = (1 - t) * 0.55;
+  }
 }
 
 // ── Two-stage aim resolver (AIMING.md) ───────────────────────────────────────
@@ -290,7 +259,7 @@ export function resolveAimTarget() {
  */
 function getProjectileDirection(spawnPos, targetPoint, out) {
   out.copy(targetPoint).sub(spawnPos);
-  if (out.lengthSq() < 0.0001) {
+  if (out.lengthSq() < AIM_MIN_TARGET_DISTANCE * AIM_MIN_TARGET_DISTANCE) {
     // Target is essentially at the muzzle — fall back to camera forward.
     camera.getWorldDirection(out);
   }
@@ -299,7 +268,7 @@ function getProjectileDirection(spawnPos, targetPoint, out) {
 
 // ── Shoot sound ───────────────────────────────────────────────────────────────
 let _blasterEl = null;
-function playShootSound() {
+function playShootSound(config) {
   const vol = Math.max(0, Math.min(1,
     Number(state.params.soundSfxVolume ?? 1) * Number(state.params.soundSfx_shoot ?? 1)
   ));
@@ -310,85 +279,157 @@ function playShootSound() {
   // Clone for overlapping shots; reuse element if already ended.
   const audio = _blasterEl.paused ? _blasterEl : _blasterEl.cloneNode();
   audio.volume = vol;
-  audio.playbackRate = 0.92 + Math.random() * 0.16;
+  const pitchByWeapon = {
+    pistol: 1.16,
+    rifle: 1.0,
+    shotgun: 0.78,
+    sniperRifle: 0.62,
+    grenades: 0.7,
+    rocketLauncher: 0.58,
+  };
+  audio.playbackRate = (pitchByWeapon[config.type] || 1) * (0.94 + Math.random() * 0.12);
   audio.play().catch(() => {});
 }
 
 // ── Firing ────────────────────────────────────────────────────────────────────
 const _fireDir = new THREE.Vector3();
+const _pelletDir = new THREE.Vector3();
+const _cameraRight = new THREE.Vector3();
+const _cameraUp = new THREE.Vector3();
+const _velocity = new THREE.Vector3();
 
-function fireLaser() {
-  const p = state.params;
-  const speed = Math.max(1, Number(p.laserProjectileSpeed) || 22);
-  const laser = acquireLaser();
+function randomSpreadDirection(baseDir, spread, out) {
+  out.copy(baseDir);
+  if (spread > 0) {
+    _cameraRight.setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+    _cameraUp.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+    const angle = Math.random() * Math.PI * 2;
+    const radius = Math.sqrt(Math.random()) * spread;
+    out.addScaledVector(_cameraRight, Math.cos(angle) * radius);
+    out.addScaledVector(_cameraUp, Math.sin(angle) * radius);
+  }
+  return out.normalize();
+}
 
-  // Muzzle position: player centre + upward offset + slight forward push
-  _spawnPos.copy(playerGroup.position);
-  _spawnPos.y += Math.max(0.55, (Number(p.playerRadius) || 0.4) + (Number(p.playerLength) || 1.2) * 0.55);
+function createProjectile(config, dir) {
+  const visual = createProjectileVisual(config);
+  visual.group.position.copy(_spawnPos);
+  _tmpQuat.setFromUnitVectors(_up, dir);
+  visual.group.quaternion.copy(_tmpQuat);
+  if (visual.glow) visual.glow.visible = !!state.params.laserBloom;
 
-  // Stage 2: aim from muzzle toward the pre-resolved aim target point
+  if (config.ballistic) {
+    _velocity.copy(dir).multiplyScalar(config.speed);
+    _velocity.y += 3.8;
+  } else {
+    _velocity.copy(dir).multiplyScalar(config.speed);
+  }
+
+  const projectile = {
+    config,
+    visual,
+    velocity: _velocity.clone(),
+    distance: 0,
+    maxRange: Math.max(1, config.range),
+    life: config.fuse || 4,
+    age: 0,
+  };
+  _activeProjectiles.push(projectile);
+}
+
+function explodeProjectile(projectile) {
+  const { config, visual } = projectile;
+  const radius = Math.max(0.5, Number(config.radius) || 4);
+  const damage = Math.max(1, Number(config.damage) || 1);
+  damageEnemiesInRadius(visual.group.position, radius, damage, 1.15);
+  spawnExplosionFlash(visual.group.position, radius);
+  disposeProjectile(projectile);
+}
+
+function fireWeapon() {
+  const config = getWeaponConfig();
+
+  // Muzzle position: actual right-hand weapon muzzle from the player visual.
+  getPlayerWeaponMuzzle(_spawnPos);
+
+  // Stage 2: aim from muzzle toward the pre-resolved aim target point.
   const targetPoint = aimResult.point;
   getProjectileDirection(_spawnPos, targetPoint, _fireDir);
 
-  // Push muzzle slightly forward along fire direction so the laser doesn't spawn inside the player
-  _spawnPos.addScaledVector(_fireDir, Math.max(0.75, (Number(p.playerRadius) || 0.4) + 0.65));
+  const pelletCount = Math.max(1, Math.min(24, Math.round(config.pellets || 1)));
+  for (let i = 0; i < pelletCount; i++) {
+    randomSpreadDirection(_fireDir, Number(config.spread) || 0, _pelletDir);
+    createProjectile(config, _pelletDir);
+  }
 
-  // Re-resolve direction from pushed muzzle → same target (avoids capsule-edge drift)
-  getProjectileDirection(_spawnPos, targetPoint, _fireDir);
-
-  _tmpQuat.setFromUnitVectors(_up, _fireDir);
-  laser.group.position.copy(_spawnPos);
-  laser.group.quaternion.copy(_tmpQuat);
-  laser.group.visible = true;
-  laser.glow.visible = !!p.laserBloom;
-  laser.dir.copy(_fireDir);
-  laser.distance = 0;
-  laser.maxRange = Math.max(1, _spawnPos.distanceTo(targetPoint));
-  laser.speed = speed;
-
-  _activeLasers.push(laser);
-  playShootSound();
+  playShootSound(config);
 }
 
 export function updateLaserProjectiles(delta, projectileDelta = delta) {
   const p = state.params;
   applyLaserMaterials();
+  updateExplosionFlashes(delta);
 
-  const fireRate = Math.max(0.1, Number(p.laserFireRate) || 5);
+  const config = getWeaponConfig();
+  const fireRate = Math.max(0.1, Number(config.fireRate) || 1);
   const interval = 1 / fireRate;
 
   if (!p.laserEnabled || !state.primaryFire) {
-    _laserCooldown = 0;
+    _weaponCooldown = 0;
   } else {
-    _laserCooldown -= delta;
-    if (_laserCooldown <= 0) {
-      fireLaser();
-      _laserCooldown = interval;
+    _weaponCooldown -= delta;
+    if (_weaponCooldown <= 0) {
+      fireWeapon();
+      _weaponCooldown = interval;
     }
   }
 
-  for (let i = _activeLasers.length - 1; i >= 0; i--) {
-    const laser = _activeLasers[i];
-    const step = laser.speed * projectileDelta;
-    laser.group.position.addScaledVector(laser.dir, step);
-    laser.distance += step;
-    laser.glow.visible = !!p.laserBloom;
+  for (let i = _activeProjectiles.length - 1; i >= 0; i--) {
+    const projectile = _activeProjectiles[i];
+    const { visual, config: projectileConfig } = projectile;
+    const step = projectile.velocity.length() * projectileDelta;
 
-    if (isPlacedObjectHit(laser.group.position, 0.12)) {
-      _activeLasers.splice(i, 1);
-      releaseLaser(laser);
+    projectile.age += delta;
+    projectile.life -= delta;
+    if (projectileConfig.ballistic) {
+      projectile.velocity.y -= PROJECTILE_GRAVITY * projectileDelta;
+    }
+
+    visual.group.position.addScaledVector(projectile.velocity, projectileDelta);
+    projectile.distance += step;
+
+    if (projectile.velocity.lengthSq() > 0.0001) {
+      _tmpQuat.setFromUnitVectors(_up, projectile.velocity.clone().normalize());
+      visual.group.quaternion.copy(_tmpQuat);
+    }
+    if (visual.glow) visual.glow.visible = !!p.laserBloom;
+
+    const hitGround = projectileConfig.ballistic && projectile.age > 0.08 && visual.group.position.y <= 0.09;
+    const hitObject = isPlacedObjectHit(visual.group.position, projectileConfig.visual === 'rocket' ? 0.16 : 0.1);
+
+    if (hitGround || hitObject) {
+      _activeProjectiles.splice(i, 1);
+      if (projectileConfig.explosive) explodeProjectile(projectile);
+      else disposeProjectile(projectile);
       continue;
     }
 
-    if (damageEnemiesAt(laser.group.position, 0.36, 34)) {
-      _activeLasers.splice(i, 1);
-      releaseLaser(laser);
+    if (projectileConfig.explosive) {
+      if (damageEnemiesAt(visual.group.position, projectileConfig.hitRadius, 0)) {
+        _activeProjectiles.splice(i, 1);
+        explodeProjectile(projectile);
+        continue;
+      }
+    } else if (damageEnemiesAt(visual.group.position, projectileConfig.hitRadius, projectileConfig.damage)) {
+      _activeProjectiles.splice(i, 1);
+      disposeProjectile(projectile);
       continue;
     }
 
-    if (laser.distance >= laser.maxRange) {
-      _activeLasers.splice(i, 1);
-      releaseLaser(laser);
+    if (projectile.life <= 0 || projectile.distance >= projectile.maxRange) {
+      _activeProjectiles.splice(i, 1);
+      if (projectileConfig.explosive) explodeProjectile(projectile);
+      else disposeProjectile(projectile);
     }
   }
 }

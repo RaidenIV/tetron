@@ -218,6 +218,10 @@ function getEnemyMass(enemy) {
   return ENEMY_GROUPING.archetypeMass[enemy.type] ?? 1.0;
 }
 
+function getActiveNpcs() {
+  return enemies.concat(allies);
+}
+
 // ── Separation steering (soft, before movement) ───────────────────────────────
 function computeEnemySeparation(enemy, nearby) {
   const cfg = ENEMY_GROUPING.separation;
@@ -316,61 +320,35 @@ function smoothSteer(enemy, next) {
 }
 
 // ── Hard decollision (after movement) ─────────────────────────────────────────
-function pushApartNpcs(a, b) {
-  const cfg = ENEMY_GROUPING.separation;
-  const ar = a.radius * getSpacingMultiplier(a);
-  const br = b.radius * getSpacingMultiplier(b);
-  const minD = ar + br + cfg.extraPadding;
-  const dx = b.group.position.x - a.group.position.x;
-  const dz = b.group.position.z - a.group.position.z;
-  const d2 = dx * dx + dz * dz;
-  if (d2 <= 0.00001 || d2 >= minD * minD) return;
-  const d = Math.sqrt(d2);
-  const nx = dx / d, nz = dz / d;
-  const overlap = minD - d;
-  const massA = getEnemyMass(a), massB = getEnemyMass(b);
-  const total = massA + massB;
-  const pushA = (massB / total) * overlap * cfg.hardPushStrength;
-  const pushB = (massA / total) * overlap * cfg.hardPushStrength;
-  a.group.position.x -= nx * pushA;
-  a.group.position.z -= nz * pushA;
-  b.group.position.x += nx * pushB;
-  b.group.position.z += nz * pushB;
-  resolveCircleAgainstPlacedObjects(a.group.position, ar);
-  resolveCircleAgainstPlacedObjects(b.group.position, br);
-}
-
 function applyHardEnemyDecollision() {
   const cfg = ENEMY_GROUPING.separation;
-
-  // Enemies vs enemies (hash-accelerated)
-  for (const a of enemies) {
+  const npcs = getActiveNpcs();
+  for (const a of npcs) {
     if (!a) continue;
     const ar = a.radius * getSpacingMultiplier(a);
     _spatialHash.query(a.group.position.x, a.group.position.z, ar + cfg.queryPadding, _queryBuf);
     for (const b of _queryBuf) {
       if (!b || b === a) continue;
-      pushApartNpcs(a, b);
-    }
-  }
-
-  // Allies vs allies (n² — ally counts are small)
-  for (let i = 0; i < allies.length; i++) {
-    const a = allies[i];
-    if (!a) continue;
-    for (let j = i + 1; j < allies.length; j++) {
-      const b = allies[j];
-      if (!b) continue;
-      pushApartNpcs(a, b);
-    }
-  }
-
-  // Enemies vs allies (cross-team)
-  for (const a of enemies) {
-    if (!a) continue;
-    for (const b of allies) {
-      if (!b) continue;
-      pushApartNpcs(a, b);
+      if (npcs.indexOf(b) < npcs.indexOf(a)) continue;
+      const br = b.radius * getSpacingMultiplier(b);
+      const minD = ar + br + cfg.extraPadding;
+      const dx = b.group.position.x - a.group.position.x;
+      const dz = b.group.position.z - a.group.position.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 <= 0.00001 || d2 >= minD * minD) continue;
+      const d = Math.sqrt(d2);
+      const nx = dx / d, nz = dz / d;
+      const overlap = minD - d;
+      const massA = getEnemyMass(a), massB = getEnemyMass(b);
+      const total = massA + massB;
+      const pushA = (massB / total) * overlap * cfg.hardPushStrength;
+      const pushB = (massA / total) * overlap * cfg.hardPushStrength;
+      a.group.position.x -= nx * pushA;
+      a.group.position.z -= nz * pushA;
+      b.group.position.x += nx * pushB;
+      b.group.position.z += nz * pushB;
+      resolveCircleAgainstPlacedObjects(a.group.position, a.radius || ar);
+      resolveCircleAgainstPlacedObjects(b.group.position, b.radius || br);
     }
   }
 }
@@ -881,15 +859,17 @@ function spawnEnemyCorpse(enemy, cfg = getDestructionConfig(enemy)) {
   mesh.position.copy(enemy.group.position);
   mesh.position.y += enemy.mesh.position.y;
   mesh.quaternion.copy(enemy.group.quaternion);
+  mesh.rotation.x += (Math.random() - 0.5) * 0.85;
+  mesh.rotation.z += (Math.random() - 0.5) * 0.85;
   scene.add(mesh);
-  alignCorpseToFloor({ mesh });
+  alignCorpseToFloor({ mesh }, { snapDown: true, tolerance: 2.5 });
 
   const yaw = Math.random() * Math.PI * 2;
   const speed = (1.1 + Math.random() * 1.7) * Math.max(0.2, cfg.speed);
   enemyCorpses.push({
     mesh,
     vx: Math.cos(yaw) * speed,
-    vy: cfg.physics === 'gravity' ? 0 : 0.12 + Math.random() * 0.22,
+    vy: cfg.physics === 'gravity' ? 0.04 + Math.random() * 0.12 : 0.08 + Math.random() * 0.16,
     vz: Math.sin(yaw) * speed,
     rx: (Math.random() - 0.5) * 4.2,
     ry: (Math.random() - 0.5) * 4.2,
@@ -904,9 +884,10 @@ function spawnEnemyCorpse(enemy, cfg = getDestructionConfig(enemy)) {
 }
 
 function alignCorpseToFloor(corpse, { snapDown = false, tolerance = 0.75 } = {}) {
+  if (!corpse?.mesh) return 0;
   corpse.mesh.updateMatrixWorld(true);
   _corpseBox.setFromObject(corpse.mesh);
-  const floorY = 0.035;
+  const floorY = 0.018;
   const delta = floorY - _corpseBox.min.y;
   if (delta > 0) {
     corpse.mesh.position.y += delta;
@@ -965,7 +946,7 @@ function updateEnemyCorpses(delta) {
 
       const floorHit = alignCorpseToFloor(corpse, {
         snapDown: corpse.landed === true,
-        tolerance: Math.max(0.45, (corpse.radius || 0.35) * 3.2),
+        tolerance: Math.max(0.75, (corpse.radius || 0.35) * 6.0),
       });
       if (floorHit !== 0) {
         corpse.landed = true;
@@ -981,6 +962,10 @@ function updateEnemyCorpses(delta) {
         corpse.rx *= floorFriction;
         corpse.ry *= floorFriction;
         corpse.rz *= floorFriction;
+        if (Math.abs(corpse.vy) < 0.08 && Math.hypot(corpse.vx, corpse.vz) < 0.08) {
+          corpse.vy = 0;
+          alignCorpseToFloor(corpse, { snapDown: true, tolerance: Math.max(0.75, (corpse.radius || 0.35) * 6.0) });
+        }
       } else {
         corpse.grounded = false;
       }
@@ -1123,11 +1108,31 @@ export function damageEnemiesAt(position, radius = 0.45, amount = 34) {
     _tmpVec.copy(enemy.group.position);
     _tmpVec.y = enemy.mesh.position.y;
     if (_tmpVec.distanceTo(position) <= hitRadius) {
-      damageEnemy(enemy, amount);
+      if (Math.max(0, Number(amount) || 0) > 0) damageEnemy(enemy, amount);
       return true;
     }
   }
   return false;
+}
+
+export function damageEnemiesInRadius(position, radius = 1, amount = 34, falloff = 1) {
+  let hitCount = 0;
+  const maxRadius = Math.max(0.001, Number(radius) || 1);
+  const baseDamage = Math.max(0, Number(amount) || 0);
+  const falloffPower = clamp(Number(falloff) || 1, 0.1, 4);
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const enemy = enemies[i];
+    const enemyRadius = Math.max(0.35, enemy.radius || 0.4);
+    _tmpVec.copy(enemy.group.position);
+    _tmpVec.y = enemy.mesh.position.y;
+    const distance = _tmpVec.distanceTo(position);
+    if (distance > maxRadius + enemyRadius) continue;
+    const normalized = clamp(distance / maxRadius, 0, 1);
+    const damage = baseDamage * (1 - Math.pow(normalized, falloffPower));
+    damageEnemy(enemy, Math.max(1, damage));
+    hitCount += 1;
+  }
+  return hitCount;
 }
 
 function getExplosionSplashDistance(event, position) {
@@ -1517,7 +1522,7 @@ export function updateEnemies(delta, elapsedTime = 0) {
   updateAllies(delta, elapsedTime);
 
   // Step 1: Rebuild spatial hash before movement (for separation queries)
-  _spatialHash.rebuild(enemies);
+  _spatialHash.rebuild(getActiveNpcs());
 
   // Step 2: Move all enemies (includes separation steering + slot bias)
   for (let i = enemies.length - 1; i >= 0; i--) {
@@ -1544,10 +1549,10 @@ export function updateEnemies(delta, elapsedTime = 0) {
   }
 
   // Step 3: Rebuild hash after movement, apply hard decollision
-  _spatialHash.rebuild(enemies);
+  _spatialHash.rebuild(getActiveNpcs());
   applyHardEnemyDecollision();
   // Step 4: Final rebuild for bullets / later systems
-  _spatialHash.rebuild(enemies);
+  _spatialHash.rebuild(getActiveNpcs());
 
   updateEnemyBullets(delta);
   updateDestructionParticles(delta);
