@@ -432,6 +432,18 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
 .reticle-svg .reticle-fill {
   fill: currentColor;
 }
+.reticle-svg path,
+.reticle-svg circle,
+.reticle-svg rect,
+.reticle-svg polygon,
+.reticle-svg polyline,
+.reticle-svg line {
+  stroke: currentColor;
+  stroke-width: var(--reticle-svg-stroke-width, 0px);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+}
 #target-reticle.reticle-glow {
   filter: drop-shadow(0 0 6px var(--reticle-color));
 }
@@ -619,7 +631,7 @@ body.is-paused * {
   color: var(--sb-accent); border-color: var(--sb-accent); background: #132033;
 }
 .reticle-picker-preview {
-  --reticle-color: currentColor; --reticle-size: 24px; --reticle-thickness: 2px;
+  --reticle-color: currentColor; --reticle-size: 24px; --reticle-thickness: 2px; --reticle-svg-stroke-width: 0px;
   --reticle-dot-size: 4px; --reticle-opacity: 1;
   position: relative; display: inline-flex; align-items: center; justify-content: center;
   width: 34px; height: 34px; color: currentColor; opacity: var(--reticle-opacity);

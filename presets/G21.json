@@ -535,5 +535,18 @@
   "weaponRocketProjectileSize": 0.42,
   "weaponRocketProjectileColor": "#ff3333",
   "weaponRocketProjectileBloom": true,
-  "weaponRocketReticleType": "ring"
+  "weaponRocketReticleType": "ring",
+  "reticleWeight": 2,
+  "weaponPistolReticleSize": 24,
+  "weaponPistolReticleWeight": 2,
+  "weaponRifleReticleSize": 24,
+  "weaponRifleReticleWeight": 2,
+  "weaponShotgunReticleSize": 24,
+  "weaponShotgunReticleWeight": 2,
+  "weaponSniperReticleSize": 24,
+  "weaponSniperReticleWeight": 2,
+  "weaponGrenadeReticleSize": 24,
+  "weaponGrenadeReticleWeight": 2,
+  "weaponRocketReticleSize": 24,
+  "weaponRocketReticleWeight": 2
 }

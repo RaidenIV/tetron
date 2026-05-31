@@ -10,6 +10,7 @@ import {
   getThirdPitchRange,
   isThirdPersonCameraMode,
 } from './renderer.js';
+import { playDashSound } from './audio.js';
 
 let _togglePanel = null;
 let _lastJumpDown = false;
@@ -133,6 +134,7 @@ function requestControllerDash(moveX, moveY) {
   state.dashTimer = p.dashDuration;
   state.dashCooldown = p.dashCooldown;
   state.dashGhostTimer = 0;
+  playDashSound();
 }
 
 function vibrate(pad, { weak = 0.08, strong = 0.18, duration = 70 } = {}) {

@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { state } from './state.js';
 import { getMoveForward, getMoveRight, isThirdPersonCameraMode, renderer } from './renderer.js';
+import { playDashSound } from './audio.js';
 
 let _togglePanel = null;
 
@@ -365,6 +366,7 @@ window.addEventListener('keydown', e => {
       state.dashTimer    = state.params.dashDuration;
       state.dashCooldown = state.params.dashCooldown;
       state.dashGhostTimer = 0;
+      playDashSound();
     }
   }
 });
@@ -562,6 +564,7 @@ export function updateController(delta) {
         state.dashTimer    = state.params.dashDuration;
         state.dashCooldown = state.params.dashCooldown;
         state.dashGhostTimer = 0;
+        playDashSound();
         rumble(pad, 0.5, 0.3, 100);
       }
     }

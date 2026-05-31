@@ -37,3 +37,15 @@ export function getSfxVolume(key, fallback = 1, sourcePosition = null) {
   const proximity = getAudioProximityFactor(sourcePosition);
   return clamp(master * channel * proximity, 0, 1);
 }
+
+
+let _dashSoundEl = null;
+export function playDashSound(sourcePosition = null) {
+  const volume = getSfxVolume('soundSfx_dash', 1, sourcePosition);
+  if (volume <= 0) return;
+  if (!_dashSoundEl) _dashSoundEl = new Audio('./assets/dash.wav');
+  const sound = _dashSoundEl.paused ? _dashSoundEl : _dashSoundEl.cloneNode();
+  sound.currentTime = 0;
+  sound.volume = volume;
+  sound.play().catch(() => {});
+}
