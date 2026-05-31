@@ -230,7 +230,7 @@ export function tick() {
   // Reticle hover colour + MGSV dwell tagging
   {
     const reticleEl = document.getElementById('target-reticle');
-    const isEnemyHit = !state.paused && aimResult.type === 'enemy';
+    const isEnemyHit = !state.paused && aimResult.type === 'enemy' && !aimResult.enemy?.isAlly;
     if (reticleEl && reticleEl.style.display !== 'none') {
       reticleEl.classList.toggle('reticle-enemy-hover', isEnemyHit);
       reticleEl.classList.toggle('is-targeting-enemy', isEnemyHit);

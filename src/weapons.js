@@ -233,7 +233,11 @@ export function resolveAimTarget() {
 
   let bestHit = null;
 
-  for (const enemy of getEnemies().concat(getAllies())) {
+  const aimTargets = state.params.allyFriendlyFire === true
+    ? getEnemies().concat(getAllies())
+    : getEnemies();
+
+  for (const enemy of aimTargets) {
     if (!enemy || !enemy.group) continue;
     const hit = intersectEnemyAimVolume(rayOrigin, rayDir, enemy);
     if (!hit) continue;

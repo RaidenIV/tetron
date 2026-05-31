@@ -570,6 +570,50 @@ function makeTagMarker(enemy) {
   enemy._tagObj = obj;
 }
 
+
+function makeNpcHealthBar(npc) {
+  const el = document.createElement('div');
+  el.className = 'npc-health-bar';
+  el.style.cssText = [
+    'width:46px', 'height:6px', 'box-sizing:border-box',
+    'padding:1px', 'border:1px solid rgba(255,255,255,0.78)',
+    'background:rgba(0,0,0,0.72)', 'border-radius:0px',
+    'box-shadow:0 1px 5px rgba(0,0,0,0.65)',
+    'pointer-events:none', 'display:flex', 'align-items:stretch',
+  ].join(';');
+
+  const fill = document.createElement('div');
+  fill.className = 'npc-health-bar-fill';
+  fill.style.cssText = [
+    'height:100%', 'width:100%', 'background:#ff3030',
+    'transition:width 0.08s linear', 'border-radius:0px',
+  ].join(';');
+  el.appendChild(fill);
+
+  const obj = new CSS2DObject(el);
+  obj.center.set(0.5, 0.5);
+  const visualTop = (npc.radius * 2 + npc.sizeMult * 1.2);
+  obj.position.set(0, visualTop + 0.34, 0);
+  npc.group.add(obj);
+
+  npc._healthBarEl = el;
+  npc._healthBarFill = fill;
+  npc._healthBarObj = obj;
+  updateNpcHealthBar(npc);
+}
+
+function updateNpcHealthBar(npc) {
+  if (!npc?._healthBarEl || !npc._healthBarFill) return;
+  const enabled = state.params.hudVisible !== false && state.params.hudNpcHealthBars !== false;
+  npc._healthBarEl.style.display = enabled ? 'flex' : 'none';
+  if (!enabled) return;
+
+  const ratio = clamp((Number(npc.hp) || 0) / Math.max(1, Number(npc.maxHp) || 1), 0, 1);
+  npc._healthBarFill.style.width = `${ratio * 100}%`;
+  npc._healthBarFill.style.background = npc.isAlly ? '#35ff00' : '#ff3030';
+  npc._healthBarEl.style.opacity = ratio > 0 ? '1' : '0';
+}
+
 // Call from loop.js when dwell threshold is reached
 export function tagEnemy(enemy) {
   if (!enemy || enemy.tagged) return;
@@ -644,6 +688,7 @@ function makeEnemy(type, position, index = 0, options = {}) {
     lastSteer: null,
   };
   if (!enemy.isAlly) makeTagMarker(enemy);
+  makeNpcHealthBar(enemy);
   return enemy;
 }
 
@@ -652,6 +697,10 @@ function disposeEnemy(enemy) {
   if (enemy._tagEl) {
     enemy._tagEl.style.opacity = '0';
     enemy._tagEl.style.display = 'none';
+  }
+  if (enemy._healthBarEl) {
+    enemy._healthBarEl.style.opacity = '0';
+    enemy._healthBarEl.style.display = 'none';
   }
   scene.remove(enemy.group);
   enemy.material?.dispose?.();
@@ -1089,6 +1138,7 @@ function damageEnemy(enemy, amount) {
   enemy.material.emissiveIntensity = 0.45;
   const invincible = enemy.isAlly ? state.params.allyInvincible : state.params.enemyInvincible;
   if (!invincible) enemy.hp -= Math.max(0, Number(amount) || 0);
+  updateNpcHealthBar(enemy);
   if (enemy.hp <= 0) destroyEnemy(enemy);
 }
 
@@ -1104,12 +1154,16 @@ function spawnSplitChildren(enemy) {
   }
 }
 
-function getDamageableNpcs() {
-  return enemies.concat(allies);
+function getDamageableNpcs({ includeAllies = true } = {}) {
+  return includeAllies ? enemies.concat(allies) : enemies;
+}
+
+function isAllyFriendlyFireEnabled() {
+  return state.params.allyFriendlyFire === true;
 }
 
 export function damageEnemiesAt(position, radius = 0.45, amount = 34) {
-  const targets = getDamageableNpcs();
+  const targets = getDamageableNpcs({ includeAllies: isAllyFriendlyFireEnabled() });
   for (let i = targets.length - 1; i >= 0; i--) {
     const enemy = targets[i];
     const hitRadius = Math.max(0.45, enemy.radius + radius);
@@ -1128,7 +1182,7 @@ export function damageEnemiesInRadius(position, radius = 1, amount = 34, falloff
   const maxRadius = Math.max(0.001, Number(radius) || 1);
   const baseDamage = Math.max(0, Number(amount) || 0);
   const falloffPower = clamp(Number(falloff) || 1, 0.1, 4);
-  const targets = getDamageableNpcs();
+  const targets = getDamageableNpcs({ includeAllies: isAllyFriendlyFireEnabled() });
   for (let i = targets.length - 1; i >= 0; i--) {
     const enemy = targets[i];
     const enemyRadius = Math.max(0.35, enemy.radius || 0.4);
@@ -1186,7 +1240,7 @@ function applyExplosionSplashDamage() {
       }
     }
 
-    const targets = getDamageableNpcs();
+    const targets = getDamageableNpcs({ includeAllies: isAllyFriendlyFireEnabled() });
     for (let i = targets.length - 1; i >= 0; i--) {
       const enemy = targets[i];
       const id = enemy.group?.uuid;
@@ -1516,6 +1570,7 @@ function updateAllyMovement(ally, delta, elapsedTime, index, target = null) {
     ally.material.emissive.set(ally.def.color);
     ally.material.emissiveIntensity = 0.06;
   }
+  updateNpcHealthBar(ally);
 }
 
 
@@ -1559,6 +1614,7 @@ export function updateEnemies(delta, elapsedTime = 0) {
       enemy.material.emissive.set(enemy.def.color);
       enemy.material.emissiveIntensity = 0.06;
     }
+    updateNpcHealthBar(enemy);
   }
 
   // Step 3: Rebuild hash after movement, apply hard decollision

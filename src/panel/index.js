@@ -129,6 +129,7 @@ const PRESET_SETTINGS = [
   "showFps": true,
   "hudVisible": true,
   "hudFont": "michroma",
+  "hudNpcHealthBars": true,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -156,6 +157,7 @@ const PRESET_SETTINGS = [
   "allyCount": 10,
   "allyHealth": 100,
   "allyInvincible": false,
+  "allyFriendlyFire": false,
   "allyBehavior": "keepDistance",
   "allyMoveSpeed": 2.2,
   "allyDamage": 10,
@@ -598,6 +600,7 @@ const PRESET_SETTINGS = [
   "showFps": true,
   "hudVisible": true,
   "hudFont": "michroma",
+  "hudNpcHealthBars": true,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -625,6 +628,7 @@ const PRESET_SETTINGS = [
   "allyCount": 5,
   "allyHealth": 100,
   "allyInvincible": false,
+  "allyFriendlyFire": false,
   "allyBehavior": "keepDistance",
   "allyMoveSpeed": 2.2,
   "allyDamage": 10,
@@ -1048,6 +1052,7 @@ const PRESET_SETTINGS = [
   "showFps": true,
   "hudVisible": true,
   "hudFont": "michroma",
+  "hudNpcHealthBars": true,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -1075,6 +1080,7 @@ const PRESET_SETTINGS = [
   "allyCount": 5,
   "allyHealth": 100,
   "allyInvincible": false,
+  "allyFriendlyFire": false,
   "allyBehavior": "keepDistance",
   "allyMoveSpeed": 2.2,
   "allyDamage": 10,
@@ -1488,6 +1494,7 @@ const PRESET_SETTINGS = [
   "showFps": true,
   "hudVisible": true,
   "hudFont": "michroma",
+  "hudNpcHealthBars": true,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -1515,6 +1522,7 @@ const PRESET_SETTINGS = [
   "allyCount": 0,
   "allyHealth": 100,
   "allyInvincible": false,
+  "allyFriendlyFire": false,
   "allyBehavior": "guard",
   "allyMoveSpeed": 2.2,
   "allyDamage": 10,
@@ -1928,6 +1936,7 @@ const PRESET_SETTINGS = [
   "showFps": true,
   "hudVisible": true,
   "hudFont": "michroma",
+  "hudNpcHealthBars": true,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -1955,6 +1964,7 @@ const PRESET_SETTINGS = [
   "allyCount": 0,
   "allyHealth": 100,
   "allyInvincible": false,
+  "allyFriendlyFire": false,
   "allyBehavior": "guard",
   "allyMoveSpeed": 2.2,
   "allyDamage": 10,
@@ -2402,6 +2412,7 @@ const PRESET_SETTINGS = [
   "showFps": true,
   "hudVisible": true,
   "hudFont": "michroma",
+  "hudNpcHealthBars": true,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -2429,6 +2440,7 @@ const PRESET_SETTINGS = [
   "allyCount": 0,
   "allyHealth": 100,
   "allyInvincible": false,
+  "allyFriendlyFire": false,
   "allyBehavior": "guard",
   "allyMoveSpeed": 2.2,
   "allyDamage": 10,
@@ -2853,6 +2865,7 @@ const PRESET_SETTINGS = [
   "showFps": true,
   "hudVisible": true,
   "hudFont": "michroma",
+  "hudNpcHealthBars": true,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -3245,6 +3258,7 @@ const PRESET_SETTINGS = [
   "showFps": true,
   "hudVisible": true,
   "hudFont": "michroma",
+  "hudNpcHealthBars": true,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -3574,6 +3588,7 @@ const PRESET_SETTINGS = [
   "showFps": true,
   "hudVisible": true,
   "hudFont": "michroma",
+  "hudNpcHealthBars": true,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -3733,6 +3748,7 @@ const PRESET_SETTINGS = [
   "showFps": true,
   "hudVisible": true,
   "hudFont": "michroma",
+  "hudNpcHealthBars": true,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -3893,6 +3909,7 @@ const PRESET_SETTINGS = [
   "showFps": true,
   "hudVisible": true,
   "hudFont": "michroma",
+  "hudNpcHealthBars": true,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -4043,6 +4060,7 @@ const PRESET_SETTINGS = [
   "showFps": true,
   "hudVisible": true,
   "hudFont": "michroma",
+  "hudNpcHealthBars": true,
   "reticleVisible": true,
   "reticleType": "triSpoke",
   "reticleColor": "#ffffff",
@@ -4913,6 +4931,7 @@ const ALLY_JSON_KEYS = [
   'allyCount',
   'allyHealth',
   'allyInvincible',
+  'allyFriendlyFire',
   'allyBehavior',
   'allyMoveSpeed',
   'allyDamage',
@@ -5432,6 +5451,7 @@ function buildScene(body) {
 function buildHUD(body) {
   body.appendChild(toggle('HUD Enabled', 'hudVisible', () => applyHudSettings()));
   body.appendChild(select('Font', 'hudFont', HUD_FONT_OPTIONS, () => applyHudSettings()));
+  body.appendChild(toggle('Enemy / Ally Health Bars', 'hudNpcHealthBars', () => applyHudSettings()));
 
   body.appendChild(subhdr('Enemy Tag'));
   body.appendChild(toggle('Tag Enabled', 'tagEnabled', () => applyTagSettings()));
@@ -5801,6 +5821,7 @@ function buildAllies(body) {
   body.appendChild(slider({ key: 'allyCount', label: 'Number of Allies', min: 0, max: 50, step: 1, dec: 0 }));
   body.appendChild(slider({ key: 'allyHealth', label: 'Health Amount', min: 1, max: 1000, step: 1, dec: 0 }));
   body.appendChild(toggle('Ally Invincible', 'allyInvincible'));
+  body.appendChild(toggle('Friendly Fire', 'allyFriendlyFire'));
   body.appendChild(select('Behavior', 'allyBehavior', ENEMY_BEHAVIOR_OPTIONS));
   body.appendChild(slider({ key: 'allyMoveSpeed', label: 'Movement Speed', min: 0, max: 12, step: 0.1, dec: 1 }));
   body.appendChild(slider({ key: 'allyDamage', label: 'Damage Amount', min: 0, max: 250, step: 1, dec: 0 }));
@@ -6135,6 +6156,10 @@ function applyHudSettings() {
   const fpsEl = document.getElementById('fps-overlay');
   if (fpsEl) fpsEl.style.display = p.hudVisible && p.showFps ? '' : 'none';
 
+  document.querySelectorAll('.npc-health-bar').forEach(el => {
+    el.style.display = p.hudVisible && p.hudNpcHealthBars !== false ? 'flex' : 'none';
+  });
+
   applyReticleSettings();
 }
 
@@ -6222,6 +6247,7 @@ function applyAllParams() {
   p.allyCount = Math.round(clampSetting(p.allyCount, 0, 50, 0));
   p.allyHealth = Math.round(clampSetting(p.allyHealth, 1, 1000, 100));
   p.allyInvincible = p.allyInvincible === true;
+  p.allyFriendlyFire = p.allyFriendlyFire === true;
   p.allyBehavior = normalizeChoice(p.allyBehavior, ENEMY_BEHAVIOR_OPTIONS, 'guard');
   p.allyMoveSpeed = clampSetting(p.allyMoveSpeed, 0, 12, 2.2);
   p.allyDamage = Math.round(clampSetting(p.allyDamage, 0, 250, 10));
@@ -6241,6 +6267,7 @@ function applyAllParams() {
   p.cameraShakeRadius = clampSetting(p.cameraShakeRadius, 1, 80, 24);
   p.cameraShakeMinFactor = clampSetting(p.cameraShakeMinFactor, 0, 1, 0.12);
   p.overallBloomIntensity = clampSetting(p.overallBloomIntensity, 0, 4, 1.8);
+  p.hudNpcHealthBars = p.hudNpcHealthBars !== false;
   const enemyDestructionPrefixes = [
     'destructionRusher',
     'destructionOrbiter',
@@ -6295,8 +6322,8 @@ function rebuildPanel() {
     [ICON_LIGHT, 'Lighting', buildLighting],
     [ICON_SCENE, 'World', buildScene],
     [ICON_HUD, 'HUD', buildHUD],
-    [ICON_ENEMIES, 'Enemies', buildEnemies],
     [ICON_ALLIES, 'Allies', buildAllies],
+    [ICON_ENEMIES, 'Enemies', buildEnemies],
     [ICON_DESTRUCTION, 'Destruction', buildDestruction],
     [ICON_WEAPONS, 'Weapons', buildWeapons],
     [ICON_SOUND, 'Sound', buildSound],
