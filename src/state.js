@@ -518,7 +518,6 @@ export const state = {
       "soundProximityFalloff": 1,
       "soundProximityMinFactor": 0
   }
-},
 };
 
 // Snapshot taken at startup — used by Reset button
