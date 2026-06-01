@@ -8,7 +8,7 @@ export const state = {
   slowTimer: 0,
   slowScale: 0.35,
   slowRequested: false,
-  activePreset: 'g24',
+  activePreset: 'g25',
   mouseLookActive: false,
   isAiming: false,          // true while right-mouse / L2 held
   activeSlot: 0,            // 0 = laser, 1 = object placer
@@ -28,6 +28,7 @@ export const state = {
   sidebarScrollTop: 0,
   explosionSplashEvents: [],
   weaponAmmo: {},
+  weaponReloads: {},
 
   // Controller runtime state
   controllerConnected: false,
@@ -99,9 +100,9 @@ export const state = {
       "jumpForce": 9.5,
       "jumpGravity": 26,
       "bulletTimeEnabled": true,
-      "bulletTimeDuration": 3,
-      "bulletTimeCooldown": 8,
-      "bulletTimeScale": 0.35,
+      "bulletTimeDuration": 5,
+      "bulletTimeCooldown": 4,
+      "bulletTimeScale": 0.5,
       "shieldVisible": false,
       "shieldColor": "#1e7bff",
       "shieldOpacity": 0.4,
@@ -415,7 +416,7 @@ export const state = {
       "soundSfx_levelup": 1,
       "soundSfx_gameover": 1,
       "soundSfx_victory": 1,
-      "soundSfx_ambience": 0.5,
+      "soundSfx_ambience": 1,
       "enemyDestructionParticleCount": 40,
       "enemyDestructionParticleSize": 0.32,
       "enemyDestructionParticleSpeed": 1.25,
@@ -675,7 +676,12 @@ export const state = {
       "weaponRocketShockwaveParticleGlow": 8,
       "weaponRocketShockwaveParticleDespawnTime": 1,
       "weaponRocketShockwaveParticleColor": "#ffffff",
-      "weaponRocketShockwaveParticlePhysics": "gravity"
+      "weaponRocketShockwaveParticlePhysics": "gravity",
+      "weaponPistolReloadTime": 1.0,
+      "weaponRifleReloadTime": 1.25,
+      "weaponShotgunReloadTime": 1.6,
+      "weaponSniperReloadTime": 2.0,
+      "weaponRocketReloadTime": 2.4
 }
 };
 

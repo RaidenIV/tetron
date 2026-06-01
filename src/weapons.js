@@ -89,12 +89,12 @@ let _projectileShockwaveId = 1;
 
 const MAGAZINE_WEAPON_TYPES = new Set(['pistol', 'rifle', 'shotgun', 'sniperRifle', 'rocketLauncher']);
 const WEAPON_AMMO_SPECS = Object.freeze({
-  pistol: { prefix: 'Pistol', label: 'PISTOL', magazineKey: 'weaponPistolMagazineSize', totalKey: 'weaponPistolTotalAmmo', defaultMagazine: 12, defaultTotal: 60 },
-  rifle: { prefix: 'Rifle', label: 'RIFLE', magazineKey: 'weaponRifleMagazineSize', totalKey: 'weaponRifleTotalAmmo', defaultMagazine: 30, defaultTotal: 180 },
-  shotgun: { prefix: 'Shotgun', label: 'SHOTGUN', magazineKey: 'weaponShotgunMagazineSize', totalKey: 'weaponShotgunTotalAmmo', defaultMagazine: 8, defaultTotal: 40 },
-  sniperRifle: { prefix: 'Sniper', label: 'SNIPER', magazineKey: 'weaponSniperMagazineSize', totalKey: 'weaponSniperTotalAmmo', defaultMagazine: 5, defaultTotal: 25 },
-  grenades: { prefix: 'Grenade', label: 'GRENADES', magazineKey: null, totalKey: 'weaponGrenadeTotalAmmo', defaultMagazine: 0, defaultTotal: 10 },
-  rocketLauncher: { prefix: 'Rocket', label: 'ROCKET', magazineKey: 'weaponRocketClipCapacity', totalKey: 'weaponRocketTotalAmmo', defaultMagazine: 1, defaultTotal: 8 },
+  pistol: { prefix: 'Pistol', label: 'PISTOL', magazineKey: 'weaponPistolMagazineSize', totalKey: 'weaponPistolTotalAmmo', defaultMagazine: 12, defaultTotal: 60, defaultReloadTime: 1.0 },
+  rifle: { prefix: 'Rifle', label: 'RIFLE', magazineKey: 'weaponRifleMagazineSize', totalKey: 'weaponRifleTotalAmmo', defaultMagazine: 30, defaultTotal: 180, defaultReloadTime: 1.25 },
+  shotgun: { prefix: 'Shotgun', label: 'SHOTGUN', magazineKey: 'weaponShotgunMagazineSize', totalKey: 'weaponShotgunTotalAmmo', defaultMagazine: 8, defaultTotal: 40, defaultReloadTime: 1.6 },
+  sniperRifle: { prefix: 'Sniper', label: 'SNIPER', magazineKey: 'weaponSniperMagazineSize', totalKey: 'weaponSniperTotalAmmo', defaultMagazine: 5, defaultTotal: 25, defaultReloadTime: 2.0 },
+  grenades: { prefix: 'Grenade', label: 'GRENADES', magazineKey: null, totalKey: 'weaponGrenadeTotalAmmo', defaultMagazine: 0, defaultTotal: 10, defaultReloadTime: 0 },
+  rocketLauncher: { prefix: 'Rocket', label: 'ROCKET', magazineKey: 'weaponRocketClipCapacity', totalKey: 'weaponRocketTotalAmmo', defaultMagazine: 1, defaultTotal: 8, defaultReloadTime: 2.4 },
 });
 
 function clamp(v, min, max) {
@@ -141,6 +141,76 @@ function getConfiguredTotalAmmo(type = getSelectedWeaponType()) {
   return intParam(state.params[spec.totalKey], spec.defaultTotal, 0, 99999);
 }
 
+function getConfiguredReloadTime(type = getSelectedWeaponType()) {
+  const spec = getAmmoSpec(type);
+  if (!spec.magazineKey) return 0;
+  const key = `weapon${spec.prefix}ReloadTime`;
+  return numParam(state.params[key], spec.defaultReloadTime || 1, 0, 10);
+}
+
+function getReloadRecord(type = getSelectedWeaponType()) {
+  state.weaponReloads = state.weaponReloads || {};
+  return state.weaponReloads[type] || null;
+}
+
+function isWeaponReloading(type = getSelectedWeaponType()) {
+  const record = getReloadRecord(type);
+  return !!record && Number(record.timeRemaining) > 0;
+}
+
+function clearWeaponReload(type = getSelectedWeaponType()) {
+  if (state.weaponReloads) delete state.weaponReloads[type];
+}
+
+function canReloadWeapon(type = getSelectedWeaponType()) {
+  const spec = getAmmoSpec(type);
+  if (!spec.magazineKey || isWeaponReloading(type)) return false;
+  const magazineSize = getConfiguredMagazineSize(type);
+  const record = getAmmoRecord(type);
+  const missing = Math.max(0, magazineSize - record.magazine);
+  if (missing <= 0) return false;
+  return state.params.weaponInfiniteAmmo === true || record.reserve > 0;
+}
+
+function completeWeaponReload(type = getSelectedWeaponType()) {
+  const spec = getAmmoSpec(type);
+  if (!spec.magazineKey) return false;
+
+  const magazineSize = getConfiguredMagazineSize(type);
+  const record = getAmmoRecord(type);
+  if (state.params.weaponInfiniteAmmo === true) {
+    record.magazine = magazineSize;
+    clearWeaponReload(type);
+    syncWeaponAmmoHud();
+    return true;
+  }
+
+  const missing = Math.max(0, magazineSize - record.magazine);
+  if (missing <= 0 || record.reserve <= 0) {
+    clearWeaponReload(type);
+    syncWeaponAmmoHud();
+    return false;
+  }
+  const loaded = Math.min(missing, record.reserve);
+  record.magazine += loaded;
+  record.reserve -= loaded;
+  clearWeaponReload(type);
+  syncWeaponAmmoHud();
+  return loaded > 0;
+}
+
+function updateWeaponReloads(delta) {
+  if (!state.weaponReloads) return;
+  Object.entries(state.weaponReloads).forEach(([type, record]) => {
+    if (!record || Number(record.timeRemaining) <= 0) {
+      clearWeaponReload(type);
+      return;
+    }
+    record.timeRemaining = Math.max(0, Number(record.timeRemaining) - Math.max(0, delta));
+    if (record.timeRemaining <= 0) completeWeaponReload(type);
+  });
+}
+
 function getAmmoRecord(type = getSelectedWeaponType()) {
   const spec = getAmmoSpec(type);
   const magazineSize = getConfiguredMagazineSize(type);
@@ -155,6 +225,7 @@ function getAmmoRecord(type = getSelectedWeaponType()) {
       _totalAmmo: totalAmmo,
     };
     state.weaponAmmo[type] = record;
+    clearWeaponReload(type);
   }
   return record;
 }
@@ -170,16 +241,23 @@ export function resetWeaponAmmo(type = getSelectedWeaponType()) {
     _magazineSize: magazineSize,
     _totalAmmo: totalAmmo,
   };
+  clearWeaponReload(type);
   syncWeaponAmmoHud();
 }
 
 export function resetAllWeaponAmmo() {
   state.weaponAmmo = {};
+  state.weaponReloads = {};
   Object.keys(WEAPON_AMMO_SPECS).forEach(type => resetWeaponAmmo(type));
   syncWeaponAmmoHud();
 }
 
 function consumeWeaponAmmo(type = getSelectedWeaponType()) {
+  if (isWeaponReloading(type)) {
+    syncWeaponAmmoHud();
+    return false;
+  }
+
   if (state.params.weaponInfiniteAmmo === true) {
     syncWeaponAmmoHud();
     return true;
@@ -209,29 +287,18 @@ function consumeWeaponAmmo(type = getSelectedWeaponType()) {
 export function reloadCurrentWeapon() {
   const type = getSelectedWeaponType();
   const spec = getAmmoSpec(type);
-  if (!spec.magazineKey) {
+  if (!spec.magazineKey || !canReloadWeapon(type)) {
     syncWeaponAmmoHud();
     return false;
   }
 
-  const magazineSize = getConfiguredMagazineSize(type);
-  const record = getAmmoRecord(type);
-  if (state.params.weaponInfiniteAmmo === true) {
-    record.magazine = magazineSize;
-    syncWeaponAmmoHud();
-    return true;
-  }
+  const reloadTime = getConfiguredReloadTime(type);
+  if (reloadTime <= 0) return completeWeaponReload(type);
 
-  const missing = Math.max(0, magazineSize - record.magazine);
-  if (missing <= 0 || record.reserve <= 0) {
-    syncWeaponAmmoHud();
-    return false;
-  }
-  const loaded = Math.min(missing, record.reserve);
-  record.magazine += loaded;
-  record.reserve -= loaded;
+  state.weaponReloads = state.weaponReloads || {};
+  state.weaponReloads[type] = { timeRemaining: reloadTime, duration: reloadTime };
   syncWeaponAmmoHud();
-  return loaded > 0;
+  return true;
 }
 
 export function syncWeaponAmmoHud() {
@@ -863,6 +930,7 @@ function explodeProjectile(projectile) {
 
 function fireWeapon() {
   const config = getWeaponConfig();
+  if (isWeaponReloading(config.type)) return;
   if (!consumeWeaponAmmo(config.type)) return;
 
   // Muzzle position: actual right-hand weapon muzzle from the player visual.
@@ -884,6 +952,7 @@ function fireWeapon() {
 export function updateLaserProjectiles(delta, projectileDelta = delta) {
   const p = state.params;
   const config = getWeaponConfig();
+  updateWeaponReloads(delta);
   syncWeaponAmmoHud();
   applyLaserMaterials(config);
   updateExplosionFlashes(delta);
