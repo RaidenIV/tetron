@@ -18,6 +18,10 @@ let _mouseDragActive = false;
 let _lastMouseX = 0;
 let _lastMouseY = 0;
 
+if (renderer?.domElement && !renderer.domElement.hasAttribute('tabindex')) {
+  renderer.domElement.tabIndex = 0;
+}
+
 function clamp(v, min, max) {
   return Math.min(max, Math.max(min, v));
 }
@@ -94,7 +98,22 @@ function applyMouseLookDelta(dx, dy) {
 function requestMouseLook(target) {
   if (!canUseMouseLook(target)) return;
   if (document.pointerLockElement === renderer.domElement) return;
-  renderer.domElement.requestPointerLock?.();
+
+  try {
+    renderer.domElement.focus?.({ preventScroll: true });
+  } catch (_) {
+    try { renderer.domElement.focus?.(); } catch (_) {}
+  }
+
+  if (!document.hasFocus()) return;
+
+  try {
+    const request = renderer.domElement.requestPointerLock?.();
+    if (request?.catch) request.catch(() => {});
+  } catch (_) {
+    // Pointer lock can be denied if the browser tab/window is not focused.
+    // Mouse-drag camera control still works without pointer lock.
+  }
 }
 
 function trySetPointerCapture(element, pointerId) {

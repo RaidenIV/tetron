@@ -7288,6 +7288,21 @@ function getAmbienceEl() {
   return _ambienceEl;
 }
 
+function canStartAudioPlaybackFromUserActivation() {
+  const activation = navigator.userActivation;
+  return !activation || activation.isActive || activation.hasBeenActive;
+}
+
+function playAmbienceIfAllowed() {
+  if (state.params.soundSfx_ambience <= 0 || state.params.soundMuted) return;
+  if (!canStartAudioPlaybackFromUserActivation()) return;
+  const el = getAmbienceEl();
+  if (!el.paused) return;
+  applyBulletTimeAudioPitch(el);
+  const playRequest = el.play();
+  if (playRequest?.catch) playRequest.catch(() => {});
+}
+
 function buildSound(body) {
   body.appendChild(subhdr('Master'));
   body.appendChild(slider({ key: 'soundMusicVolume', label: 'Music', min: 0, max: 1, step: 0.01, dec: 2 }));
@@ -7333,8 +7348,7 @@ function buildSound(body) {
       const el = getAmbienceEl();
       el.volume = Math.max(0, Math.min(1, v));
       if (v > 0 && el.paused && !state.params.soundMuted) {
-        applyBulletTimeAudioPitch(el);
-        el.play().catch(() => {});
+        playAmbienceIfAllowed();
       } else if (v <= 0) {
         el.pause();
       }
@@ -7342,12 +7356,9 @@ function buildSound(body) {
   });
   body.appendChild(ambienceRow);
 
-  // Start ambience if volume > 0
-  const ambEl = getAmbienceEl();
-  if (state.params.soundSfx_ambience > 0 && ambEl.paused && !state.params.soundMuted) {
-    applyBulletTimeAudioPitch(ambEl);
-    ambEl.play().catch(() => {});
-  }
+  // Do not start ambience during initial panel construction; browsers block
+  // unmuted media until the player has interacted with the page.
+  if (canStartAudioPlaybackFromUserActivation()) playAmbienceIfAllowed();
 }
 
 
@@ -8201,8 +8212,7 @@ function syncPauseToSidebar() {
     if (state.paused) {
       _ambienceEl.pause();
     } else if (state.params.soundSfx_ambience > 0 && !state.params.soundMuted) {
-      applyBulletTimeAudioPitch(_ambienceEl);
-      _ambienceEl.play().catch(() => {});
+      playAmbienceIfAllowed();
     }
   }
 }
