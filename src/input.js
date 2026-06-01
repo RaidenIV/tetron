@@ -121,6 +121,39 @@ function requestMouseLook(target) {
   }
 }
 
+function applyWeaponMouseButtons(event, target = event?.target) {
+  if (state.paused) return;
+  const locked = document.pointerLockElement === renderer.domElement;
+  if (!locked && !isViewportTarget(target)) return;
+
+  const buttons = Number(event?.buttons);
+  if (!Number.isFinite(buttons) || buttons <= 0) return;
+
+  const placerActive = (state.activeSlot ?? 0) === 1;
+  const leftDown = (buttons & 1) !== 0;
+  const rightDown = (buttons & 2) !== 0;
+
+  if (leftDown) {
+    _leftMouseDown = true;
+    if (placerActive && (event.ctrlKey || event.metaKey)) {
+      state.primaryFire = false;
+      state.placerSelectionRequest = { toggle: true, additive: true };
+    } else {
+      state.primaryFire = true;
+    }
+  }
+
+  if (rightDown) {
+    _rightMouseDown = true;
+    if (placerActive) {
+      state.secondaryFire = true;
+      state.isAiming = false;
+    } else if (state.params.aimEnabled !== false) {
+      state.isAiming = true;
+    }
+  }
+}
+
 function trySetPointerCapture(element, pointerId) {
   if (pointerId === undefined || !element?.setPointerCapture) return;
   try {
@@ -168,6 +201,12 @@ renderer.domElement.addEventListener('pointerdown', event => {
       state.isAiming = true;
     }
   }
+
+  // Browsers can route combined right-click ADS + left-click fire input through
+  // the `buttons` bitmask instead of separate button events, especially around
+  // pointer lock. Keep both states latched from the bitmask so ADS never blocks
+  // the primary-fire button.
+  applyWeaponMouseButtons(event);
 
   if (!canUseMouseLook(event.target)) return;
   if (event.button !== 0 && event.button !== 2) return;
@@ -234,13 +273,18 @@ document.addEventListener('pointerlockchange', () => {
 document.addEventListener('mousemove', event => {
   if (state.paused) return;
   if (document.pointerLockElement !== renderer.domElement) return;
+  applyWeaponMouseButtons(event, renderer.domElement);
   setPointerAimCenter();
   applyMouseLookDelta(event.movementX || 0, event.movementY || 0);
 });
 
 document.addEventListener('mousedown', event => {
   if (state.paused) return;
-  if (document.pointerLockElement !== renderer.domElement) return;
+  const locked = document.pointerLockElement === renderer.domElement;
+  if (!locked && !isViewportTarget(event.target)) return;
+
+  applyWeaponMouseButtons(event, locked ? renderer.domElement : event.target);
+
   if (event.button === 0) {
     _leftMouseDown = true;
     if ((state.activeSlot ?? 0) === 1 && (event.ctrlKey || event.metaKey)) {

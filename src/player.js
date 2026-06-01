@@ -199,6 +199,14 @@ function isVector3Like(value) {
   return value && Number.isFinite(value.x) && Number.isFinite(value.y) && Number.isFinite(value.z);
 }
 
+function playerWeaponHasAmmoForVisual(type) {
+  if (state.params.weaponInfiniteAmmo === true) return true;
+  const record = state.weaponAmmo?.[type];
+  if (!record) return true;
+  if (type === 'grenades') return Number(record.reserve) > 0;
+  return Number(record.magazine) > 0;
+}
+
 function aimPlayerWeaponAt(targetPoint, fallbackYaw) {
   if (!isVector3Like(targetPoint)) {
     playerWeaponGroup.rotation.set(0, fallbackYaw, 0);
@@ -226,14 +234,16 @@ function updatePlayerWeaponVisual(aimTarget = null) {
   const rightOffset = radius + weaponSideGap;
   const forwardOffset = type === 'grenades' ? 0.02 : 0.12;
   const baseWeaponHeight = radius + length * 0.56;
-  const adsLift = (state.isAiming && p.aimEnabled !== false) ? baseWeaponHeight * 0.25 : 0;
+  const ammoReady = playerWeaponHasAmmoForVisual(type);
+  const adsLift = (ammoReady && state.isAiming && p.aimEnabled !== false) ? baseWeaponHeight * 0.25 : 0;
 
   playerWeaponGroup.position.set(
     rightX * rightOffset + forwardX * forwardOffset,
     baseWeaponHeight + adsLift,
     rightZ * rightOffset + forwardZ * forwardOffset
   );
-  const shouldTrackAim = ((state.isAiming && p.aimEnabled !== false) || state.primaryFire)
+  const shouldTrackAim = ammoReady
+    && ((state.isAiming && p.aimEnabled !== false) || state.primaryFire)
     && isVector3Like(aimTarget);
   if (shouldTrackAim) {
     aimPlayerWeaponAt(aimTarget, az);

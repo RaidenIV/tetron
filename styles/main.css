@@ -523,6 +523,7 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   border-radius: 6px; cursor: pointer; background: none; padding: 1px;
 }
 .sb-section-body > .sb-toggle { margin: 7px 0; }
+.sb-section-body > .sb-toggle.sb-toggle-spaced { margin-top: 14px; padding-top: 6px; }
 
 /* Buttons */
 .sb-btn {

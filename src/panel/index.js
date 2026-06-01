@@ -7277,7 +7277,9 @@ function buildWeaponControls(body, spec) {
 function buildWeapons(body) {
   body.appendChild(createManualSubsection('Current Weapon', currentBody => {
     currentBody.appendChild(toggle('Weapons Enabled', 'laserEnabled', () => syncWeaponAmmoHud()));
-    currentBody.appendChild(toggle('Infinite Ammo', 'weaponInfiniteAmmo', () => syncWeaponAmmoHud()));
+    const infiniteAmmoToggle = toggle('Infinite Ammo', 'weaponInfiniteAmmo', () => syncWeaponAmmoHud());
+    infiniteAmmoToggle.classList.add('sb-toggle-spaced');
+    currentBody.appendChild(infiniteAmmoToggle);
     currentBody.appendChild(select('Player Weapon', 'playerWeaponType', PLAYER_WEAPON_OPTIONS, () => {
       applyPlayerWeaponSettings();
       syncReticleToCurrentWeapon();
