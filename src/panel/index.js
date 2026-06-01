@@ -402,7 +402,7 @@ const PRESET_SETTINGS = [
   "destructionRusherColor": "#ff0000",
   "destructionRusherPhysics": "gravity",
   "destructionRusherDespawnTime": 5,
-      "destructionRusherCorpseFadeTime": 1,
+  "destructionRusherCorpseFadeTime": 1,
   "destructionOrbiterParticleCount": 40,
   "destructionOrbiterParticleSize": 0.32,
   "destructionOrbiterParticleSpeed": 1.25,
@@ -410,7 +410,7 @@ const PRESET_SETTINGS = [
   "destructionOrbiterColor": "#00cc44",
   "destructionOrbiterPhysics": "gravity",
   "destructionOrbiterDespawnTime": 3,
-      "destructionOrbiterCorpseFadeTime": 1,
+  "destructionOrbiterCorpseFadeTime": 1,
   "destructionTankerParticleCount": 40,
   "destructionTankerParticleSize": 0.32,
   "destructionTankerParticleSpeed": 1.25,
@@ -418,7 +418,7 @@ const PRESET_SETTINGS = [
   "destructionTankerColor": "#2b2b2b",
   "destructionTankerPhysics": "gravity",
   "destructionTankerDespawnTime": 3,
-      "destructionTankerCorpseFadeTime": 1,
+  "destructionTankerCorpseFadeTime": 1,
   "destructionSniperParticleCount": 40,
   "destructionSniperParticleSize": 0.32,
   "destructionSniperParticleSpeed": 1.25,
@@ -426,7 +426,7 @@ const PRESET_SETTINGS = [
   "destructionSniperColor": "#9b30ff",
   "destructionSniperPhysics": "gravity",
   "destructionSniperDespawnTime": 3,
-      "destructionSniperCorpseFadeTime": 1,
+  "destructionSniperCorpseFadeTime": 1,
   "destructionTeleporterParticleCount": 40,
   "destructionTeleporterParticleSize": 0.32,
   "destructionTeleporterParticleSpeed": 1.25,
@@ -434,7 +434,7 @@ const PRESET_SETTINGS = [
   "destructionTeleporterColor": "#e0e0e0",
   "destructionTeleporterPhysics": "gravity",
   "destructionTeleporterDespawnTime": 3,
-      "destructionTeleporterCorpseFadeTime": 1,
+  "destructionTeleporterCorpseFadeTime": 1,
   "destructionShieldedParticleCount": 40,
   "destructionShieldedParticleSize": 0.32,
   "destructionShieldedParticleSpeed": 1.25,
@@ -442,7 +442,7 @@ const PRESET_SETTINGS = [
   "destructionShieldedColor": "#4aa3ff",
   "destructionShieldedPhysics": "gravity",
   "destructionShieldedDespawnTime": 3,
-      "destructionShieldedCorpseFadeTime": 1,
+  "destructionShieldedCorpseFadeTime": 1,
   "destructionSplitterParticleCount": 100,
   "destructionSplitterParticleSize": 0.5,
   "destructionSplitterParticleSpeed": 1.75,
@@ -450,7 +450,7 @@ const PRESET_SETTINGS = [
   "destructionSplitterColor": "#80fb37",
   "destructionSplitterPhysics": "gravity",
   "destructionSplitterDespawnTime": 3,
-      "destructionSplitterCorpseFadeTime": 1,
+  "destructionSplitterCorpseFadeTime": 1,
   "destructionBossParticleCount": 100,
   "destructionBossParticleSize": 0.5,
   "destructionBossParticleSpeed": 1.75,
@@ -458,7 +458,7 @@ const PRESET_SETTINGS = [
   "destructionBossColor": "#111111",
   "destructionBossPhysics": "gravity",
   "destructionBossDespawnTime": 3,
-      "destructionBossCorpseFadeTime": 1,
+  "destructionBossCorpseFadeTime": 1,
   "destructionDestructibleParticleCount": 40,
   "destructionDestructibleParticleSize": 0.25,
   "destructionDestructibleParticleSpeed": 6,
@@ -513,8 +513,8 @@ const PRESET_SETTINGS = [
   "weaponPistolProjectileBloomIntensity": 1.0,
   "weaponPistolProjectileBloomSize": 1.0,
   "weaponPistolReticleType": "dot",
-      "weaponPistolReticleSize": 24,
-      "weaponPistolReticleWeight": 2,
+  "weaponPistolReticleSize": 24,
+  "weaponPistolReticleWeight": 2,
   "weaponRifleDamage": 34,
   "weaponRifleRange": 42,
   "weaponRifleSpread": 0.003,
@@ -527,8 +527,8 @@ const PRESET_SETTINGS = [
   "weaponRifleProjectileBloomIntensity": 1.0,
   "weaponRifleProjectileBloomSize": 1.0,
   "weaponRifleReticleType": "triSpoke",
-      "weaponRifleReticleSize": 24,
-      "weaponRifleReticleWeight": 2,
+  "weaponRifleReticleSize": 24,
+  "weaponRifleReticleWeight": 2,
   "weaponShotgunDamage": 12,
   "weaponShotgunRange": 28,
   "weaponShotgunSpread": 0.16,
@@ -542,8 +542,8 @@ const PRESET_SETTINGS = [
   "weaponShotgunProjectileBloomIntensity": 1.0,
   "weaponShotgunProjectileBloomSize": 1.0,
   "weaponShotgunReticleType": "crossDot",
-      "weaponShotgunReticleSize": 24,
-      "weaponShotgunReticleWeight": 2,
+  "weaponShotgunReticleSize": 24,
+  "weaponShotgunReticleWeight": 2,
   "weaponSniperDamage": 120,
   "weaponSniperRange": 180,
   "weaponSniperSpread": 0.002,
@@ -556,8 +556,8 @@ const PRESET_SETTINGS = [
   "weaponSniperProjectileBloomIntensity": 1.0,
   "weaponSniperProjectileBloomSize": 1.0,
   "weaponSniperReticleType": "cross",
-      "weaponSniperReticleSize": 24,
-      "weaponSniperReticleWeight": 2,
+  "weaponSniperReticleSize": 24,
+  "weaponSniperReticleWeight": 2,
   "weaponGrenadeDamage": 95,
   "weaponGrenadeRange": 60,
   "weaponGrenadeSpread": 0.01,
@@ -571,8 +571,8 @@ const PRESET_SETTINGS = [
   "weaponGrenadeProjectileBloomSize": 1.0,
   "weaponGrenadeRadius": 5,
   "weaponGrenadeReticleType": "ring",
-      "weaponGrenadeReticleSize": 24,
-      "weaponGrenadeReticleWeight": 2,
+  "weaponGrenadeReticleSize": 24,
+  "weaponGrenadeReticleWeight": 2,
   "weaponRocketDamage": 130,
   "weaponRocketRange": 95,
   "weaponRocketSpread": 0.004,
@@ -585,7 +585,24 @@ const PRESET_SETTINGS = [
   "weaponRocketProjectileBloomIntensity": 1.0,
   "weaponRocketProjectileBloomSize": 1.0,
   "weaponRocketRadius": 6,
-  "weaponRocketReticleType": "ring"
+  "weaponRocketReticleType": "ring",
+  "weaponPistolProjectileBloomColor": "#d8dde6",
+  "weaponPistolReticleOpacity": 1,
+  "weaponRifleProjectileBloomColor": "#ff1100",
+  "weaponRifleReticleOpacity": 1,
+  "weaponShotgunProjectileBloomColor": "#d8dde6",
+  "weaponShotgunReticleOpacity": 1,
+  "weaponSniperProjectileBloomColor": "#d975ff",
+  "weaponSniperReticleOpacity": 1,
+  "weaponGrenadeProjectileBloomColor": "#ff8844",
+  "weaponGrenadeReticleOpacity": 1,
+  "weaponRocketProjectileBloomColor": "#ff3333",
+  "weaponRocketReticleOpacity": 1,
+  "weaponGrenadeShockwaveSpeed": 40,
+  "weaponGrenadeShockwaveColor": "#ffffff",
+  "weaponGrenadeShockwaveFadeTime": 0.12,
+  "weaponGrenadeShockwaveDelay": 0,
+  "weaponGrenadeShockwaveTransparency": 0.1
 } },
   { key: 'g20', label: 'G20', path: './presets/G20.json', data: {
   "cameraMode": "third2",
@@ -5108,6 +5125,10 @@ function weaponReticleWeightKey(spec) {
   return weaponKey(spec.prefix, 'ReticleWeight');
 }
 
+function weaponReticleOpacityKey(spec) {
+  return weaponKey(spec.prefix, 'ReticleOpacity');
+}
+
 
 const ENEMY_JSON_KEYS = [
   'enemyType',
@@ -5844,11 +5865,14 @@ function syncReticleToCurrentWeapon() {
 
   const sizeKey = weaponReticleSizeKey(spec);
   const weightKey = weaponReticleWeightKey(spec);
+  const opacityKey = weaponReticleOpacityKey(spec);
   const size = Number(state.params[sizeKey]);
   const weight = Number(state.params[weightKey]);
+  const opacity = Number(state.params[opacityKey]);
   state.params.reticleSize = Number.isFinite(size) ? size : 24;
   state.params.reticleThickness = Number.isFinite(weight) ? weight : 2;
   state.params.reticleWeight = Number.isFinite(weight) ? weight : 2;
+  state.params.reticleOpacity = Number.isFinite(opacity) ? Math.min(1, Math.max(0.05, opacity)) : 1;
   return reticleType;
 }
 
@@ -5945,13 +5969,23 @@ function buildWeaponControls(body, spec) {
   body.appendChild(reticlePickerRow(spec));
   body.appendChild(slider({ key: weaponReticleSizeKey(spec), label: 'Reticle Size', min: 4, max: 96, step: 1, dec: 0, onChange: syncActiveReticle }));
   body.appendChild(slider({ key: weaponReticleWeightKey(spec), label: 'Reticle Weight', min: 0.5, max: 12, step: 0.1, dec: 1, onChange: syncActiveReticle }));
+  body.appendChild(slider({ key: weaponReticleOpacityKey(spec), label: 'Reticle Opacity', min: 0.05, max: 1, step: 0.05, dec: 2, onChange: syncActiveReticle }));
   body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileSpeed'), label: 'Projectile Speed', min: 1, max: 250, step: 1, dec: 0 }));
   body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileSize'), label: 'Projectile Size', min: 0.05, max: 2, step: 0.01, dec: 2 }));
   body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileLength'), label: 'Projectile Length', min: 0.05, max: 8, step: 0.01, dec: 2 }));
   body.appendChild(colorPicker('Projectile Color', weaponKey(prefix, 'ProjectileColor')));
   body.appendChild(toggle('Projectile Bloom', weaponKey(prefix, 'ProjectileBloom')));
+  body.appendChild(colorPicker('Bloom Color', weaponKey(prefix, 'ProjectileBloomColor')));
   body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileBloomIntensity'), label: 'Bloom Intensity', min: 0, max: 3, step: 0.05, dec: 2 }));
   body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileBloomSize'), label: 'Bloom Size', min: 0.25, max: 4, step: 0.05, dec: 2 }));
+  if (spec.type === 'grenades') {
+    body.appendChild(subhdr('Shockwave'));
+    body.appendChild(slider({ key: 'weaponGrenadeShockwaveSpeed', label: 'Shockwave Speed', min: 0, max: 40, step: 0.5, dec: 1 }));
+    body.appendChild(colorPicker('Shockwave Color', 'weaponGrenadeShockwaveColor'));
+    body.appendChild(slider({ key: 'weaponGrenadeShockwaveTransparency', label: 'Shockwave Transparency', min: 0, max: 1, step: 0.01, dec: 2 }));
+    body.appendChild(slider({ key: 'weaponGrenadeShockwaveFadeTime', label: 'Shockwave Fade Time', min: 0.05, max: 3, step: 0.05, dec: 2 }));
+    body.appendChild(slider({ key: 'weaponGrenadeShockwaveDelay', label: 'Shockwave Delay', min: 0, max: 3, step: 0.05, dec: 2 }));
+  }
 }
 
 function buildWeapons(body) {
@@ -5989,8 +6023,12 @@ function buildWeapons(body) {
       },
     }));
     reticleBody.appendChild(slider({
-      key: 'reticleOpacity', label: 'Opacity', min: 0.1, max: 1, step: 0.05, dec: 2,
-      onChange: () => applyReticleSettings(),
+      key: 'reticleOpacity', label: 'Opacity', min: 0.05, max: 1, step: 0.05, dec: 2,
+      onChange: value => {
+        const spec = weaponSpecForType(state.params.playerWeaponType);
+        state.params[weaponReticleOpacityKey(spec)] = value;
+        applyReticleSettings();
+      },
     }));
     reticleBody.appendChild(toggle('Glow', 'reticleGlow', () => applyReticleSettings()));
   }, false));
@@ -6385,6 +6423,11 @@ function applyParamObject(params) {
     const spec = weaponSpecForType(state.params.playerWeaponType);
     state.params[weaponReticleKey(spec)] = incoming.reticleType;
   }
+  const hasWeaponReticleOpacity = WEAPON_CONTROL_SPECS.some(spec => Object.prototype.hasOwnProperty.call(incoming, weaponReticleOpacityKey(spec)));
+  if (!hasWeaponReticleOpacity && Object.prototype.hasOwnProperty.call(incoming, 'reticleOpacity')) {
+    const spec = weaponSpecForType(state.params.playerWeaponType);
+    state.params[weaponReticleOpacityKey(spec)] = incoming.reticleOpacity;
+  }
 }
 
 function applyPreset(key) {
@@ -6638,12 +6681,12 @@ function applyAllParams() {
   const hexSetting = (value, fallback) => (/^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : fallback);
   const boolSetting = (value, fallback = false) => (value === true || value === false ? value : fallback);
   const weaponDefaults = {
-    Pistol: { damage: 24, range: 55, spread: 0.01, fireRate: 3.6, speed: 70, size: 0.28, length: 0.65, bloomIntensity: 1, bloomSize: 1, color: '#d8dde6', bloom: false, reticle: 'dot', reticleSize: 24, reticleWeight: 2 },
-    Rifle: { damage: 34, range: Number(p.laserRange) || 42, spread: 0.003, fireRate: Number(p.laserFireRate) || 5, speed: Number(p.laserProjectileSpeed) || 80, size: 0.36, length: 0.84, bloomIntensity: 1, bloomSize: 1, color: p.laserBloomColor || '#ff1100', bloom: p.laserBloom !== false, reticle: 'triSpoke', reticleSize: 24, reticleWeight: 2 },
-    Shotgun: { damage: 12, range: 28, spread: 0.16, fireRate: 1.15, speed: 60, size: 0.32, length: 0.75, bloomIntensity: 1, bloomSize: 1, color: '#d8dde6', bloom: false, reticle: 'crossDot', reticleSize: 24, reticleWeight: 2 },
-    Sniper: { damage: 120, range: 180, spread: 0.002, fireRate: 0.65, speed: 130, size: 0.24, length: 0.56, bloomIntensity: 1, bloomSize: 1, color: '#d975ff', bloom: true, reticle: 'cross', reticleSize: 24, reticleWeight: 2 },
-    Grenade: { damage: 95, range: 60, spread: 0.01, fireRate: 0.72, speed: 16, size: 0.25, length: 0.27, bloomIntensity: 1, bloomSize: 1, color: '#ff8844', bloom: false, reticle: 'ring', radius: 5, reticleSize: 24, reticleWeight: 2 },
-    Rocket: { damage: 130, range: 95, spread: 0.004, fireRate: 0.68, speed: 34, size: 0.42, length: 1.33, bloomIntensity: 1, bloomSize: 1, color: '#ff3333', bloom: true, reticle: 'ring', radius: 6, reticleSize: 24, reticleWeight: 2 },
+    Pistol: { damage: 24, range: 55, spread: 0.01, fireRate: 3.6, speed: 70, size: 0.28, length: 0.65, bloomIntensity: 1, bloomSize: 1, color: '#d8dde6', bloomColor: '#d8dde6', bloom: false, reticle: 'dot', reticleSize: 24, reticleWeight: 2, reticleOpacity: 1 },
+    Rifle: { damage: 34, range: Number(p.laserRange) || 42, spread: 0.003, fireRate: Number(p.laserFireRate) || 5, speed: Number(p.laserProjectileSpeed) || 80, size: 0.36, length: 0.84, bloomIntensity: 1, bloomSize: 1, color: p.laserBloomColor || '#ff1100', bloomColor: p.laserBloomColor || '#ff1100', bloom: p.laserBloom !== false, reticle: 'triSpoke', reticleSize: 24, reticleWeight: 2, reticleOpacity: 1 },
+    Shotgun: { damage: 12, range: 28, spread: 0.16, fireRate: 1.15, speed: 60, size: 0.32, length: 0.75, bloomIntensity: 1, bloomSize: 1, color: '#d8dde6', bloomColor: '#d8dde6', bloom: false, reticle: 'crossDot', reticleSize: 24, reticleWeight: 2, reticleOpacity: 1 },
+    Sniper: { damage: 120, range: 180, spread: 0.002, fireRate: 0.65, speed: 130, size: 0.24, length: 0.56, bloomIntensity: 1, bloomSize: 1, color: '#d975ff', bloomColor: '#d975ff', bloom: true, reticle: 'cross', reticleSize: 24, reticleWeight: 2, reticleOpacity: 1 },
+    Grenade: { damage: 95, range: 60, spread: 0.01, fireRate: 0.72, speed: 16, size: 0.25, length: 0.27, bloomIntensity: 1, bloomSize: 1, color: '#ff8844', bloomColor: '#ff8844', bloom: false, reticle: 'ring', radius: 5, reticleSize: 24, reticleWeight: 2, reticleOpacity: 1 },
+    Rocket: { damage: 130, range: 95, spread: 0.004, fireRate: 0.68, speed: 34, size: 0.42, length: 1.33, bloomIntensity: 1, bloomSize: 1, color: '#ff3333', bloomColor: '#ff3333', bloom: true, reticle: 'ring', radius: 6, reticleSize: 24, reticleWeight: 2, reticleOpacity: 1 },
   };
   WEAPON_CONTROL_SPECS.forEach(spec => {
     const d = weaponDefaults[spec.prefix];
@@ -6656,14 +6699,21 @@ function applyAllParams() {
     p[weaponKey(spec.prefix, 'ProjectileLength')] = clampSetting(p[weaponKey(spec.prefix, 'ProjectileLength')], 0.05, 8, d.length);
     p[weaponKey(spec.prefix, 'ProjectileColor')] = hexSetting(p[weaponKey(spec.prefix, 'ProjectileColor')], d.color);
     p[weaponKey(spec.prefix, 'ProjectileBloom')] = boolSetting(p[weaponKey(spec.prefix, 'ProjectileBloom')], d.bloom);
+    p[weaponKey(spec.prefix, 'ProjectileBloomColor')] = hexSetting(p[weaponKey(spec.prefix, 'ProjectileBloomColor')], d.bloomColor || p[weaponKey(spec.prefix, 'ProjectileColor')]);
     p[weaponKey(spec.prefix, 'ProjectileBloomIntensity')] = clampSetting(p[weaponKey(spec.prefix, 'ProjectileBloomIntensity')], 0, 3, d.bloomIntensity);
     p[weaponKey(spec.prefix, 'ProjectileBloomSize')] = clampSetting(p[weaponKey(spec.prefix, 'ProjectileBloomSize')], 0.25, 4, d.bloomSize);
     p[weaponReticleKey(spec)] = RETICLE_MARKUP[p[weaponReticleKey(spec)]] ? p[weaponReticleKey(spec)] : d.reticle;
     p[weaponReticleSizeKey(spec)] = clampSetting(p[weaponReticleSizeKey(spec)], 4, 96, d.reticleSize);
     p[weaponReticleWeightKey(spec)] = clampSetting(p[weaponReticleWeightKey(spec)], 0.5, 12, d.reticleWeight);
+    p[weaponReticleOpacityKey(spec)] = clampSetting(p[weaponReticleOpacityKey(spec)], 0.05, 1, d.reticleOpacity);
     if (spec.radius) p[weaponKey(spec.prefix, 'Radius')] = clampSetting(p[weaponKey(spec.prefix, 'Radius')], 0.5, 60, d.radius);
   });
   p.weaponShotgunPellets = Math.round(clampSetting(p.weaponShotgunPellets, 1, 24, 8));
+  p.weaponGrenadeShockwaveSpeed = clampSetting(p.weaponGrenadeShockwaveSpeed, 0, 40, Number(p.destructionDestructibleShockwaveSpeed) || 40);
+  p.weaponGrenadeShockwaveFadeTime = clampSetting(p.weaponGrenadeShockwaveFadeTime, 0.05, 3, Number(p.destructionDestructibleShockwaveFadeTime) || 0.12);
+  p.weaponGrenadeShockwaveDelay = clampSetting(p.weaponGrenadeShockwaveDelay, 0, 3, Number(p.destructionDestructibleShockwaveDelay) || 0);
+  p.weaponGrenadeShockwaveTransparency = clampSetting(p.weaponGrenadeShockwaveTransparency, 0, 1, Number(p.destructionDestructibleShockwaveTransparency) || 0.1);
+  p.weaponGrenadeShockwaveColor = hexSetting(p.weaponGrenadeShockwaveColor, p.destructionDestructibleShockwaveColor || '#ffffff');
   syncReticleToCurrentWeapon();
   applyPlayerWeaponSettings();
   p.allyType = normalizeChoice(p.allyType, ENEMY_TYPE_OPTIONS, 'rusher');

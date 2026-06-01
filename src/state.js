@@ -137,7 +137,7 @@ export const state = {
       "hudNpcHealthBars": true,
       "hudEnemyHealthBars": true,
       "hudAllyHealthBars": true,
-  "hudNpcHealthBarRange": 60,
+      "hudNpcHealthBarRange": 60,
       "reticleVisible": true,
       "reticleType": "triSpoke",
       "reticleColor": "#ffffff",
@@ -612,7 +612,24 @@ export const state = {
       "weaponRocketRadius": 6,
       "weaponRocketReticleType": "ring",
       "weaponRocketReticleSize": 24,
-      "weaponRocketReticleWeight": 2
+      "weaponRocketReticleWeight": 2,
+      "weaponPistolProjectileBloomColor": "#d8dde6",
+      "weaponPistolReticleOpacity": 1,
+      "weaponRifleProjectileBloomColor": "#ff1100",
+      "weaponRifleReticleOpacity": 1,
+      "weaponShotgunProjectileBloomColor": "#d8dde6",
+      "weaponShotgunReticleOpacity": 1,
+      "weaponSniperProjectileBloomColor": "#d975ff",
+      "weaponSniperReticleOpacity": 1,
+      "weaponGrenadeProjectileBloomColor": "#ff8844",
+      "weaponGrenadeReticleOpacity": 1,
+      "weaponRocketProjectileBloomColor": "#ff3333",
+      "weaponRocketReticleOpacity": 1,
+      "weaponGrenadeShockwaveSpeed": 40,
+      "weaponGrenadeShockwaveColor": "#ffffff",
+      "weaponGrenadeShockwaveFadeTime": 0.12,
+      "weaponGrenadeShockwaveDelay": 0,
+      "weaponGrenadeShockwaveTransparency": 0.1
 }
 };
 

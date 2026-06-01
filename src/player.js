@@ -204,10 +204,12 @@ function updatePlayerWeaponVisual() {
   const weaponSideGap = 0.105;
   const rightOffset = radius + weaponSideGap;
   const forwardOffset = type === 'grenades' ? 0.02 : 0.12;
+  const baseWeaponHeight = radius + length * 0.56;
+  const adsLift = (state.isAiming && p.aimEnabled !== false) ? baseWeaponHeight * 0.25 : 0;
 
   playerWeaponGroup.position.set(
     rightX * rightOffset + forwardX * forwardOffset,
-    radius + length * 0.56,
+    baseWeaponHeight + adsLift,
     rightZ * rightOffset + forwardZ * forwardOffset
   );
   playerWeaponGroup.rotation.set(0, az, 0);

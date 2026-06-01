@@ -11,6 +11,7 @@ import { scene, camera } from './renderer.js';
 import { playerGroup, getPlayerWeaponMuzzle } from './player.js';
 import { damageEnemiesAt, damageEnemiesInRadius, getEnemies, getAllies } from './enemies.js';
 import { isPlacedObjectHit } from './placer.js';
+import { getSfxVolume } from './audio.js';
 
 const _up = new THREE.Vector3(0, 1, 0);
 const _spawnPos = new THREE.Vector3();
@@ -37,6 +38,7 @@ const _projectileGeo = new THREE.CapsuleGeometry(0.055, 0.7, 6, 12);
 const _rocketGeo = new THREE.CapsuleGeometry(0.09, 0.95, 8, 14);
 const _grenadeGeo = new THREE.SphereGeometry(0.16, 14, 10);
 const _explosionGeo = new THREE.SphereGeometry(1, 24, 12);
+const _projectileShockwaveGeo = new THREE.SphereGeometry(1, 32, 16);
 
 const _laserCoreMat = new THREE.MeshStandardMaterial({
   color: 0xffffff,
@@ -78,7 +80,10 @@ const _explosionMat = new THREE.MeshBasicMaterial({
 
 const _activeProjectiles = [];
 const _activeExplosions = [];
+const _activeProjectileShockwaves = [];
 let _weaponCooldown = 0;
+let _projectileShockwaveId = 1;
+let _shellSequenceIndex = 0;
 
 function clamp(v, min, max) {
   return Math.min(max, Math.max(min, v));
@@ -113,6 +118,10 @@ function weaponColor(prefix, fallback) {
   return hexColor(state.params[`weapon${prefix}ProjectileColor`], fallback);
 }
 
+function weaponBloomColor(prefix, fallback) {
+  return hexColor(state.params[`weapon${prefix}ProjectileBloomColor`], fallback);
+}
+
 function weaponBloom(prefix, fallback = false) {
   return boolParam(state.params[`weapon${prefix}ProjectileBloom`], fallback);
 }
@@ -140,6 +149,7 @@ function makeWeaponConfig(type, prefix, defaults, extra = {}) {
     projectileSize,
     projectileLength,
     projectileColor: weaponColor(prefix, defaults.projectileColor),
+    projectileBloomColor: weaponBloomColor(prefix, defaults.projectileBloomColor || defaults.projectileColor),
     projectileBloom: weaponBloom(prefix, defaults.projectileBloom),
     projectileBloomIntensity,
     projectileBloomSize,
@@ -153,7 +163,7 @@ function makeWeaponConfig(type, prefix, defaults, extra = {}) {
 function applyLaserMaterials(config = null) {
   const p = state.params;
   const bloomIntensity = Number(p.laserBloomIntensity);
-  _laserGlowMat.color.set(config?.projectileColor || p.laserBloomColor || '#ff1100');
+  _laserGlowMat.color.set(config?.projectileBloomColor || config?.projectileColor || p.laserBloomColor || '#ff1100');
   _laserGlowMat.opacity = (config ? config.projectileBloom !== false : p.laserBloom)
     ? clamp((Number.isFinite(bloomIntensity) ? bloomIntensity : 0.55) * getOverallBloomFactor(), 0, 3)
     : 0;
@@ -167,24 +177,38 @@ function getSelectedWeaponType() {
     : 'rifle';
 }
 
+function getGrenadeShockwaveConfig(radius, damage) {
+  const p = state.params;
+  return {
+    speed: numParam(p.weaponGrenadeShockwaveSpeed, p.destructionDestructibleShockwaveSpeed ?? 40, 0, 40),
+    color: hexColor(p.weaponGrenadeShockwaveColor, p.destructionDestructibleShockwaveColor || '#ffffff'),
+    transparency: numParam(p.weaponGrenadeShockwaveTransparency, p.destructionDestructibleShockwaveTransparency ?? 0.1, 0, 1),
+    fadeTime: numParam(p.weaponGrenadeShockwaveFadeTime, p.destructionDestructibleShockwaveFadeTime ?? 0.12, 0.05, 3),
+    delay: numParam(p.weaponGrenadeShockwaveDelay, p.destructionDestructibleShockwaveDelay ?? 0, 0, 3),
+    radius: Math.max(0.5, Number(radius) || 5),
+    damage: Math.max(0, Number(damage) || 0),
+  };
+}
+
 function getWeaponConfig(type = getSelectedWeaponType()) {
   switch (type) {
     case 'pistol':
-      return makeWeaponConfig('pistol', 'Pistol', { fireRate: 3.6, speed: 70, range: 55, damage: 24, spread: 0.01, projectileSize: 0.28, projectileLength: 0.65, projectileBloomIntensity: 1, projectileBloomSize: 1, projectileColor: '#d8dde6', projectileBloom: false, visual: 'solid' });
+      return makeWeaponConfig('pistol', 'Pistol', { fireRate: 3.6, speed: 70, range: 55, damage: 24, spread: 0.01, projectileSize: 0.28, projectileLength: 0.65, projectileBloomIntensity: 1, projectileBloomSize: 1, projectileColor: '#d8dde6', projectileBloomColor: '#d8dde6', projectileBloom: false, visual: 'solid' });
     case 'shotgun': {
-      const cfg = makeWeaponConfig('shotgun', 'Shotgun', { fireRate: 1.15, speed: 60, range: 28, damage: 12, spread: 0.16, projectileSize: 0.32, projectileLength: 0.75, projectileBloomIntensity: 1, projectileBloomSize: 1, projectileColor: '#d8dde6', projectileBloom: false, visual: 'solid' });
+      const cfg = makeWeaponConfig('shotgun', 'Shotgun', { fireRate: 1.15, speed: 60, range: 28, damage: 12, spread: 0.16, projectileSize: 0.32, projectileLength: 0.75, projectileBloomIntensity: 1, projectileBloomSize: 1, projectileColor: '#d8dde6', projectileBloomColor: '#d8dde6', projectileBloom: false, visual: 'solid' });
       cfg.pellets = Math.max(1, Math.min(24, Math.round(Number(state.params.weaponShotgunPellets) || 8)));
       return cfg;
     }
     case 'sniperRifle':
-      return makeWeaponConfig('sniperRifle', 'Sniper', { fireRate: 0.65, speed: 130, range: 180, damage: 120, spread: 0.002, projectileSize: 0.24, projectileLength: 0.56, projectileBloomIntensity: 1, projectileBloomSize: 1, projectileColor: '#d975ff', projectileBloom: true, visual: 'laser' });
+      return makeWeaponConfig('sniperRifle', 'Sniper', { fireRate: 0.65, speed: 130, range: 180, damage: 120, spread: 0.002, projectileSize: 0.24, projectileLength: 0.56, projectileBloomIntensity: 1, projectileBloomSize: 1, projectileColor: '#d975ff', projectileBloomColor: '#d975ff', projectileBloom: true, visual: 'laser' });
     case 'grenades': {
-      const cfg = makeWeaponConfig('grenades', 'Grenade', { fireRate: 0.72, speed: 16, range: 60, damage: 95, spread: 0.01, projectileSize: 0.25, projectileLength: 0.27, projectileBloomIntensity: 1, projectileBloomSize: 1, projectileColor: '#ff8844', projectileBloom: false, visual: 'grenade' }, { ballistic: true, explosive: true, fuse: 2.2 });
+      const cfg = makeWeaponConfig('grenades', 'Grenade', { fireRate: 0.72, speed: 16, range: 60, damage: 95, spread: 0.01, projectileSize: 0.25, projectileLength: 0.27, projectileBloomIntensity: 1, projectileBloomSize: 1, projectileColor: '#ff8844', projectileBloomColor: '#ff8844', projectileBloom: false, visual: 'grenade' }, { ballistic: true, physicsObject: true, explosive: true, fuse: 2.2 });
       cfg.radius = weaponValue('Grenade', 'Radius', 5, 0.5, 50);
+      cfg.shockwave = getGrenadeShockwaveConfig(cfg.radius, cfg.damage);
       return cfg;
     }
     case 'rocketLauncher': {
-      const cfg = makeWeaponConfig('rocketLauncher', 'Rocket', { fireRate: 0.68, speed: 34, range: 95, damage: 130, spread: 0.004, projectileSize: 0.42, projectileLength: 1.33, projectileBloomIntensity: 1, projectileBloomSize: 1, projectileColor: '#ff3333', projectileBloom: true, visual: 'rocket' }, { explosive: true, fuse: 4.0 });
+      const cfg = makeWeaponConfig('rocketLauncher', 'Rocket', { fireRate: 0.68, speed: 34, range: 95, damage: 130, spread: 0.004, projectileSize: 0.42, projectileLength: 1.33, projectileBloomIntensity: 1, projectileBloomSize: 1, projectileColor: '#ff3333', projectileBloomColor: '#ff3333', projectileBloom: true, visual: 'rocket' }, { explosive: true, fuse: 4.0 });
       cfg.radius = weaponValue('Rocket', 'Radius', 6, 0.5, 60);
       return cfg;
     }
@@ -201,6 +225,7 @@ function getWeaponConfig(type = getSelectedWeaponType()) {
         projectileBloomIntensity: 1,
         projectileBloomSize: 1,
         projectileColor: state.params.laserBloomColor || '#ff1100',
+        projectileBloomColor: state.params.laserBloomColor || '#ff1100',
         projectileBloom: state.params.laserBloom !== false,
         visual: 'laser',
       });
@@ -233,7 +258,7 @@ function createProjectileVisual(config) {
     core = new THREE.Mesh(_projectileGeo, coreMat);
   }
   core.name = 'ProjectileCore';
-  core.castShadow = config.visual !== 'laser';
+  core.castShadow = config.visual === 'grenade';
   core.receiveShadow = false;
   group.add(core);
 
@@ -249,7 +274,7 @@ function createProjectileVisual(config) {
   let glowMat = null;
   if (config.projectileBloom) {
     glowMat = _laserGlowMat.clone();
-    glowMat.color.copy(projectileColor);
+    glowMat.color.set(config.projectileBloomColor || config.projectileColor || '#ffffff');
     glowMat.opacity = clamp(0.55 * bloomIntensity * getOverallBloomFactor(), 0, 3);
     glow = new THREE.Mesh(config.visual === 'rocket' ? _rocketGeo : config.visual === 'grenade' ? _grenadeGeo : _projectileGeo, glowMat);
     glow.name = 'ProjectileGlow';
@@ -292,6 +317,59 @@ function updateExplosionFlashes(delta) {
     const t = 1 - fx.life / fx.maxLife;
     fx.mesh.scale.setScalar(Math.max(0.01, fx.radius * t));
     fx.mesh.material.opacity = (1 - t) * 0.55;
+  }
+}
+
+function spawnProjectileShockwave(position, cfg = {}) {
+  const speed = Math.max(0, Number(cfg.speed) || 0);
+  const fadeTime = clamp(Number(cfg.fadeTime) || 0.12, 0.05, 3);
+  const maxRadius = Math.max(0.01, Number(cfg.radius) || speed * fadeTime || 1);
+  const opacity = clamp(Number(cfg.transparency) || 0, 0, 1);
+  if (speed <= 0 && opacity <= 0) return;
+
+  const material = new THREE.MeshBasicMaterial({
+    color: hexColor(cfg.color, '#ffffff'),
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+  });
+  const mesh = new THREE.Mesh(_projectileShockwaveGeo, material);
+  mesh.name = `GrenadeShockwave_${_projectileShockwaveId++}`;
+  mesh.position.copy(position);
+  mesh.scale.setScalar(0.001);
+  mesh.visible = false;
+  scene.add(mesh);
+  _activeProjectileShockwaves.push({
+    mesh,
+    speed,
+    maxRadius,
+    opacity,
+    fadeTime,
+    age: -clamp(Number(cfg.delay) || 0, 0, 3),
+  });
+}
+
+function updateProjectileShockwaves(delta) {
+  for (let i = _activeProjectileShockwaves.length - 1; i >= 0; i--) {
+    const shockwave = _activeProjectileShockwaves[i];
+    shockwave.age += delta;
+    if (shockwave.age < 0) {
+      shockwave.mesh.visible = false;
+      continue;
+    }
+    const t = clamp(shockwave.age / shockwave.fadeTime, 0, 1);
+    const radius = Math.max(0.001, Math.min(shockwave.maxRadius, shockwave.speed > 0 ? shockwave.speed * shockwave.age : shockwave.maxRadius * t));
+    shockwave.mesh.visible = shockwave.opacity > 0;
+    shockwave.mesh.scale.setScalar(radius);
+    shockwave.mesh.material.opacity = shockwave.opacity * (1 - t);
+    if (shockwave.age >= shockwave.fadeTime) {
+      scene.remove(shockwave.mesh);
+      shockwave.mesh.material?.dispose?.();
+      _activeProjectileShockwaves.splice(i, 1);
+    }
   }
 }
 
@@ -381,28 +459,58 @@ function getProjectileDirection(spawnPos, targetPoint, out) {
 }
 
 // ── Shoot sound ───────────────────────────────────────────────────────────────
-let _blasterEl = null;
-function playShootSound(config) {
-  const vol = Math.max(0, Math.min(1,
-    Number(state.params.soundSfxVolume ?? 1) * Number(state.params.soundSfx_shoot ?? 1)
-  ));
-  if (!vol || state.params.soundMuted) return;
-  if (!_blasterEl) {
-    _blasterEl = new Audio('./assets/blaster1.wav');
+const _audioCache = new Map();
+const RIFLE_SHELL_SEQUENCE = [
+  './assets/shell1.wav',
+  './assets/shell2.wav',
+  './assets/shell3.wav',
+  './assets/shell4.wav',
+  './assets/shell5.wav',
+  './assets/shell6.wav',
+];
+
+function playWeaponAsset(path, volume, playbackRate = 1) {
+  if (!volume || state.params.soundMuted) return;
+  let base = _audioCache.get(path);
+  if (!base) {
+    base = new Audio(path);
+    _audioCache.set(path, base);
   }
-  // Clone for overlapping shots; reuse element if already ended.
-  const audio = _blasterEl.paused ? _blasterEl : _blasterEl.cloneNode();
-  audio.volume = vol;
+  const audio = base.paused ? base : base.cloneNode();
+  audio.currentTime = 0;
+  audio.volume = clamp(volume, 0, 1);
+  audio.playbackRate = playbackRate;
+  audio.play().catch(() => {});
+}
+
+function scheduleRifleShellSound() {
+  const volume = getSfxVolume('soundSfx_shoot', 1) * 0.75;
+  if (volume <= 0) return;
+  const path = RIFLE_SHELL_SEQUENCE[_shellSequenceIndex % RIFLE_SHELL_SEQUENCE.length];
+  _shellSequenceIndex += 1;
+  globalThis.setTimeout(() => {
+    playWeaponAsset(path, volume, 0.96 + Math.random() * 0.08);
+  }, 500);
+}
+
+function playShootSound(config) {
+  const vol = getSfxVolume('soundSfx_shoot', 1);
+  if (!vol || state.params.soundMuted) return;
+  if (config.type === 'grenades') {
+    playWeaponAsset('./assets/throw.wav', vol, 0.94 + Math.random() * 0.12);
+    return;
+  }
+  if (config.type === 'rifle') {
+    playWeaponAsset('./assets/blaster2.wav', vol, 0.96 + Math.random() * 0.08);
+    return;
+  }
   const pitchByWeapon = {
     pistol: 1.16,
-    rifle: 1.0,
     shotgun: 0.78,
     sniperRifle: 0.62,
-    grenades: 0.7,
     rocketLauncher: 0.58,
   };
-  audio.playbackRate = (pitchByWeapon[config.type] || 1) * (0.94 + Math.random() * 0.12);
-  audio.play().catch(() => {});
+  playWeaponAsset('./assets/blaster1.wav', vol, (pitchByWeapon[config.type] || 1) * (0.94 + Math.random() * 0.12));
 }
 
 // ── Firing ────────────────────────────────────────────────────────────────────
@@ -447,8 +555,15 @@ function createProjectile(config, dir) {
     maxRange: Math.max(1, config.range),
     life: config.fuse || 4,
     age: 0,
+    radius: Math.max(0.05, Number(config.projectileSize) || 0.25) * 0.5,
+    spin: new THREE.Vector3(
+      (Math.random() - 0.5) * 8,
+      (Math.random() - 0.5) * 8,
+      (Math.random() - 0.5) * 8,
+    ),
   };
   _activeProjectiles.push(projectile);
+  if (config.type === 'rifle') scheduleRifleShellSound();
 }
 
 function explodeProjectile(projectile) {
@@ -457,6 +572,7 @@ function explodeProjectile(projectile) {
   const damage = Math.max(1, Number(config.damage) || 1);
   damageEnemiesInRadius(visual.group.position, radius, damage, 1.15);
   spawnExplosionFlash(visual.group.position, radius);
+  if (config.type === 'grenades') spawnProjectileShockwave(visual.group.position, config.shockwave || {});
   disposeProjectile(projectile);
 }
 
@@ -484,6 +600,7 @@ export function updateLaserProjectiles(delta, projectileDelta = delta) {
   const config = getWeaponConfig();
   applyLaserMaterials(config);
   updateExplosionFlashes(delta);
+  updateProjectileShockwaves(delta);
   const fireRate = Math.max(0.1, Number(config.fireRate) || 1);
   const interval = 1 / fireRate;
 
@@ -511,13 +628,27 @@ export function updateLaserProjectiles(delta, projectileDelta = delta) {
     visual.group.position.addScaledVector(projectile.velocity, projectileDelta);
     projectile.distance += step;
 
-    if (projectile.velocity.lengthSq() > 0.0001) {
+    if (projectileConfig.physicsObject) {
+      visual.group.rotation.x += projectile.spin.x * projectileDelta;
+      visual.group.rotation.y += projectile.spin.y * projectileDelta;
+      visual.group.rotation.z += projectile.spin.z * projectileDelta;
+      const floorY = Math.max(0.035, projectile.radius);
+      if (visual.group.position.y <= floorY) {
+        visual.group.position.y = floorY;
+        if (projectile.velocity.y < 0) {
+          projectile.velocity.y = Math.abs(projectile.velocity.y) * 0.34;
+          projectile.velocity.x *= 0.72;
+          projectile.velocity.z *= 0.72;
+          projectile.spin.multiplyScalar(0.68);
+        }
+      }
+    } else if (projectile.velocity.lengthSq() > 0.0001) {
       _tmpQuat.setFromUnitVectors(_up, projectile.velocity.clone().normalize());
       visual.group.quaternion.copy(_tmpQuat);
     }
     if (visual.glow) visual.glow.visible = projectileConfig.projectileBloom !== false;
 
-    const hitGround = projectileConfig.ballistic && projectile.age > 0.08 && visual.group.position.y <= 0.09;
+    const hitGround = projectileConfig.ballistic && !projectileConfig.physicsObject && projectile.age > 0.08 && visual.group.position.y <= 0.09;
     const laserThroughFloor = projectileConfig.visual === 'laser' && visual.group.position.y <= 0.02;
     const hitObject = isPlacedObjectHit(visual.group.position, projectileConfig.visual === 'rocket' ? 0.16 : 0.1);
 

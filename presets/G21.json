@@ -566,5 +566,22 @@
   "weaponGrenadeProjectileBloomSize": 1.0,
   "weaponRocketProjectileLength": 1.33,
   "weaponRocketProjectileBloomIntensity": 1.0,
-  "weaponRocketProjectileBloomSize": 1.0
+  "weaponRocketProjectileBloomSize": 1.0,
+  "weaponPistolProjectileBloomColor": "#d8dde6",
+  "weaponPistolReticleOpacity": 1,
+  "weaponRifleProjectileBloomColor": "#ff1100",
+  "weaponRifleReticleOpacity": 1,
+  "weaponShotgunProjectileBloomColor": "#d8dde6",
+  "weaponShotgunReticleOpacity": 1,
+  "weaponSniperProjectileBloomColor": "#d975ff",
+  "weaponSniperReticleOpacity": 1,
+  "weaponGrenadeProjectileBloomColor": "#ff8844",
+  "weaponGrenadeReticleOpacity": 1,
+  "weaponRocketProjectileBloomColor": "#ff3333",
+  "weaponRocketReticleOpacity": 1,
+  "weaponGrenadeShockwaveSpeed": 40,
+  "weaponGrenadeShockwaveColor": "#ffffff",
+  "weaponGrenadeShockwaveFadeTime": 0.12,
+  "weaponGrenadeShockwaveDelay": 0,
+  "weaponGrenadeShockwaveTransparency": 0.1
 }
