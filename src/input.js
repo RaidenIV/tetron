@@ -274,6 +274,14 @@ document.addEventListener('mousemove', event => {
   if (state.paused) return;
   if (document.pointerLockElement !== renderer.domElement) return;
   applyWeaponMouseButtons(event, renderer.domElement);
+  // In pointer lock the browser may not always include both buttons in
+  // event.buttons during simultaneous left+right click. Fall back to the
+  // latched _leftMouseDown / _rightMouseDown flags so ADS never silently
+  // blocks firing and firing never silently clears ADS.
+  if (_leftMouseDown && (state.activeSlot ?? 0) === 0) state.primaryFire = true;
+  if (_rightMouseDown && state.params.aimEnabled !== false && (state.activeSlot ?? 0) === 0) {
+    state.isAiming = true;
+  }
   setPointerAimCenter();
   applyMouseLookDelta(event.movementX || 0, event.movementY || 0);
 });
