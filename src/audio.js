@@ -7,37 +7,57 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-const BULLET_TIME_AUDIO_RATE = Math.pow(2, -3 / 12);
+const BULLET_TIME_AUDIO_RATE = Math.pow(2, -5 / 12);
 const _managedAudio = new Set();
+const _bulletTimeActiveAudio = new Set();
+
+function isBulletTimeActive() {
+  return state.params.bulletTimeEnabled !== false && state.slowTimer > 0;
+}
 
 export function getBulletTimeAudioRate() {
-  const active = state.params.bulletTimeEnabled !== false && (state.slowTimer > 0 || state.worldScale < 0.999);
-  return active ? BULLET_TIME_AUDIO_RATE : 1;
+  return isBulletTimeActive() ? BULLET_TIME_AUDIO_RATE : 1;
 }
 
 export function applyBulletTimeAudioPitch(audio, baseRate = 1) {
   if (!audio) return audio;
-  const rate = clamp((Number(baseRate) || 1) * getBulletTimeAudioRate(), 0.25, 4);
+  const base = Number(baseRate) || 1;
+  const rate = audio.__skipBulletTimePitch ? base : clamp(base * getBulletTimeAudioRate(), 0.25, 4);
   try {
     // Browsers preserve pitch by default when playbackRate changes; disable
-    // that so bullet time audibly drops all managed audio by -3 semitones.
-    audio.preservesPitch = false;
-    audio.mozPreservesPitch = false;
-    audio.webkitPreservesPitch = false;
+    // that so non-bullet-time audio audibly drops by -5 semitones during bullet time.
+    audio.preservesPitch = !!audio.__skipBulletTimePitch;
+    audio.mozPreservesPitch = !!audio.__skipBulletTimePitch;
+    audio.webkitPreservesPitch = !!audio.__skipBulletTimePitch;
   } catch (_) {}
   try { audio.playbackRate = rate; } catch (_) {}
   return audio;
 }
 
-export function registerManagedAudio(audio, baseRate = 1) {
+export function stopBulletTimeSounds() {
+  _bulletTimeActiveAudio.forEach(audio => {
+    if (!audio) return;
+    try { audio.pause(); } catch (_) {}
+    try { audio.currentTime = 0; } catch (_) {}
+    audio.__pausedByGame = false;
+  });
+  _bulletTimeActiveAudio.clear();
+}
+
+export function registerManagedAudio(audio, baseRate = 1, options = {}) {
   if (!audio) return audio;
   audio.__basePlaybackRate = Number(baseRate) || 1;
+  audio.__skipBulletTimePitch = options.skipBulletTimePitch === true || audio.__skipBulletTimePitch === true;
+  if (options.bulletTimeSound === true) _bulletTimeActiveAudio.add(audio);
   _managedAudio.add(audio);
 
   if (!audio.__bulletTimePitchManaged) {
     audio.__bulletTimePitchManaged = true;
     audio.addEventListener('ended', () => {
-      if (!audio.loop) _managedAudio.delete(audio);
+      if (!audio.loop) {
+        _managedAudio.delete(audio);
+        _bulletTimeActiveAudio.delete(audio);
+      }
     });
   }
 
@@ -46,6 +66,7 @@ export function registerManagedAudio(audio, baseRate = 1) {
 }
 
 export function updateBulletTimeAudioPitch() {
+  if (!isBulletTimeActive()) stopBulletTimeSounds();
   _managedAudio.forEach(audio => {
     if (!audio) { _managedAudio.delete(audio); return; }
     applyBulletTimeAudioPitch(audio, audio.__basePlaybackRate || 1);
@@ -139,12 +160,20 @@ function playBulletTimeSound(templateRef, assetPath, volumeKey) {
   const volume = getSfxVolume(volumeKey, 1);
   if (volume <= 0) return templateRef;
 
-  if (!templateRef) templateRef = registerManagedAudio(new Audio(assetPath));
+  if (!templateRef) {
+    templateRef = registerManagedAudio(new Audio(assetPath), 1, {
+      skipBulletTimePitch: true,
+      bulletTimeSound: true,
+    });
+  }
   const sound = templateRef.paused ? templateRef : templateRef.cloneNode();
-  registerManagedAudio(sound, 1);
+  registerManagedAudio(sound, 1, {
+    skipBulletTimePitch: true,
+    bulletTimeSound: true,
+  });
   sound.volume = volume;
   sound.currentTime = 0;
-  applyBulletTimeAudioPitch(sound);
+  applyBulletTimeAudioPitch(sound, 1);
   sound.play().catch(() => {});
   return templateRef;
 }
