@@ -267,6 +267,7 @@ function consumeWeaponAmmo(type = getSelectedWeaponType()) {
   const record = getAmmoRecord(type);
   if (spec.magazineKey) {
     if (record.magazine <= 0) {
+      playEmptyMagazineSound();
       syncWeaponAmmoHud();
       return false;
     }
@@ -830,6 +831,43 @@ function getProjectileDirection(spawnPos, targetPoint, out) {
   return out.normalize();
 }
 
+function restartFeedbackAnimation(el, className) {
+  if (!el) return;
+  el.classList.remove(className);
+  void el.offsetWidth;
+  el.classList.add(className);
+}
+
+function triggerReticleHitFeedback(result = {}) {
+  const p = state.params;
+  if (p.hudVisible === false || p.reticleVisible === false) return;
+
+  const marker = document.getElementById('hit-marker');
+  if (marker) {
+    marker.classList.remove('hit-marker-armor', 'hit-marker-critical');
+    if (result.hitType === 'armor' || result.hitType === 'shield') marker.classList.add('hit-marker-armor');
+    if (result.hitType === 'critical' || result.hitType === 'headshot') marker.classList.add('hit-marker-critical');
+    restartFeedbackAnimation(marker, 'is-active');
+  }
+
+  if (result.killed === true && p.reticleKillConfirmEnabled !== false) {
+    const kill = document.getElementById('kill-confirmation');
+    if (kill) {
+      const color = /^#[0-9a-f]{6}$/i.test(String(p.reticleKillConfirmColor || '')) ? p.reticleKillConfirmColor : '#ffffff';
+      const size = clamp(Number(p.reticleKillConfirmSize) || 64, 12, 160);
+      const opacity = clamp(Number(p.reticleKillConfirmOpacity) || 0.9, 0, 1);
+      kill.style.setProperty('--kill-confirm-color', color);
+      kill.style.setProperty('--kill-confirm-size', `${size}px`);
+      kill.style.setProperty('--kill-confirm-opacity', String(opacity));
+      restartFeedbackAnimation(kill, 'is-active');
+    }
+  }
+}
+
+window.addEventListener('game-lab-reticle-feedback', event => {
+  triggerReticleHitFeedback(event.detail || {});
+});
+
 // ── Shoot sound ───────────────────────────────────────────────────────────────
 const _audioCache = new Map();
 
@@ -873,6 +911,12 @@ function playReloadSound() {
   const vol = getSfxVolume('soundSfx_reload', 1);
   if (!vol || state.params.soundMuted) return;
   playWeaponAsset('./assets/reload.wav', vol, 1);
+}
+
+function playEmptyMagazineSound() {
+  const vol = getSfxVolume('soundSfx_empty', 1);
+  if (!vol || state.params.soundMuted) return;
+  playWeaponAsset('./assets/empty.wav', vol, 1);
 }
 
 // ── Firing ────────────────────────────────────────────────────────────────────
@@ -945,7 +989,8 @@ function explodeProjectile(projectile) {
     spawnProjectileExplosionParticles(visual.group.position, config.shockwave);
     spawnProjectileShockwave(visual.group.position, config.shockwave);
   } else {
-    damageEnemiesInRadius(visual.group.position, radius, Math.max(1, Number(config.damage) || 1), 1.15);
+    const result = damageEnemiesInRadius(visual.group.position, radius, Math.max(1, Number(config.damage) || 1), 1.15);
+    if (result?.hit) triggerReticleHitFeedback(result);
   }
   disposeProjectile(projectile);
 }
@@ -1041,15 +1086,20 @@ export function updateLaserProjectiles(delta, projectileDelta = delta) {
     }
 
     if (projectileConfig.explosive) {
-      if (damageEnemiesAt(visual.group.position, projectileConfig.hitRadius, 0)) {
+      const impactResult = damageEnemiesAt(visual.group.position, projectileConfig.hitRadius, 0);
+      if (impactResult?.hit) {
         _activeProjectiles.splice(i, 1);
         explodeProjectile(projectile);
         continue;
       }
-    } else if (damageEnemiesAt(visual.group.position, projectileConfig.hitRadius, projectileConfig.damage)) {
-      _activeProjectiles.splice(i, 1);
-      disposeProjectile(projectile);
-      continue;
+    } else {
+      const hitResult = damageEnemiesAt(visual.group.position, projectileConfig.hitRadius, projectileConfig.damage);
+      if (hitResult?.hit) {
+        triggerReticleHitFeedback(hitResult);
+        _activeProjectiles.splice(i, 1);
+        disposeProjectile(projectile);
+        continue;
+      }
     }
 
     if (projectile.life <= 0 || projectile.distance >= projectile.maxRange) {

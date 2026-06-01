@@ -949,10 +949,11 @@ export function updatePlayer(delta, moveForward, moveRight, aimTarget = null) {
   }
 
   // Dash — shunts in a fixed direction at higher speed while dashTimer > 0
+  const dashDelta = delta * Math.max(0.05, Math.min(1, Number(state.worldScale) || 1));
   if (state.dashTimer > 0) {
-    state.dashTimer -= delta;
-    playerGroup.position.x += state.dashVX * p.dashSpeed * delta;
-    playerGroup.position.z += state.dashVZ * p.dashSpeed * delta;
+    state.dashTimer -= dashDelta;
+    playerGroup.position.x += state.dashVX * p.dashSpeed * dashDelta;
+    playerGroup.position.z += state.dashVZ * p.dashSpeed * dashDelta;
     resolveCircleAgainstPlacedObjects(playerGroup.position, getPlayerCollisionRadius(), 4, {
       walkableRamps: true,
       footY: playerGroup.position.y,
@@ -962,17 +963,17 @@ export function updatePlayer(delta, moveForward, moveRight, aimTarget = null) {
     });
     syncPlayerGround(0.7, 0.75);
     playerMesh.rotation.z   = state.dashVX * -0.35;
-    state.dashGhostTimer -= delta;
+    state.dashGhostTimer -= dashDelta;
     if (state.dashGhostTimer <= 0) {
       stampDashGhost();
-      state.dashGhostTimer = 0.04; // stamp a ghost every 40ms
+      state.dashGhostTimer = 0.04; // stamp a ghost every 40ms of world-scaled dash time
     }
   } else {
     playerMesh.rotation.z += (0 - playerMesh.rotation.z) * 12 * delta;
   }
 
   if (state.dashCooldown > 0) {
-    state.dashCooldown = Math.max(0, state.dashCooldown - delta);
+    state.dashCooldown = Math.max(0, state.dashCooldown - dashDelta);
   }
 
   syncPlayerGround();

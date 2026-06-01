@@ -1419,14 +1419,17 @@ function syncPlayerHud() {
 }
 
 function damageEnemy(enemy, amount) {
-  if (!enemy) return;
+  if (!enemy) return false;
+  const wasAlive = Number(enemy.hp) > 0;
   enemy.spawnFlashTimer = Math.max(enemy.spawnFlashTimer, 0.12);
   enemy.material.emissive.set(0xffffff);
   enemy.material.emissiveIntensity = 0.45;
   const invincible = enemy.isAlly ? state.params.allyInvincible : state.params.enemyInvincible;
   if (!invincible) enemy.hp -= Math.max(0, Number(amount) || 0);
   updateNpcHealthBar(enemy);
+  const killed = wasAlive && enemy.hp <= 0 && !enemy.isAlly;
   if (enemy.hp <= 0) destroyEnemy(enemy);
+  return killed;
 }
 
 function spawnSplitChildren(enemy) {
@@ -1457,15 +1460,17 @@ export function damageEnemiesAt(position, radius = 0.45, amount = 34) {
     _tmpVec.copy(enemy.group.position);
     _tmpVec.y = enemy.mesh.position.y;
     if (_tmpVec.distanceTo(position) <= hitRadius) {
-      if (Math.max(0, Number(amount) || 0) > 0) damageEnemy(enemy, amount);
-      return true;
+      const willDamage = Math.max(0, Number(amount) || 0) > 0;
+      const killed = willDamage ? damageEnemy(enemy, amount) === true : false;
+      return { hit: true, killed, target: enemy };
     }
   }
-  return false;
+  return null;
 }
 
 export function damageEnemiesInRadius(position, radius = 1, amount = 34, falloff = 1) {
   let hitCount = 0;
+  let killed = false;
   const maxRadius = Math.max(0.001, Number(radius) || 1);
   const baseDamage = Math.max(0, Number(amount) || 0);
   const falloffPower = clamp(Number(falloff) || 1, 0.1, 4);
@@ -1479,10 +1484,10 @@ export function damageEnemiesInRadius(position, radius = 1, amount = 34, falloff
     if (distance > maxRadius + enemyRadius) continue;
     const normalized = clamp(distance / maxRadius, 0, 1);
     const damage = baseDamage * (1 - Math.pow(normalized, falloffPower));
-    damageEnemy(enemy, Math.max(1, damage));
+    killed = damageEnemy(enemy, Math.max(1, damage)) === true || killed;
     hitCount += 1;
   }
-  return hitCount;
+  return hitCount > 0 ? { hit: true, hitCount, killed } : null;
 }
 
 function getExplosionSplashDistance(event, position) {
@@ -1537,7 +1542,12 @@ function applyExplosionSplashDamage() {
       if (enemyDistance <= radius + Math.max(0.45, enemy.radius || 0)) {
         hitSet.add(id);
         hitNpcIds.push(id);
-        damageEnemy(enemy, getExplosionSplashDamage(event, enemyDistance));
+        const killed = damageEnemy(enemy, getExplosionSplashDamage(event, enemyDistance)) === true;
+        if (String(event.id || '').startsWith('weapon_splash_')) {
+          window.dispatchEvent(new CustomEvent('game-lab-reticle-feedback', {
+            detail: { hit: true, killed },
+          }));
+        }
       }
     }
   }

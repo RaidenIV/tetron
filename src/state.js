@@ -8,7 +8,7 @@ export const state = {
   slowTimer: 0,
   slowScale: 0.35,
   slowRequested: false,
-  activePreset: 'g29',
+  activePreset: 'g30',
   mouseLookActive: false,
   isAiming: false,          // true while right-mouse / L2 held
   activeSlot: 0,            // 0 = laser, 1 = object placer
@@ -60,7 +60,7 @@ export const state = {
       "third2BodyFrameHeight": 1.35,
       "third2BodyScreenY": 0.45,
       "third2MinEyeHeight": 0.15,
-      "thirdAzimuth": 6.004741228717542,
+      "thirdAzimuth": 1.5413706143585308,
       "thirdLookAhead": 3.8,
       "thirdSmoothPos": 10,
       "thirdSmoothLook": 12,
@@ -72,7 +72,7 @@ export const state = {
       "aimSmooth": 10,
       "thirdMouseSensitivityX": 0.003,
       "thirdMouseSensitivityY": 0.0024,
-      "thirdPitch": -0.014000000000001053,
+      "thirdPitch": -0.02840000000000105,
       "thirdOffsetMode": "parallel",
       "thirdOffsetX": 1.25,
       "thirdOffsetY": -0.25,
@@ -702,7 +702,12 @@ export const state = {
       "weaponGrenadeOffsetY": 0,
       "weaponRocketOffsetX": 0,
       "weaponRocketOffsetY": 0,
-      "weaponRocketRecoil": 0
+      "weaponRocketRecoil": 0,
+      "soundSfx_empty": 1,
+      "reticleKillConfirmEnabled": true,
+      "reticleKillConfirmColor": "#ffffff",
+      "reticleKillConfirmSize": 64,
+      "reticleKillConfirmOpacity": 0.9
 }
 };
 
