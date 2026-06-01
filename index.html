@@ -19,7 +19,12 @@
 <div id="sidebar" class="sidebar"></div>
 <div id="fps-overlay" style="display:none;">FPS <span id="fps-val">-</span></div>
 <div id="target-reticle" aria-hidden="true"></div>
-<span id="hit-marker" class="reticle-feedback hit-marker" aria-hidden="true"></span>
+<svg id="hit-marker" class="reticle-feedback hit-marker" aria-hidden="true" viewBox="0 0 64 64" focusable="false">
+  <line class="hit-marker-segment" x1="18" y1="18" x2="26" y2="26"></line>
+  <line class="hit-marker-segment" x1="46" y1="18" x2="38" y2="26"></line>
+  <line class="hit-marker-segment" x1="18" y1="46" x2="26" y2="38"></line>
+  <line class="hit-marker-segment" x1="46" y1="46" x2="38" y2="38"></line>
+</svg>
 <span id="kill-confirmation" class="reticle-feedback kill-confirmation" aria-hidden="true"></span>
 <span id="bullet-time-active-indicator" class="game-hud-icon bullet-time-active-indicator" aria-hidden="true"></span>
 <div id="pause-overlay" aria-hidden="true">PAUSED</div>

@@ -580,19 +580,33 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   will-change: transform, opacity;
 }
 .hit-marker {
-  width: 54px;
-  height: 54px;
-  color: #ffffff;
-  -webkit-mask-image: url('../assets/hit_marker.svg');
-  mask-image: url('../assets/hit_marker.svg');
+  --hit-marker-size: 54px;
+  --hit-marker-weight: 3px;
+  --hit-marker-opacity: 1;
+  --hit-marker-color: #ffffff;
+  --hit-marker-duration: 190ms;
+  width: var(--hit-marker-size);
+  height: var(--hit-marker-size);
+  color: var(--hit-marker-color);
+  background: none;
+  background-color: transparent;
+  overflow: visible;
+}
+.hit-marker-segment {
+  stroke: currentColor;
+  stroke-width: var(--hit-marker-weight);
+  stroke-linecap: round;
+  fill: none;
+  vector-effect: non-scaling-stroke;
 }
 .hit-marker.hit-marker-armor { color: #59d7ff; }
 .hit-marker.hit-marker-critical { color: #ffb23c; }
-.hit-marker.is-active { animation: hit-marker-flash 190ms ease-out both; }
+.hit-marker.is-active { animation: hit-marker-flash var(--hit-marker-duration) ease-out both; }
 .kill-confirmation {
   --kill-confirm-color: #ffffff;
   --kill-confirm-size: 64px;
   --kill-confirm-opacity: 0.9;
+  --kill-confirm-duration: 320ms;
   width: var(--kill-confirm-size);
   height: var(--kill-confirm-size);
   color: var(--kill-confirm-color);
@@ -600,11 +614,11 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   mask-image: url('../assets/kill_skull.svg');
   filter: drop-shadow(0 0 7px currentColor) drop-shadow(1px 2px 2px rgba(0,0,0,0.85));
 }
-.kill-confirmation.is-active { animation: kill-confirmation-pulse 320ms ease-out both; }
+.kill-confirmation.is-active { animation: kill-confirmation-pulse var(--kill-confirm-duration) ease-out both; }
 @keyframes hit-marker-flash {
   0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.82); }
-  12%  { opacity: 1; }
-  55%  { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+  12%  { opacity: var(--hit-marker-opacity); }
+  55%  { opacity: var(--hit-marker-opacity); transform: translate(-50%, -50%) scale(1.08); }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1.18); }
 }
 @keyframes kill-confirmation-pulse {

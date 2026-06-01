@@ -86,6 +86,7 @@ const _projectileParticlePool = [];
 const PROJECTILE_PARTICLE_GRAVITY = 18;
 let _weaponCooldown = 0;
 let _projectileShockwaveId = 1;
+let _rifleTracerShotCounter = 0;
 
 const MAGAZINE_WEAPON_TYPES = new Set(['pistol', 'rifle', 'shotgun', 'sniperRifle', 'rocketLauncher']);
 const WEAPON_AMMO_SPECS = Object.freeze({
@@ -844,6 +845,16 @@ function triggerReticleHitFeedback(result = {}) {
 
   const marker = document.getElementById('hit-marker');
   if (marker) {
+    const color = /^#[0-9a-f]{6}$/i.test(String(p.reticleHitMarkerColor || '')) ? p.reticleHitMarkerColor : '#ffffff';
+    const size = clamp(Number(p.reticleHitMarkerSize) || 54, 12, 160);
+    const weight = clamp(Number(p.reticleHitMarkerWeight) || 3, 0.5, 12);
+    const opacity = clamp(Number(p.reticleHitMarkerOpacity) || 1, 0, 1);
+    const duration = clamp(Number(p.reticleHitMarkerDuration) || 190, 80, 500);
+    marker.style.setProperty('--hit-marker-color', color);
+    marker.style.setProperty('--hit-marker-size', `${size}px`);
+    marker.style.setProperty('--hit-marker-weight', `${weight}px`);
+    marker.style.setProperty('--hit-marker-opacity', String(opacity));
+    marker.style.setProperty('--hit-marker-duration', `${duration}ms`);
     marker.classList.remove('hit-marker-armor', 'hit-marker-critical');
     if (result.hitType === 'armor' || result.hitType === 'shield') marker.classList.add('hit-marker-armor');
     if (result.hitType === 'critical' || result.hitType === 'headshot') marker.classList.add('hit-marker-critical');
@@ -856,9 +867,11 @@ function triggerReticleHitFeedback(result = {}) {
       const color = /^#[0-9a-f]{6}$/i.test(String(p.reticleKillConfirmColor || '')) ? p.reticleKillConfirmColor : '#ffffff';
       const size = clamp(Number(p.reticleKillConfirmSize) || 64, 12, 160);
       const opacity = clamp(Number(p.reticleKillConfirmOpacity) || 0.9, 0, 1);
+      const duration = clamp(Number(p.reticleKillConfirmDuration) || 320, 80, 800);
       kill.style.setProperty('--kill-confirm-color', color);
       kill.style.setProperty('--kill-confirm-size', `${size}px`);
       kill.style.setProperty('--kill-confirm-opacity', String(opacity));
+      kill.style.setProperty('--kill-confirm-duration', `${duration}ms`);
       restartFeedbackAnimation(kill, 'is-active');
     }
   }
@@ -940,6 +953,13 @@ function randomSpreadDirection(baseDir, spread, out) {
 }
 
 
+
+function shouldShowRifleTracer(config) {
+  if (!config || config.type !== 'rifle' || state.params.weaponRifleTracers === false) return true;
+  _rifleTracerShotCounter = (_rifleTracerShotCounter + 1) % 5;
+  return _rifleTracerShotCounter === 0;
+}
+
 function getProjectileMuzzleClearance(config) {
   const length = Number(config?.projectileLength);
   const size = Number(config?.projectileSize);
@@ -950,10 +970,13 @@ function getProjectileMuzzleClearance(config) {
 
 function createProjectile(config, dir) {
   const visual = createProjectileVisual(config);
+  const showVisual = shouldShowRifleTracer(config);
+  visual.group.visible = showVisual;
+  if (visual.glow) visual.glow.visible = showVisual && config.projectileBloom !== false;
   visual.group.position.copy(_spawnPos).addScaledVector(dir, getProjectileMuzzleClearance(config));
   _tmpQuat.setFromUnitVectors(_up, dir);
   visual.group.quaternion.copy(_tmpQuat);
-  if (visual.glow) visual.glow.visible = config.projectileBloom !== false;
+  if (visual.glow) visual.glow.visible = showVisual && config.projectileBloom !== false;
 
   if (config.ballistic) {
     _velocity.copy(dir).multiplyScalar(config.speed);
@@ -1072,7 +1095,7 @@ export function updateLaserProjectiles(delta, projectileDelta = delta) {
       _tmpQuat.setFromUnitVectors(_up, projectile.velocity.clone().normalize());
       visual.group.quaternion.copy(_tmpQuat);
     }
-    if (visual.glow) visual.glow.visible = projectileConfig.projectileBloom !== false;
+    if (visual.glow) visual.glow.visible = visual.group.visible && projectileConfig.projectileBloom !== false;
 
     const hitGround = projectileConfig.ballistic && !projectileConfig.physicsObject && projectile.age > 0.08 && visual.group.position.y <= 0.09;
     const laserThroughFloor = projectileConfig.visual === 'laser' && visual.group.position.y <= 0.02;

@@ -1326,6 +1326,127 @@ function weaponColor(prefix, field, fallback) {
   return normalizeHexColor(state.params[`weapon${prefix}${field}`], fallback);
 }
 
+const NPC_MAGAZINE_WEAPON_TYPES = new Set(['pistol', 'rifle', 'shotgun', 'sniperRifle', 'rocketLauncher']);
+const NPC_AMMO_KEYS = Object.freeze({
+  pistol: { prefix: 'Pistol', magazineKey: 'weaponPistolMagazineSize', totalKey: 'weaponPistolTotalAmmo', defaultMagazine: 12, defaultTotal: 60, defaultReloadTime: 1.0 },
+  rifle: { prefix: 'Rifle', magazineKey: 'weaponRifleMagazineSize', totalKey: 'weaponRifleTotalAmmo', defaultMagazine: 30, defaultTotal: 180, defaultReloadTime: 1.25 },
+  shotgun: { prefix: 'Shotgun', magazineKey: 'weaponShotgunMagazineSize', totalKey: 'weaponShotgunTotalAmmo', defaultMagazine: 8, defaultTotal: 40, defaultReloadTime: 1.6 },
+  sniperRifle: { prefix: 'Sniper', magazineKey: 'weaponSniperMagazineSize', totalKey: 'weaponSniperTotalAmmo', defaultMagazine: 5, defaultTotal: 25, defaultReloadTime: 2.0 },
+  grenades: { prefix: 'Grenade', magazineKey: null, totalKey: 'weaponGrenadeTotalAmmo', defaultMagazine: 0, defaultTotal: 10, defaultReloadTime: 0 },
+  rocketLauncher: { prefix: 'Rocket', magazineKey: 'weaponRocketClipCapacity', totalKey: 'weaponRocketTotalAmmo', defaultMagazine: 1, defaultTotal: 8, defaultReloadTime: 2.4 },
+});
+let _npcRifleTracerShotCounter = 0;
+
+function getNpcAmmoSpec(type) {
+  return NPC_AMMO_KEYS[type] || NPC_AMMO_KEYS.rifle;
+}
+
+function getNpcConfiguredMagazineSize(type) {
+  const spec = getNpcAmmoSpec(type);
+  if (!spec.magazineKey) return 0;
+  return Math.max(1, Math.round(Number(state.params[spec.magazineKey]) || spec.defaultMagazine));
+}
+
+function getNpcConfiguredTotalAmmo(type) {
+  const spec = getNpcAmmoSpec(type);
+  return Math.max(0, Math.round(Number(state.params[spec.totalKey]) || spec.defaultTotal));
+}
+
+function getNpcConfiguredReloadTime(type) {
+  const spec = getNpcAmmoSpec(type);
+  if (!spec.magazineKey) return 0;
+  return clamp(Number(state.params[`weapon${spec.prefix}ReloadTime`]) || spec.defaultReloadTime || 1, 0, 10);
+}
+
+function getNpcAmmoRecord(npc, type) {
+  const spec = getNpcAmmoSpec(type);
+  const magazineSize = getNpcConfiguredMagazineSize(type);
+  const totalAmmo = getNpcConfiguredTotalAmmo(type);
+  npc._weaponAmmo = npc._weaponAmmo || {};
+  let record = npc._weaponAmmo[type];
+  if (!record || record._magazineSize !== magazineSize || record._totalAmmo !== totalAmmo) {
+    record = {
+      magazine: spec.magazineKey ? magazineSize : 0,
+      reserve: totalAmmo,
+      reloadRemaining: 0,
+      _magazineSize: magazineSize,
+      _totalAmmo: totalAmmo,
+    };
+    npc._weaponAmmo[type] = record;
+  }
+  return record;
+}
+
+function startNpcReload(npc, type, record) {
+  const reloadTime = getNpcConfiguredReloadTime(type);
+  if (reloadTime <= 0) {
+    completeNpcReload(npc, type, record);
+    return true;
+  }
+  record.reloadRemaining = Math.max(record.reloadRemaining || 0, reloadTime);
+  return true;
+}
+
+function completeNpcReload(npc, type, record = getNpcAmmoRecord(npc, type)) {
+  const spec = getNpcAmmoSpec(type);
+  if (!spec.magazineKey) return false;
+  const magazineSize = getNpcConfiguredMagazineSize(type);
+  if (state.params.weaponInfiniteAmmo === true) {
+    record.magazine = magazineSize;
+    record.reloadRemaining = 0;
+    return true;
+  }
+  const missing = Math.max(0, magazineSize - record.magazine);
+  if (missing <= 0 || record.reserve <= 0) {
+    record.reloadRemaining = 0;
+    return false;
+  }
+  const loaded = Math.min(missing, record.reserve);
+  record.magazine += loaded;
+  record.reserve -= loaded;
+  record.reloadRemaining = 0;
+  return loaded > 0;
+}
+
+function updateNpcReload(npc, type, delta) {
+  const record = getNpcAmmoRecord(npc, type);
+  if ((record.reloadRemaining || 0) > 0) {
+    record.reloadRemaining = Math.max(0, record.reloadRemaining - Math.max(0, delta));
+    if (record.reloadRemaining <= 0) completeNpcReload(npc, type, record);
+  }
+  return record;
+}
+
+function consumeNpcAmmoForShot(npc, config, delta) {
+  const type = config?.type;
+  if (!type) return false;
+  const spec = getNpcAmmoSpec(type);
+  const record = updateNpcReload(npc, type, delta);
+  if ((record.reloadRemaining || 0) > 0) return false;
+
+  if (state.params.weaponInfiniteAmmo === true) return true;
+
+  if (spec.magazineKey) {
+    if (record.magazine <= 0) {
+      if (record.reserve > 0) startNpcReload(npc, type, record);
+      return false;
+    }
+    record.magazine = Math.max(0, record.magazine - 1);
+    if (record.magazine <= 0 && record.reserve > 0) startNpcReload(npc, type, record);
+    return true;
+  }
+
+  if (record.reserve <= 0) return false;
+  record.reserve = Math.max(0, record.reserve - 1);
+  return true;
+}
+
+function shouldShowNpcRifleTracer(config) {
+  if (!config || config.type !== 'rifle' || state.params.weaponRifleTracers === false) return true;
+  _npcRifleTracerShotCounter = (_npcRifleTracerShotCounter + 1) % 5;
+  return _npcRifleTracerShotCounter === 0;
+}
+
 function getNpcWeaponShockwaveConfig(spec, cfg) {
   const p = state.params;
   const basePrefix = `weapon${spec.prefix}Shockwave`;
@@ -1353,7 +1474,7 @@ function getNpcWeaponConfig(npc) {
     range: weaponNumber(prefix, 'Range', spec.range, 1, 1000),
     spread: weaponNumber(prefix, 'Spread', spec.spread, 0, 1),
     fireRate: weaponNumber(prefix, 'FireRate', spec.fireRate, 0.1, 60),
-    speed: weaponNumber(prefix, 'ProjectileSpeed', spec.speed, 0.1, 1000),
+    speed: weaponNumber(prefix, 'ProjectileSpeed', spec.speed, 1, 500),
     projectileSize: weaponNumber(prefix, 'ProjectileSize', spec.projectileSize, 0.02, 2),
     projectileLength: weaponNumber(prefix, 'ProjectileLength', spec.projectileLength, 0.02, 12),
     projectileColor: weaponColor(prefix, 'ProjectileColor', spec.projectileColor),
@@ -1759,17 +1880,18 @@ function createNpcProjectileMesh(config) {
   return mesh;
 }
 
-function fireEnemyBullet(enemy, targetNpc = null) {
-  const config = getNpcWeaponConfig(enemy);
+function fireEnemyBullet(enemy, targetNpc = null, config = getNpcWeaponConfig(enemy)) {
   if (!config) return;
   if (enemy.isAlly && !targetNpc) return;
 
   const shots = Math.max(1, Number(config.pellets) || 1);
   const targetPoint = getNpcAimPoint(targetNpc, _npcFireTargetPoint);
+  const showVisual = shouldShowNpcRifleTracer(config);
 
   for (let shot = 0; shot < shots; shot++) {
     const mesh = createNpcProjectileMesh(config);
     mesh.name = enemy.isAlly ? 'AllyProjectile' : 'EnemyProjectile';
+    mesh.visible = showVisual;
     if (isLaserLikeWeapon(config.type) && enemy._weaponMuzzle) {
       updateNpcWeaponVisual(enemy, targetPoint);
       enemy._weaponMuzzle.getWorldPosition(mesh.position);
@@ -1815,9 +1937,10 @@ function updateEnemyShooting(enemy, delta, targetNpc = null) {
   const config = getNpcWeaponConfig(enemy);
   if (!config || enemy.spawnFlashTimer > 0) return;
   if (enemy.isAlly && !targetNpc) return;
+  updateNpcReload(enemy, config.type, delta);
   enemy.shootTimer -= delta;
   if (enemy.shootTimer <= 0) {
-    fireEnemyBullet(enemy, targetNpc);
+    if (consumeNpcAmmoForShot(enemy, config, delta)) fireEnemyBullet(enemy, targetNpc, config);
     const interval = 1 / Math.max(0.1, Number(config.fireRate) || 1);
     enemy.shootTimer = interval * randomRange(0.82, 1.18);
   }
