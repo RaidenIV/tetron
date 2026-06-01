@@ -121,11 +121,6 @@ let playerWeaponMesh = null;
 let playerWeaponModelKey = '';
 let playerWeaponLength = 1.125;
 
-const _playerWeaponLocalForward = new THREE.Vector3(0, 0, -1);
-const _playerWeaponWorldOrigin = new THREE.Vector3();
-const _playerWeaponAimDir = new THREE.Vector3();
-const _playerWeaponWorldQuat = new THREE.Quaternion();
-const _playerWeaponParentWorldQuat = new THREE.Quaternion();
 
 function getPlayerWeaponType() {
   const type = state.params.playerWeaponType;
@@ -210,22 +205,10 @@ function aimPlayerWeaponAt(targetPoint, fallbackYaw) {
     return;
   }
 
-  playerWeaponGroup.getWorldPosition(_playerWeaponWorldOrigin);
-  _playerWeaponAimDir.copy(targetPoint).sub(_playerWeaponWorldOrigin);
-  if (_playerWeaponAimDir.lengthSq() < 0.0001) {
-    playerWeaponGroup.rotation.set(0, fallbackYaw, 0);
-    return;
-  }
-
-  _playerWeaponAimDir.normalize();
-  _playerWeaponWorldQuat.setFromUnitVectors(_playerWeaponLocalForward, _playerWeaponAimDir);
-
-  if (playerWeaponGroup.parent) {
-    playerWeaponGroup.parent.getWorldQuaternion(_playerWeaponParentWorldQuat).invert();
-    playerWeaponGroup.quaternion.copy(_playerWeaponParentWorldQuat.multiply(_playerWeaponWorldQuat));
-  } else {
-    playerWeaponGroup.quaternion.copy(_playerWeaponWorldQuat);
-  }
+  // Object3D.lookAt aims the group's local -Z axis at the world target, which
+  // matches the player weapon mesh and muzzle orientation. This gives the
+  // visible prop pitch/yaw without touching mouse/ADS/fire input state.
+  playerWeaponGroup.lookAt(targetPoint);
 }
 
 function updatePlayerWeaponVisual(aimTarget = null) {
@@ -250,7 +233,9 @@ function updatePlayerWeaponVisual(aimTarget = null) {
     baseWeaponHeight + adsLift,
     rightZ * rightOffset + forwardZ * forwardOffset
   );
-  if (state.isAiming && p.aimEnabled !== false && isVector3Like(aimTarget)) {
+  const shouldTrackAim = ((state.isAiming && p.aimEnabled !== false) || state.primaryFire)
+    && isVector3Like(aimTarget);
+  if (shouldTrackAim) {
     aimPlayerWeaponAt(aimTarget, az);
   } else {
     playerWeaponGroup.rotation.set(0, az, 0);
@@ -258,8 +243,9 @@ function updatePlayerWeaponVisual(aimTarget = null) {
   playerWeaponGroup.visible = true;
 }
 
-export function getPlayerWeaponMuzzle(out = new THREE.Vector3(), aimTarget = null) {
-  updatePlayerWeaponVisual(aimTarget);
+export function getPlayerWeaponMuzzle(out = new THREE.Vector3()) {
+  applyPlayerWeaponSettings();
+  playerWeaponGroup.updateWorldMatrix(true, true);
   playerWeaponMuzzle.getWorldPosition(out);
   return out;
 }

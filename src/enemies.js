@@ -396,11 +396,6 @@ const _corpseRestAxis = new THREE.Vector3();
 const _corpseRestQuat = new THREE.Quaternion();
 const _npcProjectileRight = new THREE.Vector3();
 const _npcProjectileUp = new THREE.Vector3();
-const _npcWeaponLocalForward = new THREE.Vector3(0, 0, 1);
-const _npcWeaponWorldOrigin = new THREE.Vector3();
-const _npcWeaponAimDir = new THREE.Vector3();
-const _npcWeaponWorldQuat = new THREE.Quaternion();
-const _npcWeaponParentWorldQuat = new THREE.Quaternion();
 const _npcAimPoint = new THREE.Vector3();
 const _npcFireTargetPoint = new THREE.Vector3();
 
@@ -750,22 +745,11 @@ function aimNpcWeaponAt(npc, targetPoint) {
     return;
   }
 
-  npc._weaponGroup.getWorldPosition(_npcWeaponWorldOrigin);
-  _npcWeaponAimDir.copy(targetPoint).sub(_npcWeaponWorldOrigin);
-  if (_npcWeaponAimDir.lengthSq() < 0.0001) {
-    npc._weaponGroup.rotation.set(0, 0, 0);
-    return;
-  }
-
-  _npcWeaponAimDir.normalize();
-  _npcWeaponWorldQuat.setFromUnitVectors(_npcWeaponLocalForward, _npcWeaponAimDir);
-
-  if (npc._weaponGroup.parent) {
-    npc._weaponGroup.parent.getWorldQuaternion(_npcWeaponParentWorldQuat).invert();
-    npc._weaponGroup.quaternion.copy(_npcWeaponParentWorldQuat.multiply(_npcWeaponWorldQuat));
-  } else {
-    npc._weaponGroup.quaternion.copy(_npcWeaponWorldQuat);
-  }
+  // NPC rifle/muzzle geometry points down local +Z. lookAt points local -Z at
+  // the target, so rotate 180° afterward to make the carried weapon point at
+  // the same target without disturbing NPC movement or firing state.
+  npc._weaponGroup.lookAt(targetPoint);
+  npc._weaponGroup.rotateY(Math.PI);
 }
 
 function getNpcAimPoint(targetNpc = null, out = _npcAimPoint) {
