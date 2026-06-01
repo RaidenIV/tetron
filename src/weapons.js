@@ -293,10 +293,15 @@ export function reloadCurrentWeapon() {
   }
 
   const reloadTime = getConfiguredReloadTime(type);
-  if (reloadTime <= 0) return completeWeaponReload(type);
+  if (reloadTime <= 0) {
+    const completed = completeWeaponReload(type);
+    if (completed) playReloadSound();
+    return completed;
+  }
 
   state.weaponReloads = state.weaponReloads || {};
   state.weaponReloads[type] = { timeRemaining: reloadTime, duration: reloadTime };
+  playReloadSound();
   syncWeaponAmmoHud();
   return true;
 }
@@ -862,6 +867,13 @@ function playShootSound(config) {
   playWeaponAsset('./assets/blaster1.wav', vol, (pitchByWeapon[config.type] || 1) * (0.94 + Math.random() * 0.12));
 }
 
+
+function playReloadSound() {
+  const vol = getSfxVolume('soundSfx_reload', 1);
+  if (!vol || state.params.soundMuted) return;
+  playWeaponAsset('./assets/reload.wav', vol, 1);
+}
+
 // ── Firing ────────────────────────────────────────────────────────────────────
 const _fireDir = new THREE.Vector3();
 const _pelletDir = new THREE.Vector3();
@@ -882,9 +894,18 @@ function randomSpreadDirection(baseDir, spread, out) {
   return out.normalize();
 }
 
+
+function getProjectileMuzzleClearance(config) {
+  const length = Number(config?.projectileLength);
+  const size = Number(config?.projectileSize);
+  const halfLength = Number.isFinite(length) ? Math.max(0, length) * 0.5 : 0;
+  const radius = Number.isFinite(size) ? Math.max(0.025, size * 0.5) : 0.125;
+  return Math.max(radius, halfLength);
+}
+
 function createProjectile(config, dir) {
   const visual = createProjectileVisual(config);
-  visual.group.position.copy(_spawnPos);
+  visual.group.position.copy(_spawnPos).addScaledVector(dir, getProjectileMuzzleClearance(config));
   _tmpQuat.setFromUnitVectors(_up, dir);
   visual.group.quaternion.copy(_tmpQuat);
   if (visual.glow) visual.glow.visible = config.projectileBloom !== false;

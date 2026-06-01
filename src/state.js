@@ -8,7 +8,7 @@ export const state = {
   slowTimer: 0,
   slowScale: 0.35,
   slowRequested: false,
-  activePreset: 'g25',
+  activePreset: 'g26',
   mouseLookActive: false,
   isAiming: false,          // true while right-mouse / L2 held
   activeSlot: 0,            // 0 = laser, 1 = object placer
@@ -60,7 +60,7 @@ export const state = {
       "third2BodyFrameHeight": 1.35,
       "third2BodyScreenY": 0.45,
       "third2MinEyeHeight": 0.15,
-      "thirdAzimuth": 3.97248245743517,
+      "thirdAzimuth": 1.1182971502556462,
       "thirdLookAhead": 3.8,
       "thirdSmoothPos": 10,
       "thirdSmoothLook": 12,
@@ -72,7 +72,7 @@ export const state = {
       "aimSmooth": 10,
       "thirdMouseSensitivityX": 0.003,
       "thirdMouseSensitivityY": 0.0024,
-      "thirdPitch": -0.028399999999999162,
+      "thirdPitch": 0.13959999999999895,
       "thirdOffsetMode": "parallel",
       "thirdOffsetX": 1.25,
       "thirdOffsetY": -0.25,
@@ -677,11 +677,12 @@ export const state = {
       "weaponRocketShockwaveParticleDespawnTime": 1,
       "weaponRocketShockwaveParticleColor": "#ffffff",
       "weaponRocketShockwaveParticlePhysics": "gravity",
-      "weaponPistolReloadTime": 1.0,
-      "weaponRifleReloadTime": 1.25,
+      "weaponPistolReloadTime": 1,
+      "weaponRifleReloadTime": 1.2,
       "weaponShotgunReloadTime": 1.6,
-      "weaponSniperReloadTime": 2.0,
-      "weaponRocketReloadTime": 2.4
+      "weaponSniperReloadTime": 2,
+      "weaponRocketReloadTime": 2.4,
+      "soundSfx_reload": 1
 }
 };
 

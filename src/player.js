@@ -282,9 +282,7 @@ function updatePlayerWeaponVisual(aimTarget = null) {
     baseWeaponHeight + adsLift,
     rightZ * rightOffset + forwardZ * forwardOffset
   );
-  const shouldTrackAim = ammoReady
-    && ((state.isAiming && p.aimEnabled !== false) || state.primaryFire)
-    && isVector3Like(aimTarget);
+  const shouldTrackAim = ammoReady && isVector3Like(aimTarget);
   if (shouldTrackAim) {
     aimPlayerWeaponAt(aimTarget, az);
   } else {
