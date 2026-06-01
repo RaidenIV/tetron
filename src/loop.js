@@ -54,10 +54,12 @@ function updateBulletTimeIndicator() {
   const size = clamp(Number(p.hudBulletTimeIndicatorSize) || 24, 8, 64);
   const readyOpacity = clamp(Number(p.hudBulletTimeReadyOpacity) || 1, 0, 1);
   const emptyOpacity = clamp(Number(p.hudBulletTimeEmptyOpacity) || 0.5, 0, 1);
-  const asset = ready ? './assets/bt1.svg' : './assets/bt2.svg';
+  const asset = ready
+    ? new URL('../assets/bt1.svg', import.meta.url).href
+    : new URL('../assets/bt2.svg', import.meta.url).href;
   if (el.dataset.btAsset !== asset) {
     el.dataset.btAsset = asset;
-    el.style.setProperty('--bt-icon-url', `url('${asset}')`);
+    el.style.setProperty('--bt-icon-url', `url("${asset}")`);
   }
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
