@@ -121,9 +121,13 @@ let playerWeaponMesh = null;
 let playerWeaponModelKey = '';
 let playerWeaponLength = 1.125;
 const _weaponForwardLocal = new THREE.Vector3(0, 0, -1);
+const _weaponUp = new THREE.Vector3(0, 1, 0);
 const _weaponWorldPos = new THREE.Vector3();
 const _weaponAimDir = new THREE.Vector3();
 const _weaponAimQuat = new THREE.Quaternion();
+const _weaponParentWorldQuat = new THREE.Quaternion();
+const _weaponParentInvQuat = new THREE.Quaternion();
+const _weaponAimMatrix = new THREE.Matrix4();
 const _weaponRecoilLocal = new THREE.Vector3();
 let _weaponRecoilOffset = 0;
 
@@ -269,12 +273,16 @@ function aimPlayerWeaponAt(targetPoint, fallbackYaw) {
     return;
   }
 
-  // Aim the visible prop's local -Z axis at the resolved world target. Building
-  // the quaternion from the full 3-D direction preserves vertical pitch, so the
-  // weapon follows camera pitch as well as left/right yaw while ADS/firing.
+  // Aim the visible prop's local -Z axis at the resolved world target while
+  // preserving world-up, then convert the result into the player group's local
+  // space. This gives regular aiming and ADS the same pitch/yaw behavior
+  // without introducing unnecessary roll.
   _weaponAimDir.normalize();
-  _weaponAimQuat.setFromUnitVectors(_weaponForwardLocal, _weaponAimDir);
-  playerWeaponGroup.quaternion.copy(_weaponAimQuat);
+  _weaponAimMatrix.lookAt(_weaponWorldPos, targetPoint, _weaponUp);
+  _weaponAimQuat.setFromRotationMatrix(_weaponAimMatrix);
+  playerGroup.getWorldQuaternion(_weaponParentWorldQuat);
+  _weaponParentInvQuat.copy(_weaponParentWorldQuat).invert();
+  playerWeaponGroup.quaternion.copy(_weaponParentInvQuat).multiply(_weaponAimQuat);
 }
 
 
@@ -303,6 +311,10 @@ function syncPlayerWeaponRestPose() {
 }
 
 function updatePlayerWeaponVisual(delta = 0, aimTarget = null) {
+  if ((state.activeSlot ?? 0) === 1) {
+    playerWeaponGroup.visible = false;
+    return;
+  }
   applyPlayerWeaponSettings();
   const type = getPlayerWeaponType();
   const recoilRecover = Math.min(1, Math.max(0, Number(delta) || 0) * 18);
@@ -320,15 +332,14 @@ function updatePlayerWeaponVisual(delta = 0, aimTarget = null) {
   const rightOffset = radius + weaponSideGap + getPlayerWeaponOffsetX(type);
   const forwardOffset = type === 'grenades' ? 0.02 : 0.12;
   const baseWeaponHeight = radius + length * 0.56 + getPlayerWeaponOffsetY(type);
-  const ammoReady = playerWeaponHasAmmoForVisual(type);
-  const adsLift = (ammoReady && state.isAiming && p.aimEnabled !== false) ? baseWeaponHeight * 0.25 : 0;
+  const adsLift = (state.isAiming && p.aimEnabled !== false) ? baseWeaponHeight * 0.25 : 0;
 
   playerWeaponGroup.position.set(
     rightX * rightOffset + forwardX * forwardOffset,
     baseWeaponHeight + adsLift,
     rightZ * rightOffset + forwardZ * forwardOffset
   );
-  const shouldTrackAim = ammoReady && isVector3Like(aimTarget);
+  const shouldTrackAim = isVector3Like(aimTarget);
   if (shouldTrackAim) {
     aimPlayerWeaponAt(aimTarget, az);
   } else {

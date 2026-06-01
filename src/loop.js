@@ -43,27 +43,52 @@ function drawTagIcon(ctx, x, y, iconSize, color) {
 }
 
 
-function updateBulletTimeIndicator() {
-  const el = document.getElementById('bullet-time-indicator');
+function updateBulletTimeActiveIcon() {
+  const el = document.getElementById('bullet-time-active-indicator');
   if (!el) return;
   const p = state.params;
-  const enabled = p.hudVisible !== false && p.hudBulletTimeIndicator !== false && p.bulletTimeEnabled !== false;
+  const active = state.slowTimer > 0;
+  const enabled = p.hudVisible !== false
+    && p.hudBulletTimeActiveIcon !== false
+    && p.bulletTimeEnabled !== false
+    && active;
   el.style.display = enabled ? '' : 'none';
   if (!enabled) return;
-  const ready = state.slowTimer > 0 || state.slowCooldown <= 0;
-  const size = clamp(Number(p.hudBulletTimeIndicatorSize) || 24, 8, 64);
-  const readyOpacity = clamp(Number(p.hudBulletTimeReadyOpacity) || 1, 0, 1);
-  const emptyOpacity = clamp(Number(p.hudBulletTimeEmptyOpacity) || 0.5, 0, 1);
-  const asset = ready
-    ? new URL('../assets/bt1.svg', import.meta.url).href
-    : new URL('../assets/bt2.svg', import.meta.url).href;
-  if (el.dataset.btAsset !== asset) {
-    el.dataset.btAsset = asset;
-    el.style.setProperty('--bt-icon-url', `url("${asset}")`);
-  }
+  const size = clamp(Number(p.hudBulletTimeActiveIconSize) || 42, 12, 128);
+  const opacity = clamp(Number(p.hudBulletTimeActiveIconOpacity) || 1, 0, 1);
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
-  el.style.opacity = String(ready ? readyOpacity : emptyOpacity);
+  el.style.opacity = String(opacity);
+}
+
+function updateBulletTimeIndicator() {
+  const el = document.getElementById('bullet-time-indicator');
+  const p = state.params;
+  if (el) {
+    const enabled = p.hudVisible !== false && p.hudBulletTimeIndicator !== false && p.bulletTimeEnabled !== false;
+    el.style.display = enabled ? '' : 'none';
+    if (enabled) {
+      const ready = state.slowTimer > 0 || state.slowCooldown <= 0;
+      const size = clamp(Number(p.hudBulletTimeIndicatorSize) || 24, 8, 64);
+      const readyOpacity = clamp(Number(p.hudBulletTimeReadyOpacity) || 1, 0, 1);
+      const emptyOpacity = clamp(Number(p.hudBulletTimeEmptyOpacity) || 0.5, 0, 1);
+      const asset = ready
+        ? new URL('../assets/bt1.svg', import.meta.url).href
+        : new URL('../assets/bt2.svg', import.meta.url).href;
+      if (el.dataset.btAsset !== asset) {
+        el.dataset.btAsset = asset;
+        el.style.setProperty('--bt-icon-url', `url("${asset}")`);
+        el.style.webkitMaskImage = `url("${asset}")`;
+        el.style.maskImage = `url("${asset}")`;
+      }
+      el.style.background = 'currentColor';
+      el.style.backgroundColor = 'currentColor';
+      el.style.width = `${size}px`;
+      el.style.height = `${size}px`;
+      el.style.opacity = String(ready ? readyOpacity : emptyOpacity);
+    }
+  }
+  updateBulletTimeActiveIcon();
 }
 
 function updateRadar() {
@@ -292,6 +317,8 @@ export function tick() {
   }
 
   updateTimeSlow(delta);
+  updateBulletTimeAudioPitch();
+  updateBulletTimeIndicator();
   updatePlayer(delta, getMoveForward(), getMoveRight(), aimResult.point);
   updateDashStreaks(delta);
 

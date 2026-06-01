@@ -8,7 +8,7 @@ export const state = {
   slowTimer: 0,
   slowScale: 0.35,
   slowRequested: false,
-  activePreset: 'g26',
+  activePreset: 'g27',
   mouseLookActive: false,
   isAiming: false,          // true while right-mouse / L2 held
   activeSlot: 0,            // 0 = laser, 1 = object placer
@@ -650,6 +650,9 @@ export const state = {
       "hudBulletTimeIndicatorSize": 41,
       "hudBulletTimeReadyOpacity": 1,
       "hudBulletTimeEmptyOpacity": 1,
+      "hudBulletTimeActiveIcon": true,
+      "hudBulletTimeActiveIconSize": 42,
+      "hudBulletTimeActiveIconOpacity": 1,
       "weaponGrenadeShockwaveSplashDamage": 100,
       "weaponGrenadeShockwaveSplashRadius": 4,
       "weaponGrenadeShockwaveSplashFalloff": 1,
