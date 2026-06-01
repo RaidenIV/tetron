@@ -18,6 +18,7 @@ const _dv = new THREE.Vector3();
 let _mouseDragActive = false;
 let _leftMouseDown = false;
 let _rightMouseDown = false;
+let _pointerLockPending = false; // true between requestPointerLock() and pointerlockchange
 let _lastMouseX = 0;
 let _lastMouseY = 0;
 
@@ -113,9 +114,11 @@ function requestMouseLook(target) {
   if (!document.hasFocus()) return;
 
   try {
+    _pointerLockPending = true;
     const request = renderer.domElement.requestPointerLock?.();
-    if (request?.catch) request.catch(() => {});
+    if (request?.catch) request.catch(() => { _pointerLockPending = false; });
   } catch (_) {
+    _pointerLockPending = false;
     // Pointer lock can be denied if the browser tab/window is not focused.
     // Mouse-drag camera control still works without pointer lock.
   }
@@ -235,11 +238,21 @@ window.addEventListener('pointermove', event => {
 });
 
 function stopMouseDrag(event) {
+  // pointercancel fires when the browser implicitly releases pointer capture —
+  // this happens when requestPointerLock() is called (right-click entering ADS
+  // triggers pointer lock, which cancels the captured pointer). In that case the
+  // physical button is still held, so we must NOT clear isAiming or _rightMouseDown.
+  // We detect this by checking whether we just entered pointer lock.
+  // pointercancel fires when requestPointerLock() implicitly releases pointer capture.
+  // _pointerLockPending is true between the lock request and the pointerlockchange event.
+  const isPointerLockTransition = event?.type === 'pointercancel'
+    && (_pointerLockPending || document.pointerLockElement === renderer.domElement);
+
   if (!event || event.button === 0) {
     _leftMouseDown = false;
     state.primaryFire = false;
   }
-  if (!event || event.button === 2) {
+  if (!isPointerLockTransition && (!event || event.button === 2)) {
     _rightMouseDown = false;
     state.isAiming = false;
     state.secondaryFire = false;
@@ -265,7 +278,18 @@ window.addEventListener('pointercancel', stopMouseDrag);
 // camera continuously, like a desktop third-person action shooter. ESC exits lock.
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === renderer.domElement;
-  if (locked) setPointerAimCenter();
+  _pointerLockPending = false;
+  if (locked) {
+    setPointerAimCenter();
+    // Pointer lock entry fires pointercancel which may have cleared isAiming even
+    // though the right mouse button is still physically held. Restore both here.
+    if (_rightMouseDown && state.params.aimEnabled !== false && (state.activeSlot ?? 0) === 0) {
+      state.isAiming = true;
+    }
+    if (_leftMouseDown && (state.activeSlot ?? 0) === 0) {
+      state.primaryFire = true;
+    }
+  }
   state.mouseLookActive = locked || _mouseDragActive;
   document.body.classList.toggle('third-person-mouse-look', state.mouseLookActive);
 });
