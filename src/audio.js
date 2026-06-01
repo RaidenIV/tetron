@@ -26,6 +26,14 @@ export function registerManagedAudio(audio, baseRate = 1) {
   if (!audio) return audio;
   audio.__basePlaybackRate = Number(baseRate) || 1;
   _managedAudio.add(audio);
+
+  if (!audio.__bulletTimePitchManaged) {
+    audio.__bulletTimePitchManaged = true;
+    audio.addEventListener('ended', () => {
+      if (!audio.loop) _managedAudio.delete(audio);
+    });
+  }
+
   applyBulletTimeAudioPitch(audio, audio.__basePlaybackRate);
   return audio;
 }
@@ -75,6 +83,7 @@ export function playDashSound(sourcePosition = null) {
   if (volume <= 0) return;
   if (!_dashSoundEl) _dashSoundEl = registerManagedAudio(new Audio('./assets/dash.wav'));
   const sound = _dashSoundEl.paused ? _dashSoundEl : _dashSoundEl.cloneNode();
+  registerManagedAudio(sound, 1);
   sound.currentTime = 0;
   sound.volume = volume;
   applyBulletTimeAudioPitch(sound);
@@ -88,6 +97,7 @@ export function playObjectExplosionSound(sourcePosition = null) {
   if (volume <= 0) return;
   if (!_objectExplosionEl) _objectExplosionEl = registerManagedAudio(new Audio('./assets/xpl1.wav'));
   const sound = _objectExplosionEl.paused ? _objectExplosionEl : _objectExplosionEl.cloneNode();
+  registerManagedAudio(sound, 1);
   sound.volume = volume;
   sound.currentTime = 0;
   applyBulletTimeAudioPitch(sound);

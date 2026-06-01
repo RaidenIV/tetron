@@ -11,7 +11,7 @@ import { scene, camera } from './renderer.js';
 import { playerGroup, getPlayerWeaponMuzzle } from './player.js';
 import { damageEnemiesAt, damageEnemiesInRadius, getEnemies, getAllies } from './enemies.js';
 import { isPlacedObjectHit } from './placer.js';
-import { getSfxVolume, applyBulletTimeAudioPitch, playObjectExplosionSound } from './audio.js';
+import { getSfxVolume, applyBulletTimeAudioPitch, registerManagedAudio, playObjectExplosionSound } from './audio.js';
 
 const _up = new THREE.Vector3(0, 1, 0);
 const _spawnPos = new THREE.Vector3();
@@ -619,10 +619,11 @@ function playWeaponAsset(path, volume, playbackRate = 1) {
   if (!volume || state.params.soundMuted) return;
   let base = _audioCache.get(path);
   if (!base) {
-    base = new Audio(path);
+    base = registerManagedAudio(new Audio(path), playbackRate);
     _audioCache.set(path, base);
   }
   const audio = base.paused ? base : base.cloneNode();
+  registerManagedAudio(audio, playbackRate);
   audio.currentTime = 0;
   audio.volume = clamp(volume, 0, 1);
   applyBulletTimeAudioPitch(audio, playbackRate);

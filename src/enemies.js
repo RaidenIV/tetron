@@ -12,7 +12,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { scene, camera } from './renderer.js';
 import { state } from './state.js';
 import { playerGroup } from './player.js';
-import { getSfxVolume, applyBulletTimeAudioPitch } from './audio.js';
+import { getSfxVolume, applyBulletTimeAudioPitch, registerManagedAudio } from './audio.js';
 import { resolveCircleAgainstPlacedObjects, isPlacedObjectHit } from './placer.js';
 
 export const ENEMY_TYPE = Object.freeze({
@@ -101,8 +101,9 @@ function playEnemyGruntSound(sourcePosition = null) {
   const fallback = Number(state.params.soundSfx_standard_hit ?? 1);
   const volume = getSfxVolume('soundSfx_enemy_grunt', fallback, sourcePosition);
   if (volume <= 0) return;
-  if (!_enemyGruntEl) _enemyGruntEl = new Audio('./assets/grunt.wav');
-  const sound = _enemyGruntEl.cloneNode();
+  if (!_enemyGruntEl) _enemyGruntEl = registerManagedAudio(new Audio('./assets/grunt.wav'));
+  const sound = _enemyGruntEl.paused ? _enemyGruntEl : _enemyGruntEl.cloneNode();
+  registerManagedAudio(sound, 1);
   sound.volume = volume;
   applyBulletTimeAudioPitch(sound);
   sound.currentTime = 0;

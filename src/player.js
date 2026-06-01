@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { scene } from './renderer.js';
 import { state } from './state.js';
 import { resolveCircleAgainstPlacedObjects, getWalkablePlacedObjectHeight } from './placer.js';
+import { registerManagedAudio, applyBulletTimeAudioPitch } from './audio.js';
 
 // ── Geometry & material ────────────────────────────────────────────────────────
 // The player is a CapsuleGeometry inside a Group.
@@ -26,12 +27,6 @@ playerMesh.position.y = 0.4 + 1.2 / 2;
 playerGroup.add(playerMesh);
 
 let _jumpSoundEl = null;
-const PLAYER_BULLET_TIME_AUDIO_RATE = Math.pow(2, -3 / 12);
-function getPlayerAudioPitchRate() {
-  return state.params.bulletTimeEnabled !== false && (state.slowTimer > 0 || state.worldScale < 0.999)
-    ? PLAYER_BULLET_TIME_AUDIO_RATE
-    : 1;
-}
 
 function getOverallBloomFactor() {
   const raw = Number(state.params.overallBloomIntensity);
@@ -45,10 +40,11 @@ function playJumpSound() {
   const jumpVol = Number(state.params.soundSfx_jump ?? 1);
   const volume = Math.max(0, Math.min(1, master * jumpVol));
   if (volume <= 0) return;
-  if (!_jumpSoundEl) _jumpSoundEl = new Audio('./assets/jump.wav');
-  const sound = _jumpSoundEl.cloneNode();
+  if (!_jumpSoundEl) _jumpSoundEl = registerManagedAudio(new Audio('./assets/jump.wav'));
+  const sound = _jumpSoundEl.paused ? _jumpSoundEl : _jumpSoundEl.cloneNode();
+  registerManagedAudio(sound, 1);
   sound.volume = volume;
-  sound.playbackRate = getPlayerAudioPitchRate();
+  applyBulletTimeAudioPitch(sound);
   sound.currentTime = 0;
   sound.play().catch(() => {});
 }
