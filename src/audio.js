@@ -7,6 +7,36 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+const BULLET_TIME_AUDIO_RATE = Math.pow(2, -3 / 12);
+const _managedAudio = new Set();
+
+export function getBulletTimeAudioRate() {
+  const active = state.params.bulletTimeEnabled !== false && (state.slowTimer > 0 || state.worldScale < 0.999);
+  return active ? BULLET_TIME_AUDIO_RATE : 1;
+}
+
+export function applyBulletTimeAudioPitch(audio, baseRate = 1) {
+  if (!audio) return audio;
+  const rate = clamp((Number(baseRate) || 1) * getBulletTimeAudioRate(), 0.25, 4);
+  try { audio.playbackRate = rate; } catch (_) {}
+  return audio;
+}
+
+export function registerManagedAudio(audio, baseRate = 1) {
+  if (!audio) return audio;
+  audio.__basePlaybackRate = Number(baseRate) || 1;
+  _managedAudio.add(audio);
+  applyBulletTimeAudioPitch(audio, audio.__basePlaybackRate);
+  return audio;
+}
+
+export function updateBulletTimeAudioPitch() {
+  _managedAudio.forEach(audio => {
+    if (!audio) { _managedAudio.delete(audio); return; }
+    applyBulletTimeAudioPitch(audio, audio.__basePlaybackRate || 1);
+  });
+}
+
 function numeric(value, fallback) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -43,9 +73,23 @@ let _dashSoundEl = null;
 export function playDashSound(sourcePosition = null) {
   const volume = getSfxVolume('soundSfx_dash', 1, sourcePosition);
   if (volume <= 0) return;
-  if (!_dashSoundEl) _dashSoundEl = new Audio('./assets/dash.wav');
+  if (!_dashSoundEl) _dashSoundEl = registerManagedAudio(new Audio('./assets/dash.wav'));
   const sound = _dashSoundEl.paused ? _dashSoundEl : _dashSoundEl.cloneNode();
   sound.currentTime = 0;
   sound.volume = volume;
+  applyBulletTimeAudioPitch(sound);
+  sound.play().catch(() => {});
+}
+
+let _objectExplosionEl = null;
+export function playObjectExplosionSound(sourcePosition = null) {
+  const fallback = Number(state.params.soundSfx_explode ?? 1);
+  const volume = getSfxVolume('soundSfx_object_explode', fallback, sourcePosition);
+  if (volume <= 0) return;
+  if (!_objectExplosionEl) _objectExplosionEl = registerManagedAudio(new Audio('./assets/xpl1.wav'));
+  const sound = _objectExplosionEl.paused ? _objectExplosionEl : _objectExplosionEl.cloneNode();
+  sound.volume = volume;
+  sound.currentTime = 0;
+  applyBulletTimeAudioPitch(sound);
   sound.play().catch(() => {});
 }

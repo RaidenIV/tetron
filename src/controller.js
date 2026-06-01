@@ -117,6 +117,7 @@ function applyControllerLook(dt, lookX, lookY) {
 function requestControllerDash(moveX, moveY) {
   const p = state.params;
   if (!p.dashEnabled) return;
+  if (state.isAiming) return;
   if (state.dashCooldown > 0 || state.dashTimer > 0) return;
 
   const forward = getMoveForward();

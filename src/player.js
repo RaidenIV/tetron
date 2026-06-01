@@ -26,6 +26,13 @@ playerMesh.position.y = 0.4 + 1.2 / 2;
 playerGroup.add(playerMesh);
 
 let _jumpSoundEl = null;
+const PLAYER_BULLET_TIME_AUDIO_RATE = Math.pow(2, -3 / 12);
+function getPlayerAudioPitchRate() {
+  return state.params.bulletTimeEnabled !== false && (state.slowTimer > 0 || state.worldScale < 0.999)
+    ? PLAYER_BULLET_TIME_AUDIO_RATE
+    : 1;
+}
+
 function getOverallBloomFactor() {
   const raw = Number(state.params.overallBloomIntensity);
   const value = Number.isFinite(raw) ? raw : 1;
@@ -41,6 +48,7 @@ function playJumpSound() {
   if (!_jumpSoundEl) _jumpSoundEl = new Audio('./assets/jump.wav');
   const sound = _jumpSoundEl.cloneNode();
   sound.volume = volume;
+  sound.playbackRate = getPlayerAudioPitchRate();
   sound.currentTime = 0;
   sound.play().catch(() => {});
 }

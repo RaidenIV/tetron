@@ -583,5 +583,22 @@
   "weaponGrenadeShockwaveColor": "#ffffff",
   "weaponGrenadeShockwaveFadeTime": 0.12,
   "weaponGrenadeShockwaveDelay": 0,
-  "weaponGrenadeShockwaveTransparency": 0.1
+  "weaponGrenadeShockwaveTransparency": 0.1,
+  "hudBulletTimeIndicator": true,
+  "hudBulletTimeIndicatorSize": 24,
+  "hudBulletTimeReadyOpacity": 1,
+  "hudBulletTimeEmptyOpacity": 0.5,
+  "weaponGrenadeShockwaveSplashDamage": 100,
+  "weaponGrenadeShockwaveSplashRadius": 4,
+  "weaponGrenadeShockwaveSplashFalloff": 1,
+  "weaponGrenadeShockwaveSplashMinFactor": 0.15,
+  "weaponRocketShockwaveSpeed": 40,
+  "weaponRocketShockwaveColor": "#ffffff",
+  "weaponRocketShockwaveFadeTime": 0.12,
+  "weaponRocketShockwaveDelay": 0,
+  "weaponRocketShockwaveTransparency": 0.1,
+  "weaponRocketShockwaveSplashDamage": 100,
+  "weaponRocketShockwaveSplashRadius": 4,
+  "weaponRocketShockwaveSplashFalloff": 1,
+  "weaponRocketShockwaveSplashMinFactor": 0.15
 }

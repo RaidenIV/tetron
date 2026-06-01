@@ -302,6 +302,7 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   --hud-color: #33ddff;
   --hud-track-bg: rgba(53,221,255,0.18);
   --hud-track-border: rgba(53,231,255,0.32);
+  grid-template-columns: 30px 1fr 30px;
   margin-left: 24px;
 }
 .game-hud-icon {
@@ -327,6 +328,15 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
 .health-icon {
   -webkit-mask-image: url('../assets/health.svg');
   mask-image: url('../assets/health.svg');
+}
+.bullet-time-indicator {
+  --bt-icon-url: url('../assets/bt1.svg');
+  color: #58a6ff;
+  width: 24px;
+  height: 24px;
+  -webkit-mask-image: var(--bt-icon-url);
+  mask-image: var(--bt-icon-url);
+  transition: opacity 0.18s ease, filter 0.18s ease;
 }
 .game-hud-content { width: 210px; }
 .game-hud-line {

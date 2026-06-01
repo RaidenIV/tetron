@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { scene, camera, triggerCameraShake } from './renderer.js';
 import { state } from './state.js';
 import { ASSET_CATALOGUE } from './assets-catalogue.js';
-import { getSfxVolume } from './audio.js';
+import { getSfxVolume, playObjectExplosionSound as playSharedObjectExplosionSound } from './audio.js';
 
 // ── Geometry factories (Three.js — kept here, not in catalogue) ───────────────
 const _geoFactories = {
@@ -63,16 +63,8 @@ const _destructibleShockwaves = [];
 const _destructibleShockwaveGeo = new THREE.SphereGeometry(1, 32, 16);
 let _destructibleShockwaveId = 1;
 
-let _objectExplosionEl = null;
 function playObjectExplosionSound(sourcePosition = null) {
-  const fallback = Number(state.params.soundSfx_explode ?? 1);
-  const volume = getSfxVolume('soundSfx_object_explode', fallback, sourcePosition);
-  if (volume <= 0) return;
-  if (!_objectExplosionEl) _objectExplosionEl = new Audio('./assets/xpl1.wav');
-  const sound = _objectExplosionEl.cloneNode();
-  sound.volume = volume;
-  sound.currentTime = 0;
-  sound.play().catch(() => {});
+  playSharedObjectExplosionSound(sourcePosition);
 }
 
 

@@ -11,7 +11,7 @@ import { scene, camera } from './renderer.js';
 import { playerGroup, getPlayerWeaponMuzzle } from './player.js';
 import { damageEnemiesAt, damageEnemiesInRadius, getEnemies, getAllies } from './enemies.js';
 import { isPlacedObjectHit } from './placer.js';
-import { getSfxVolume } from './audio.js';
+import { getSfxVolume, applyBulletTimeAudioPitch, playObjectExplosionSound } from './audio.js';
 
 const _up = new THREE.Vector3(0, 1, 0);
 const _spawnPos = new THREE.Vector3();
@@ -176,14 +176,22 @@ function getSelectedWeaponType() {
     : 'rifle';
 }
 
-function getGrenadeShockwaveConfig(radius, damage) {
+function getWeaponShockwaveConfig(prefix, radius, damage) {
   const p = state.params;
+  const basePrefix = `weapon${prefix}Shockwave`;
+  const splashRadiusFallback = prefix === 'Rocket'
+    ? (p.destructionDestructibleSplashRadius ?? radius ?? 6)
+    : (p.destructionDestructibleSplashRadius ?? radius ?? 5);
   return {
-    speed: numParam(p.weaponGrenadeShockwaveSpeed, p.destructionDestructibleShockwaveSpeed ?? 40, 0, 40),
-    color: hexColor(p.weaponGrenadeShockwaveColor, p.destructionDestructibleShockwaveColor || '#ffffff'),
-    transparency: numParam(p.weaponGrenadeShockwaveTransparency, p.destructionDestructibleShockwaveTransparency ?? 0.1, 0, 1),
-    fadeTime: numParam(p.weaponGrenadeShockwaveFadeTime, p.destructionDestructibleShockwaveFadeTime ?? 0.12, 0.05, 3),
-    delay: numParam(p.weaponGrenadeShockwaveDelay, p.destructionDestructibleShockwaveDelay ?? 0, 0, 3),
+    speed: numParam(p[`${basePrefix}Speed`], p.destructionDestructibleShockwaveSpeed ?? 40, 0, 40),
+    color: hexColor(p[`${basePrefix}Color`], p.destructionDestructibleShockwaveColor || '#ffffff'),
+    transparency: numParam(p[`${basePrefix}Transparency`], p.destructionDestructibleShockwaveTransparency ?? 0.1, 0, 1),
+    fadeTime: numParam(p[`${basePrefix}FadeTime`], p.destructionDestructibleShockwaveFadeTime ?? 0.12, 0.05, 3),
+    delay: numParam(p[`${basePrefix}Delay`], p.destructionDestructibleShockwaveDelay ?? 0, 0, 3),
+    splashDamage: numParam(p[`${basePrefix}SplashDamage`], p.destructionDestructibleSplashDamage ?? damage ?? 0, 0, 500),
+    splashRadius: numParam(p[`${basePrefix}SplashRadius`], splashRadiusFallback, 0, 80),
+    splashFalloff: numParam(p[`${basePrefix}SplashFalloff`], p.destructionDestructibleSplashFalloff ?? 1, 0.1, 4),
+    splashMinFactor: numParam(p[`${basePrefix}SplashMinFactor`], p.destructionDestructibleSplashMinFactor ?? 0.15, 0, 1),
     radius: Math.max(0.5, Number(radius) || 5),
     damage: Math.max(0, Number(damage) || 0),
   };
@@ -203,12 +211,13 @@ function getWeaponConfig(type = getSelectedWeaponType()) {
     case 'grenades': {
       const cfg = makeWeaponConfig('grenades', 'Grenade', { fireRate: 0.72, speed: 16, range: 60, damage: 95, spread: 0.01, projectileSize: 0.25, projectileLength: 0.27, projectileBloomIntensity: 1, projectileBloomSize: 1, projectileColor: '#ff8844', projectileBloomColor: '#ff8844', projectileBloom: false, visual: 'grenade' }, { ballistic: true, physicsObject: true, explosive: true, fuse: 2.2 });
       cfg.radius = weaponValue('Grenade', 'Radius', 5, 0.5, 50);
-      cfg.shockwave = getGrenadeShockwaveConfig(cfg.radius, cfg.damage);
+      cfg.shockwave = getWeaponShockwaveConfig('Grenade', cfg.radius, cfg.damage);
       return cfg;
     }
     case 'rocketLauncher': {
       const cfg = makeWeaponConfig('rocketLauncher', 'Rocket', { fireRate: 0.68, speed: 34, range: 95, damage: 130, spread: 0.004, projectileSize: 0.42, projectileLength: 1.33, projectileBloomIntensity: 1, projectileBloomSize: 1, projectileColor: '#ff3333', projectileBloomColor: '#ff3333', projectileBloom: true, visual: 'rocket' }, { explosive: true, fuse: 4.0 });
       cfg.radius = weaponValue('Rocket', 'Radius', 6, 0.5, 60);
+      cfg.shockwave = getWeaponShockwaveConfig('Rocket', cfg.radius, cfg.damage);
       return cfg;
     }
     case 'rifle':
@@ -322,9 +331,29 @@ function updateExplosionFlashes(delta) {
 function spawnProjectileShockwave(position, cfg = {}) {
   const speed = Math.max(0, Number(cfg.speed) || 0);
   const fadeTime = clamp(Number(cfg.fadeTime) || 0.12, 0.05, 3);
-  const maxRadius = Math.max(0.01, Number(cfg.radius) || speed * fadeTime || 1);
+  const visualMaxRadius = Math.max(0, speed * fadeTime);
   const opacity = clamp(Number(cfg.transparency) || 0, 0, 1);
-  if (speed <= 0 && opacity <= 0) return;
+  const damage = Math.max(0, Number(cfg.splashDamage ?? cfg.damage) || 0);
+  const splashRadius = clamp(Number(cfg.splashRadius ?? cfg.radius) || 0, 0, 80);
+  const damageMaxRadius = splashRadius > 0 ? splashRadius : Math.max(0, Number(cfg.radius) || visualMaxRadius);
+  if (visualMaxRadius <= 0 && (damage <= 0 || damageMaxRadius <= 0)) return;
+
+  const event = {
+    id: `weapon_splash_${_projectileShockwaveId++}`,
+    x: position.x, y: position.y, z: position.z,
+    currentRadius: 0,
+    maxRadius: damageMaxRadius,
+    damage,
+    damageFalloff: clamp(Number(cfg.splashFalloff) || 1, 0.1, 4),
+    minDamageFactor: clamp(Number(cfg.splashMinFactor) || 0, 0, 1),
+    active: false,
+    hitNpcIds: [],
+    hitEnemyIds: [],
+    hitObjectIds: [],
+    hitPlayer: false,
+  };
+  state.explosionSplashEvents = state.explosionSplashEvents || [];
+  state.explosionSplashEvents.push(event);
 
   const material = new THREE.MeshBasicMaterial({
     color: hexColor(cfg.color, '#ffffff'),
@@ -336,15 +365,17 @@ function spawnProjectileShockwave(position, cfg = {}) {
     toneMapped: false,
   });
   const mesh = new THREE.Mesh(_projectileShockwaveGeo, material);
-  mesh.name = `GrenadeShockwave_${_projectileShockwaveId++}`;
+  mesh.name = `WeaponShockwave_${event.id}`;
   mesh.position.copy(position);
   mesh.scale.setScalar(0.001);
   mesh.visible = false;
   scene.add(mesh);
   _activeProjectileShockwaves.push({
     mesh,
+    event,
     speed,
-    maxRadius,
+    visualMaxRadius,
+    damageMaxRadius,
     opacity,
     fadeTime,
     age: -clamp(Number(cfg.delay) || 0, 0, 3),
@@ -357,16 +388,28 @@ function updateProjectileShockwaves(delta) {
     shockwave.age += delta;
     if (shockwave.age < 0) {
       shockwave.mesh.visible = false;
+      if (shockwave.event) {
+        shockwave.event.active = false;
+        shockwave.event.currentRadius = 0;
+      }
       continue;
     }
     const t = clamp(shockwave.age / shockwave.fadeTime, 0, 1);
-    const radius = Math.max(0.001, Math.min(shockwave.maxRadius, shockwave.speed > 0 ? shockwave.speed * shockwave.age : shockwave.maxRadius * t));
-    shockwave.mesh.visible = shockwave.opacity > 0;
-    shockwave.mesh.scale.setScalar(radius);
+    const visualRadius = Math.max(0.001, Math.min(shockwave.visualMaxRadius, shockwave.speed > 0 ? shockwave.speed * shockwave.age : shockwave.visualMaxRadius * t));
+    const damageRadius = Math.max(0, Math.min(shockwave.damageMaxRadius, shockwave.damageMaxRadius * t));
+    shockwave.mesh.visible = shockwave.visualMaxRadius > 0 && shockwave.opacity > 0;
+    shockwave.mesh.scale.setScalar(visualRadius);
     shockwave.mesh.material.opacity = shockwave.opacity * (1 - t);
+    if (shockwave.event) {
+      shockwave.event.active = true;
+      shockwave.event.currentRadius = damageRadius;
+    }
     if (shockwave.age >= shockwave.fadeTime) {
       scene.remove(shockwave.mesh);
       shockwave.mesh.material?.dispose?.();
+      if (shockwave.event) {
+        state.explosionSplashEvents = (state.explosionSplashEvents || []).filter(event => event !== shockwave.event);
+      }
       _activeProjectileShockwaves.splice(i, 1);
     }
   }
@@ -470,7 +513,7 @@ function playWeaponAsset(path, volume, playbackRate = 1) {
   const audio = base.paused ? base : base.cloneNode();
   audio.currentTime = 0;
   audio.volume = clamp(volume, 0, 1);
-  audio.playbackRate = playbackRate;
+  applyBulletTimeAudioPitch(audio, playbackRate);
   audio.play().catch(() => {});
 }
 
@@ -548,11 +591,11 @@ function createProjectile(config, dir) {
 
 function explodeProjectile(projectile) {
   const { config, visual } = projectile;
-  const radius = Math.max(0.5, Number(config.radius) || 4);
-  const damage = Math.max(1, Number(config.damage) || 1);
-  damageEnemiesInRadius(visual.group.position, radius, damage, 1.15);
+  const radius = Math.max(0.5, Number(config.radius) || Number(config.shockwave?.splashRadius) || 4);
+  playObjectExplosionSound(visual.group.position);
   spawnExplosionFlash(visual.group.position, radius);
-  if (config.type === 'grenades') spawnProjectileShockwave(visual.group.position, config.shockwave || {});
+  if (config.shockwave) spawnProjectileShockwave(visual.group.position, config.shockwave);
+  else damageEnemiesInRadius(visual.group.position, radius, Math.max(1, Number(config.damage) || 1), 1.15);
   disposeProjectile(projectile);
 }
 

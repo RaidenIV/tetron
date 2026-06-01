@@ -344,9 +344,9 @@ window.addEventListener('keydown', e => {
     state.params.thirdOffsetX = -(state.params.thirdOffsetX || 1.25);
   }
 
-  if (e.key === 'Shift' && state.params.dashEnabled) {
+  if (e.key === 'Shift') {
     e.preventDefault();
-    if (state.dashCooldown <= 0 && state.dashTimer <= 0) {
+    if (state.params.dashEnabled && !state.isAiming && state.dashCooldown <= 0 && state.dashTimer <= 0) {
       // Build direction from currently held keys + camera-relative vectors
       _dv.set(0, 0, 0);
       if (state.keys.w) _dv.addScaledVector(getMoveForward(),  1);
@@ -541,7 +541,7 @@ export function updateController(delta) {
 
   // ── Circle (1) → dash ─────────────────────────────────────────────────────
   if (pressed(1)) {
-    if (!_dashHeld.get(idx) && state.params.dashEnabled) {
+    if (!_dashHeld.get(idx) && state.params.dashEnabled && !state.isAiming) {
       _dashHeld.set(idx, true);
       if (state.dashCooldown <= 0 && state.dashTimer <= 0) {
         // Use analogue stick direction if available, else last move direction.

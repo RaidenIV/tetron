@@ -13,6 +13,7 @@ import { updateLaserProjectiles, resolveAimTarget, aimResult } from './weapons.j
 import { updateEnemies, getEnemyMeshes, tagEnemy, getEnemies, getAllies } from './enemies.js';
 import { updatePlacer } from './placer.js';
 import { updateController } from './input.js';
+import { updateBulletTimeAudioPitch } from './audio.js';
 
 const clock = new THREE.Clock();
 // ── Radar canvas ──────────────────────────────────────────────────────────────
@@ -39,6 +40,28 @@ function drawTagIcon(ctx, x, y, iconSize, color) {
   ctx.fillStyle = color;
   ctx.fill(_tagIconPath);
   ctx.restore();
+}
+
+
+function updateBulletTimeIndicator() {
+  const el = document.getElementById('bullet-time-indicator');
+  if (!el) return;
+  const p = state.params;
+  const enabled = p.hudVisible !== false && p.hudBulletTimeIndicator !== false && p.bulletTimeEnabled !== false;
+  el.style.display = enabled ? '' : 'none';
+  if (!enabled) return;
+  const ready = state.slowTimer > 0 || state.slowCooldown <= 0;
+  const size = clamp(Number(p.hudBulletTimeIndicatorSize) || 24, 8, 64);
+  const readyOpacity = clamp(Number(p.hudBulletTimeReadyOpacity) || 1, 0, 1);
+  const emptyOpacity = clamp(Number(p.hudBulletTimeEmptyOpacity) || 0.5, 0, 1);
+  const asset = ready ? './assets/bt1.svg' : './assets/bt2.svg';
+  if (el.dataset.btAsset !== asset) {
+    el.dataset.btAsset = asset;
+    el.style.setProperty('--bt-icon-url', `url('${asset}')`);
+  }
+  el.style.width = `${size}px`;
+  el.style.height = `${size}px`;
+  el.style.opacity = String(ready ? readyOpacity : emptyOpacity);
 }
 
 function updateRadar() {
@@ -219,6 +242,8 @@ export function tick() {
   // Poll controller every frame (including paused — Options button must work).
   updateController(delta);
   updateRadar();
+  updateBulletTimeAudioPitch();
+  updateBulletTimeIndicator();
   updatePlacer(delta);
 
   // Stage 1 aim resolve — runs every frame so reticle hover and firing share

@@ -18,6 +18,7 @@ import {
   getSelectedPlacedObjectCount, deleteSelectedPlacedObjects,
   clearPlacedObjectSelection, selectAllPlacedObjects,
 } from '../placer.js';
+import { registerManagedAudio, applyBulletTimeAudioPitch } from '../audio.js';
 
 const sidebar = document.getElementById('sidebar');
 
@@ -624,7 +625,24 @@ const PRESET_SETTINGS = [
   "weaponGrenadeShockwaveColor": "#ffffff",
   "weaponGrenadeShockwaveFadeTime": 0.12,
   "weaponGrenadeShockwaveDelay": 0,
-  "weaponGrenadeShockwaveTransparency": 0.1
+  "weaponGrenadeShockwaveTransparency": 0.1,
+  "hudBulletTimeIndicator": true,
+  "hudBulletTimeIndicatorSize": 24,
+  "hudBulletTimeReadyOpacity": 1,
+  "hudBulletTimeEmptyOpacity": 0.5,
+  "weaponGrenadeShockwaveSplashDamage": 100,
+  "weaponGrenadeShockwaveSplashRadius": 4,
+  "weaponGrenadeShockwaveSplashFalloff": 1,
+  "weaponGrenadeShockwaveSplashMinFactor": 0.15,
+  "weaponRocketShockwaveSpeed": 40,
+  "weaponRocketShockwaveColor": "#ffffff",
+  "weaponRocketShockwaveFadeTime": 0.12,
+  "weaponRocketShockwaveDelay": 0,
+  "weaponRocketShockwaveTransparency": 0.1,
+  "weaponRocketShockwaveSplashDamage": 100,
+  "weaponRocketShockwaveSplashRadius": 4,
+  "weaponRocketShockwaveSplashFalloff": 1,
+  "weaponRocketShockwaveSplashMinFactor": 0.15
 } },
   { key: 'g21', label: 'G21', path: './presets/G21.json', data: {
   "cameraMode": "third2",
@@ -6260,6 +6278,10 @@ function buildHUD(body) {
   body.appendChild(toggle('Enemy Health Bars', 'hudEnemyHealthBars', () => applyHudSettings()));
   body.appendChild(toggle('Ally Health Bars', 'hudAllyHealthBars', () => applyHudSettings()));
   body.appendChild(slider({ key: 'hudNpcHealthBarRange', label: 'Health Bar Range', min: 0, max: 200, step: 1, dec: 0, onChange: () => applyHudSettings() }));
+  body.appendChild(toggle('Bullet Time Indicator', 'hudBulletTimeIndicator', () => applyHudSettings()));
+  body.appendChild(slider({ key: 'hudBulletTimeIndicatorSize', label: 'BT Icon Size', min: 8, max: 64, step: 1, dec: 0, onChange: () => applyHudSettings() }));
+  body.appendChild(slider({ key: 'hudBulletTimeReadyOpacity', label: 'BT Ready Opacity', min: 0, max: 1, step: 0.05, dec: 2, onChange: () => applyHudSettings() }));
+  body.appendChild(slider({ key: 'hudBulletTimeEmptyOpacity', label: 'BT Empty Opacity', min: 0, max: 1, step: 0.05, dec: 2, onChange: () => applyHudSettings() }));
 
   body.appendChild(subhdr('Enemy Tag'));
   body.appendChild(toggle('Tag Enabled', 'tagEnabled', () => applyTagSettings()));
@@ -6565,13 +6587,18 @@ function buildWeaponControls(body, spec) {
   body.appendChild(colorPicker('Bloom Color', weaponKey(prefix, 'ProjectileBloomColor')));
   body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileBloomIntensity'), label: 'Bloom Intensity', min: 0, max: 3, step: 0.05, dec: 2 }));
   body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileBloomSize'), label: 'Bloom Size', min: 0.25, max: 4, step: 0.05, dec: 2 }));
-  if (spec.type === 'grenades') {
+  if (spec.type === 'grenades' || spec.type === 'rocketLauncher') {
+    const shockPrefix = spec.type === 'rocketLauncher' ? 'weaponRocketShockwave' : 'weaponGrenadeShockwave';
     body.appendChild(subhdr('Shockwave'));
-    body.appendChild(slider({ key: 'weaponGrenadeShockwaveSpeed', label: 'Shockwave Speed', min: 0, max: 40, step: 0.5, dec: 1 }));
-    body.appendChild(colorPicker('Shockwave Color', 'weaponGrenadeShockwaveColor'));
-    body.appendChild(slider({ key: 'weaponGrenadeShockwaveTransparency', label: 'Shockwave Transparency', min: 0, max: 1, step: 0.01, dec: 2 }));
-    body.appendChild(slider({ key: 'weaponGrenadeShockwaveFadeTime', label: 'Shockwave Fade Time', min: 0.05, max: 3, step: 0.05, dec: 2 }));
-    body.appendChild(slider({ key: 'weaponGrenadeShockwaveDelay', label: 'Shockwave Delay', min: 0, max: 3, step: 0.05, dec: 2 }));
+    body.appendChild(slider({ key: `${shockPrefix}Speed`, label: 'Speed', min: 0, max: 40, step: 0.5, dec: 1 }));
+    body.appendChild(colorPicker('Color', `${shockPrefix}Color`));
+    body.appendChild(slider({ key: `${shockPrefix}Transparency`, label: 'Transparency', min: 0, max: 1, step: 0.01, dec: 2 }));
+    body.appendChild(slider({ key: `${shockPrefix}FadeTime`, label: 'Fade Time', min: 0.05, max: 3, step: 0.05, dec: 2 }));
+    body.appendChild(slider({ key: `${shockPrefix}Delay`, label: 'Delay', min: 0, max: 3, step: 0.05, dec: 2 }));
+    body.appendChild(slider({ key: `${shockPrefix}SplashDamage`, label: 'Splash Damage', min: 0, max: 500, step: 1, dec: 0 }));
+    body.appendChild(slider({ key: `${shockPrefix}SplashRadius`, label: 'Splash Radius', min: 0, max: 80, step: 0.5, dec: 1 }));
+    body.appendChild(slider({ key: `${shockPrefix}SplashFalloff`, label: 'Damage Falloff', min: 0.1, max: 4, step: 0.1, dec: 1 }));
+    body.appendChild(slider({ key: `${shockPrefix}SplashMinFactor`, label: 'Min Damage', min: 0, max: 1, step: 0.01, dec: 2 }));
   }
 }
 
@@ -6625,7 +6652,7 @@ function buildWeapons(body) {
 let _ambienceEl = null;
 function getAmbienceEl() {
   if (!_ambienceEl) {
-    _ambienceEl = new Audio('./assets/storm.mp3');
+    _ambienceEl = registerManagedAudio(new Audio('./assets/storm.mp3'));
     _ambienceEl.loop = true;
     _ambienceEl.volume = Math.max(0, Math.min(1, Number(state.params.soundSfx_ambience) ?? 0.5));
   }
@@ -6675,6 +6702,7 @@ function buildSound(body) {
       const el = getAmbienceEl();
       el.volume = Math.max(0, Math.min(1, v));
       if (v > 0 && el.paused && !state.params.soundMuted) {
+        applyBulletTimeAudioPitch(el);
         el.play().catch(() => {});
       } else if (v <= 0) {
         el.pause();
@@ -6686,6 +6714,7 @@ function buildSound(body) {
   // Start ambience if volume > 0
   const ambEl = getAmbienceEl();
   if (state.params.soundSfx_ambience > 0 && ambEl.paused && !state.params.soundMuted) {
+    applyBulletTimeAudioPitch(ambEl);
     ambEl.play().catch(() => {});
   }
 }
@@ -7178,6 +7207,14 @@ function applyHudSettings() {
   const fpsEl = document.getElementById('fps-overlay');
   if (fpsEl) fpsEl.style.display = p.hudVisible && p.showFps ? '' : 'none';
 
+  const btIndicatorEl = document.getElementById('bullet-time-indicator');
+  if (btIndicatorEl) {
+    const btEnabled = p.hudVisible !== false && p.hudBulletTimeIndicator !== false && p.bulletTimeEnabled !== false;
+    btIndicatorEl.style.display = btEnabled ? '' : 'none';
+    btIndicatorEl.style.width = `${Math.min(64, Math.max(8, Number(p.hudBulletTimeIndicatorSize) || 24))}px`;
+    btIndicatorEl.style.height = `${Math.min(64, Math.max(8, Number(p.hudBulletTimeIndicatorSize) || 24))}px`;
+  }
+
   document.querySelectorAll('.npc-health-bar').forEach(el => {
     const teamEnabled = el.dataset.team === 'ally'
       ? p.hudAllyHealthBars !== false
@@ -7296,11 +7333,19 @@ function applyAllParams() {
     if (spec.radius) p[weaponKey(spec.prefix, 'Radius')] = clampSetting(p[weaponKey(spec.prefix, 'Radius')], 0.5, 60, d.radius);
   });
   p.weaponShotgunPellets = Math.round(clampSetting(p.weaponShotgunPellets, 1, 24, 8));
-  p.weaponGrenadeShockwaveSpeed = clampSetting(p.weaponGrenadeShockwaveSpeed, 0, 40, Number(p.destructionDestructibleShockwaveSpeed) || 40);
-  p.weaponGrenadeShockwaveFadeTime = clampSetting(p.weaponGrenadeShockwaveFadeTime, 0.05, 3, Number(p.destructionDestructibleShockwaveFadeTime) || 0.12);
-  p.weaponGrenadeShockwaveDelay = clampSetting(p.weaponGrenadeShockwaveDelay, 0, 3, Number(p.destructionDestructibleShockwaveDelay) || 0);
-  p.weaponGrenadeShockwaveTransparency = clampSetting(p.weaponGrenadeShockwaveTransparency, 0, 1, Number(p.destructionDestructibleShockwaveTransparency) || 0.1);
-  p.weaponGrenadeShockwaveColor = hexSetting(p.weaponGrenadeShockwaveColor, p.destructionDestructibleShockwaveColor || '#ffffff');
+  ['Grenade', 'Rocket'].forEach(prefix => {
+    const key = `weapon${prefix}Shockwave`;
+    const radiusFallback = prefix === 'Rocket' ? (p.weaponRocketRadius || 6) : (p.weaponGrenadeRadius || 5);
+    p[`${key}Speed`] = clampSetting(p[`${key}Speed`], 0, 40, Number(p.destructionDestructibleShockwaveSpeed) || 40);
+    p[`${key}FadeTime`] = clampSetting(p[`${key}FadeTime`], 0.05, 3, Number(p.destructionDestructibleShockwaveFadeTime) || 0.12);
+    p[`${key}Delay`] = clampSetting(p[`${key}Delay`], 0, 3, Number(p.destructionDestructibleShockwaveDelay) || 0);
+    p[`${key}Transparency`] = clampSetting(p[`${key}Transparency`], 0, 1, Number(p.destructionDestructibleShockwaveTransparency) || 0.1);
+    p[`${key}Color`] = hexSetting(p[`${key}Color`], p.destructionDestructibleShockwaveColor || '#ffffff');
+    p[`${key}SplashDamage`] = clampSetting(p[`${key}SplashDamage`], 0, 500, Number(p.destructionDestructibleSplashDamage) || (prefix === 'Rocket' ? 130 : 95));
+    p[`${key}SplashRadius`] = clampSetting(p[`${key}SplashRadius`], 0, 80, Number(p.destructionDestructibleSplashRadius) || radiusFallback);
+    p[`${key}SplashFalloff`] = clampSetting(p[`${key}SplashFalloff`], 0.1, 4, Number(p.destructionDestructibleSplashFalloff) || 1);
+    p[`${key}SplashMinFactor`] = clampSetting(p[`${key}SplashMinFactor`], 0, 1, Number(p.destructionDestructibleSplashMinFactor) || 0.15);
+  });
   syncReticleToCurrentWeapon();
   applyPlayerWeaponSettings();
   p.allyType = normalizeChoice(p.allyType, ENEMY_TYPE_OPTIONS, 'rusher');
@@ -7334,6 +7379,10 @@ function applyAllParams() {
   p.hudEnemyHealthBars = p.hudEnemyHealthBars !== false;
   p.hudAllyHealthBars = p.hudAllyHealthBars !== false;
   p.hudNpcHealthBarRange = clampSetting(p.hudNpcHealthBarRange, 0, 200, 60);
+  p.hudBulletTimeIndicator = p.hudBulletTimeIndicator !== false;
+  p.hudBulletTimeIndicatorSize = clampSetting(p.hudBulletTimeIndicatorSize, 8, 64, 24);
+  p.hudBulletTimeReadyOpacity = clampSetting(p.hudBulletTimeReadyOpacity, 0, 1, 1);
+  p.hudBulletTimeEmptyOpacity = clampSetting(p.hudBulletTimeEmptyOpacity, 0, 1, 0.5);
   const enemyDestructionPrefixes = [
     'destructionEnemies',
     'destructionAllies',
@@ -7521,6 +7570,7 @@ function syncPauseToSidebar() {
     if (state.paused) {
       _ambienceEl.pause();
     } else if (state.params.soundSfx_ambience > 0 && !state.params.soundMuted) {
+      applyBulletTimeAudioPitch(_ambienceEl);
       _ambienceEl.play().catch(() => {});
     }
   }
