@@ -238,21 +238,22 @@ window.addEventListener('pointermove', event => {
 });
 
 function stopMouseDrag(event) {
-  // pointercancel fires when the browser implicitly releases pointer capture —
-  // this happens when requestPointerLock() is called (right-click entering ADS
-  // triggers pointer lock, which cancels the captured pointer). In that case the
-  // physical button is still held, so we must NOT clear isAiming or _rightMouseDown.
-  // We detect this by checking whether we just entered pointer lock.
-  // pointercancel fires when requestPointerLock() implicitly releases pointer capture.
-  // _pointerLockPending is true between the lock request and the pointerlockchange event.
-  const isPointerLockTransition = event?.type === 'pointercancel'
-    && (_pointerLockPending || document.pointerLockElement === renderer.domElement);
+  // Only a real pointerup (physical button release) should clear latched button state.
+  // pointercancel fires when requestPointerLock() releases pointer capture — the physical
+  // button is still held, so we must NOT clear any button state on cancel.
+  if (event?.type === 'pointercancel') {
+    // Just release capture; do not touch button state.
+    try {
+      if (event?.pointerId !== undefined) renderer.domElement.releasePointerCapture?.(event.pointerId);
+    } catch (_) {}
+    return;
+  }
 
   if (!event || event.button === 0) {
     _leftMouseDown = false;
     state.primaryFire = false;
   }
-  if (!isPointerLockTransition && (!event || event.button === 2)) {
+  if (!event || event.button === 2) {
     _rightMouseDown = false;
     state.isAiming = false;
     state.secondaryFire = false;
