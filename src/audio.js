@@ -7,7 +7,7 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-const BULLET_TIME_AUDIO_RATE = Math.pow(2, -5 / 12);
+const BULLET_TIME_AUDIO_RATE = Math.pow(2, -7 / 12);
 const _managedAudio = new Set();
 const _bulletTimeActiveAudio = new Set();
 
@@ -25,7 +25,7 @@ export function applyBulletTimeAudioPitch(audio, baseRate = 1) {
   const rate = audio.__skipBulletTimePitch ? base : clamp(base * getBulletTimeAudioRate(), 0.25, 4);
   try {
     // Browsers preserve pitch by default when playbackRate changes; disable
-    // that so non-bullet-time audio audibly drops by -5 semitones during bullet time.
+    // that so non-bullet-time audio audibly drops by -7 semitones during bullet time.
     audio.preservesPitch = !!audio.__skipBulletTimePitch;
     audio.mozPreservesPitch = !!audio.__skipBulletTimePitch;
     audio.webkitPreservesPitch = !!audio.__skipBulletTimePitch;

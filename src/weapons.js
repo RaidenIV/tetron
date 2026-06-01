@@ -361,7 +361,7 @@ function makeWeaponConfig(type, prefix, defaults, extra = {}) {
   return {
     type,
     fireRate: weaponValue(prefix, 'FireRate', defaults.fireRate, 0.1, 30),
-    speed: weaponValue(prefix, 'ProjectileSpeed', defaults.speed, 1, 250),
+    speed: weaponValue(prefix, 'ProjectileSpeed', defaults.speed, 1, 500),
     range: weaponValue(prefix, 'Range', defaults.range, 1, 500),
     damage: weaponValue(prefix, 'Damage', defaults.damage, 0, 1000),
     hitRadius: projectileSize,
@@ -983,11 +983,12 @@ export function updateLaserProjectiles(delta, projectileDelta = delta) {
   updateProjectileExplosionParticles(delta);
   const fireRate = Math.max(0.1, Number(config.fireRate) || 1);
   const interval = 1 / fireRate;
+  const cooldownDelta = Math.max(0, Number(projectileDelta) || delta);
 
   if (!p.laserEnabled || !state.primaryFire) {
     _weaponCooldown = 0;
   } else {
-    _weaponCooldown -= delta;
+    _weaponCooldown -= cooldownDelta;
     if (_weaponCooldown <= 0) {
       fireWeapon();
       _weaponCooldown = interval;
