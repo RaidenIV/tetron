@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { state } from './state.js';
 import { getMoveForward, getMoveRight, isThirdPersonCameraMode, renderer } from './renderer.js';
 import { playDashSound } from './audio.js';
+import { reloadCurrentWeapon } from './weapons.js';
 
 let _togglePanel = null;
 
@@ -15,6 +16,8 @@ export function initInput({ togglePanel }) {
 
 const _dv = new THREE.Vector3();
 let _mouseDragActive = false;
+let _leftMouseDown = false;
+let _rightMouseDown = false;
 let _lastMouseX = 0;
 let _lastMouseY = 0;
 
@@ -67,6 +70,8 @@ export function clearGameplayInput() {
   state.jumpAirJumpsUsed = 0;
   state.isAiming = false;
   _mouseDragActive = false;
+  _leftMouseDown = false;
+  _rightMouseDown = false;
   // clear analogue controller axes
   state.controllerMoveX = 0;
   state.controllerMoveZ = 0;
@@ -143,6 +148,7 @@ renderer.domElement.addEventListener('pointerdown', event => {
   const placerActive = (state.activeSlot ?? 0) === 1;
 
   if (event.button === 0 && isViewportTarget(event.target)) {
+    _leftMouseDown = true;
     if (placerActive && (event.ctrlKey || event.metaKey)) {
       state.primaryFire = false;
       state.placerSelectionRequest = { toggle: true, additive: true };
@@ -154,6 +160,7 @@ renderer.domElement.addEventListener('pointerdown', event => {
 
   // Right-click removes placed objects while the placer is active; otherwise it enters ADS.
   if (event.button === 2 && isViewportTarget(event.target)) {
+    _rightMouseDown = true;
     if (placerActive) {
       state.secondaryFire = true;
       state.isAiming = false;
@@ -190,14 +197,16 @@ window.addEventListener('pointermove', event => {
 
 function stopMouseDrag(event) {
   if (!event || event.button === 0) {
+    _leftMouseDown = false;
     state.primaryFire = false;
   }
   if (!event || event.button === 2) {
+    _rightMouseDown = false;
     state.isAiming = false;
     state.secondaryFire = false;
   }
 
-  _mouseDragActive = false;
+  _mouseDragActive = _leftMouseDown || _rightMouseDown;
   try {
     if (event?.pointerId !== undefined) renderer.domElement.releasePointerCapture?.(event.pointerId);
   } catch (_) {
@@ -205,8 +214,8 @@ function stopMouseDrag(event) {
   }
 
   if (document.pointerLockElement !== renderer.domElement) {
-    state.mouseLookActive = false;
-    document.body.classList.remove('third-person-mouse-look');
+    state.mouseLookActive = _mouseDragActive;
+    document.body.classList.toggle('third-person-mouse-look', state.mouseLookActive);
   }
 }
 
@@ -233,6 +242,7 @@ document.addEventListener('mousedown', event => {
   if (state.paused) return;
   if (document.pointerLockElement !== renderer.domElement) return;
   if (event.button === 0) {
+    _leftMouseDown = true;
     if ((state.activeSlot ?? 0) === 1 && (event.ctrlKey || event.metaKey)) {
       state.primaryFire = false;
       state.placerSelectionRequest = { toggle: true, additive: true };
@@ -242,6 +252,7 @@ document.addEventListener('mousedown', event => {
     state.primaryFire = true;
   }
   if (event.button === 2) {
+    _rightMouseDown = true;
     if ((state.activeSlot ?? 0) === 1) {
       state.secondaryFire = true;
       state.isAiming = false;
@@ -252,18 +263,25 @@ document.addEventListener('mousedown', event => {
 });
 
 document.addEventListener('mouseup', event => {
-  if (event.button === 0) state.primaryFire = false;
+  if (event.button === 0) {
+    _leftMouseDown = false;
+    state.primaryFire = false;
+  }
   if (event.button === 2) {
+    _rightMouseDown = false;
     state.secondaryFire = false;
     state.isAiming = false;
   }
+  _mouseDragActive = _leftMouseDown || _rightMouseDown;
 });
 
 document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement !== renderer.domElement) {
-    state.primaryFire = false;
-    state.secondaryFire = false;
-    state.isAiming = false;
+    if (!_leftMouseDown) state.primaryFire = false;
+    if (!_rightMouseDown) {
+      state.secondaryFire = false;
+      state.isAiming = false;
+    }
   }
 });
 
@@ -362,10 +380,14 @@ window.addEventListener('keydown', e => {
   }
 
 
-  // R key → open transform modal for the current placer shape
-  if (k === 'r' && !e.repeat && (state.activeSlot ?? 0) === 1) {
+  // R key → open transform modal for the current placer shape, or reload while using weapons.
+  if (k === 'r' && !e.repeat) {
     e.preventDefault();
-    togglePlacerTransformModal();
+    if ((state.activeSlot ?? 0) === 1) {
+      togglePlacerTransformModal();
+    } else {
+      reloadCurrentWeapon();
+    }
     return;
   }
 

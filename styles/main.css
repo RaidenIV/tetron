@@ -400,6 +400,46 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   box-shadow: none;
 }
 
+
+.ammo-hud {
+  position: fixed;
+  right: calc(var(--sb-width, 320px) + 28px + var(--radar-size, 180px) + 14px);
+  bottom: 28px;
+  z-index: 24;
+  min-width: 118px;
+  padding: 10px 12px;
+  pointer-events: none;
+  color: #ffffff;
+  font-family: var(--hud-font-family, 'Segoe UI', system-ui, sans-serif);
+  font-weight: var(--hud-font-weight, 800);
+  letter-spacing: var(--hud-letter-spacing, 0.18em);
+  background: rgba(0, 0, 0, 0.36);
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 0 8px rgba(0,0,0,0.55);
+}
+.ammo-hud-title {
+  margin-bottom: 7px;
+  font-size: 10px;
+  line-height: 1;
+  color: rgba(255,255,255,0.68);
+}
+.ammo-hud-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.ammo-hud-line span { color: rgba(255,255,255,0.72); }
+.ammo-hud-line strong {
+  min-width: 36px;
+  text-align: right;
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--hud-value-letter-spacing, 0.12em);
+}
+
 #target-reticle {
   --reticle-color: #ffffff;
   --reticle-size: 4px;
@@ -604,6 +644,10 @@ body.is-paused * {
 
   /* Radar — stays bottom-right, slightly more padding */
   #radar-canvas {
+    bottom: 38px;
+  }
+
+  .ammo-hud {
     bottom: 38px;
   }
 

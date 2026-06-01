@@ -1744,8 +1744,8 @@ function createNpcProjectileMesh(config) {
       opacity: config.projectileBloom === true ? clamp(0.55 + (Number(config.projectileBloomIntensity) || 1) * 0.08, 0.55, 1) : 0.88,
     }),
   );
-  mesh.castShadow = config.visual === 'grenade';
-  mesh.receiveShadow = config.visual === 'grenade';
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
   return mesh;
 }
 

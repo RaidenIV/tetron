@@ -169,8 +169,8 @@ function rebuildPlayerWeaponVisual(type = getPlayerWeaponType()) {
 
   playerWeaponMesh = new THREE.Mesh(geo, playerWeaponMat);
   playerWeaponMesh.name = `PlayerWeapon_${type}`;
-  playerWeaponMesh.castShadow = true;
-  playerWeaponMesh.receiveShadow = true;
+  playerWeaponMesh.castShadow = false;
+  playerWeaponMesh.receiveShadow = false;
 
   if (spec.kind === 'cylinder') {
     playerWeaponMesh.rotation.x = Math.PI / 2;

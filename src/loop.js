@@ -9,7 +9,7 @@ import { state } from './state.js';
 import { updateSunPosition } from './lighting.js';
 import { updateChunks } from './terrain.js';
 import { playerGroup, updatePlayer, updateDashStreaks } from './player.js';
-import { updateLaserProjectiles, resolveAimTarget, aimResult } from './weapons.js';
+import { updateLaserProjectiles, resolveAimTarget, aimResult, syncWeaponAmmoHud } from './weapons.js';
 import { updateEnemies, getEnemyMeshes, tagEnemy, getEnemies, getAllies } from './enemies.js';
 import { updatePlacer } from './placer.js';
 import { updateController } from './input.js';
@@ -89,6 +89,7 @@ function updateRadar() {
     _radarCanvas.style.width  = `${size}px`;
     _radarCanvas.style.height = `${size}px`;
     _radarCanvas.style.borderRadius = '0px';
+    document.documentElement.style.setProperty('--radar-size', `${size}px`);
   }
 
   const ctx = _radarCtx;
@@ -245,6 +246,7 @@ export function tick() {
   // Poll controller every frame (including paused — Options button must work).
   updateController(delta);
   updateRadar();
+  syncWeaponAmmoHud();
   updateBulletTimeAudioPitch();
   updateBulletTimeIndicator();
   updatePlacer(delta);

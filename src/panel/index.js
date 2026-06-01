@@ -19,6 +19,7 @@ import {
   clearPlacedObjectSelection, selectAllPlacedObjects,
 } from '../placer.js';
 import { registerManagedAudio, applyBulletTimeAudioPitch } from '../audio.js';
+import { resetWeaponAmmo, resetAllWeaponAmmo, syncWeaponAmmoHud } from '../weapons.js';
 
 const sidebar = document.getElementById('sidebar');
 
@@ -6336,6 +6337,33 @@ function weaponKey(prefix, field) {
   return `weapon${prefix}${field}`;
 }
 
+function weaponMagazineKey(spec) {
+  if (spec.type === 'grenades') return null;
+  if (spec.type === 'rocketLauncher') return 'weaponRocketClipCapacity';
+  return weaponKey(spec.prefix, 'MagazineSize');
+}
+
+function weaponTotalAmmoKey(spec) {
+  return weaponKey(spec.prefix, 'TotalAmmo');
+}
+
+function weaponAmmoDefaults(spec) {
+  switch (spec.type) {
+    case 'pistol': return { magazine: 12, total: 60 };
+    case 'rifle': return { magazine: 30, total: 180 };
+    case 'shotgun': return { magazine: 8, total: 40 };
+    case 'sniperRifle': return { magazine: 5, total: 25 };
+    case 'grenades': return { magazine: 0, total: 10 };
+    case 'rocketLauncher': return { magazine: 1, total: 8 };
+    default: return { magazine: 30, total: 180 };
+  }
+}
+
+function resetWeaponAmmoForSpec(spec) {
+  resetWeaponAmmo(spec.type);
+  syncWeaponAmmoHud();
+}
+
 function weaponReticleKey(spec) {
   return weaponKey(spec.prefix, 'ReticleType');
 }
@@ -7183,6 +7211,21 @@ function buildWeaponControls(body, spec) {
       applyReticleSettings();
     }
   };
+  const magKey = weaponMagazineKey(spec);
+  if (magKey) {
+    body.appendChild(slider({
+      key: magKey,
+      label: spec.type === 'rocketLauncher' ? 'Clip Capacity' : 'Magazine Amount',
+      min: 1, max: 999, step: 1, dec: 0,
+      onChange: () => resetWeaponAmmoForSpec(spec),
+    }));
+  }
+  body.appendChild(slider({
+    key: weaponTotalAmmoKey(spec),
+    label: 'Total Ammo',
+    min: 0, max: 9999, step: 1, dec: 0,
+    onChange: () => resetWeaponAmmoForSpec(spec),
+  }));
   body.appendChild(slider({ key: weaponKey(prefix, 'Damage'), label: 'Damage', min: 0, max: 1000, step: 1, dec: 0 }));
   body.appendChild(slider({ key: weaponKey(prefix, 'Range'), label: 'Range', min: 1, max: 500, step: 1, dec: 0 }));
   body.appendChild(slider({ key: weaponKey(prefix, 'Spread'), label: 'Spread', min: 0, max: 1, step: 0.001, dec: 3 }));
@@ -7233,11 +7276,13 @@ function buildWeaponControls(body, spec) {
 
 function buildWeapons(body) {
   body.appendChild(createManualSubsection('Current Weapon', currentBody => {
-    currentBody.appendChild(toggle('Weapons Enabled', 'laserEnabled'));
+    currentBody.appendChild(toggle('Weapons Enabled', 'laserEnabled', () => syncWeaponAmmoHud()));
+    currentBody.appendChild(toggle('Infinite Ammo', 'weaponInfiniteAmmo', () => syncWeaponAmmoHud()));
     currentBody.appendChild(select('Player Weapon', 'playerWeaponType', PLAYER_WEAPON_OPTIONS, () => {
       applyPlayerWeaponSettings();
       syncReticleToCurrentWeapon();
       applyReticleSettings();
+      syncWeaponAmmoHud();
     }));
   }, true));
 
@@ -7686,6 +7731,7 @@ function applyParamObject(params) {
     const spec = weaponSpecForType(state.params.playerWeaponType);
     state.params[weaponReticleOpacityKey(spec)] = incoming.reticleOpacity;
   }
+  resetAllWeaponAmmo();
 }
 
 function applyPreset(key) {
@@ -7944,6 +7990,7 @@ function applyAllParams() {
     return normalizeChoice(value, NPC_WEAPON_OPTIONS, 'rifle');
   };
   p.playerWeaponType = normalizeChoice(p.playerWeaponType, PLAYER_WEAPON_OPTIONS, 'rifle');
+  p.weaponInfiniteAmmo = p.weaponInfiniteAmmo === true;
   const hexSetting = (value, fallback) => (/^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : fallback);
   const boolSetting = (value, fallback = false) => (value === true || value === false ? value : fallback);
   const weaponDefaults = {
@@ -7956,6 +8003,10 @@ function applyAllParams() {
   };
   WEAPON_CONTROL_SPECS.forEach(spec => {
     const d = weaponDefaults[spec.prefix];
+    const ammo = weaponAmmoDefaults(spec);
+    const magKey = weaponMagazineKey(spec);
+    if (magKey) p[magKey] = Math.round(clampSetting(p[magKey], 1, 999, ammo.magazine));
+    p[weaponTotalAmmoKey(spec)] = Math.round(clampSetting(p[weaponTotalAmmoKey(spec)], 0, 9999, ammo.total));
     p[weaponKey(spec.prefix, 'Damage')] = Math.round(clampSetting(p[weaponKey(spec.prefix, 'Damage')], 0, 1000, d.damage));
     p[weaponKey(spec.prefix, 'Range')] = clampSetting(p[weaponKey(spec.prefix, 'Range')], 1, 500, d.range);
     p[weaponKey(spec.prefix, 'Spread')] = clampSetting(p[weaponKey(spec.prefix, 'Spread')], 0, 1, d.spread);
@@ -7990,6 +8041,7 @@ function applyAllParams() {
   });
   syncReticleToCurrentWeapon();
   applyPlayerWeaponSettings();
+  syncWeaponAmmoHud();
   p.allyType = normalizeChoice(p.allyType, ENEMY_TYPE_OPTIONS, 'rusher');
   p.allyCount = Math.round(clampSetting(p.allyCount, 0, 50, 0));
   p.allyHealth = Math.round(clampSetting(p.allyHealth, 1, 1000, 100));

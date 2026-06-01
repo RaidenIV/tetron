@@ -87,6 +87,16 @@ const PROJECTILE_PARTICLE_GRAVITY = 18;
 let _weaponCooldown = 0;
 let _projectileShockwaveId = 1;
 
+const MAGAZINE_WEAPON_TYPES = new Set(['pistol', 'rifle', 'shotgun', 'sniperRifle', 'rocketLauncher']);
+const WEAPON_AMMO_SPECS = Object.freeze({
+  pistol: { prefix: 'Pistol', label: 'PISTOL', magazineKey: 'weaponPistolMagazineSize', totalKey: 'weaponPistolTotalAmmo', defaultMagazine: 12, defaultTotal: 60 },
+  rifle: { prefix: 'Rifle', label: 'RIFLE', magazineKey: 'weaponRifleMagazineSize', totalKey: 'weaponRifleTotalAmmo', defaultMagazine: 30, defaultTotal: 180 },
+  shotgun: { prefix: 'Shotgun', label: 'SHOTGUN', magazineKey: 'weaponShotgunMagazineSize', totalKey: 'weaponShotgunTotalAmmo', defaultMagazine: 8, defaultTotal: 40 },
+  sniperRifle: { prefix: 'Sniper', label: 'SNIPER', magazineKey: 'weaponSniperMagazineSize', totalKey: 'weaponSniperTotalAmmo', defaultMagazine: 5, defaultTotal: 25 },
+  grenades: { prefix: 'Grenade', label: 'GRENADES', magazineKey: null, totalKey: 'weaponGrenadeTotalAmmo', defaultMagazine: 0, defaultTotal: 10 },
+  rocketLauncher: { prefix: 'Rocket', label: 'ROCKET', magazineKey: 'weaponRocketClipCapacity', totalKey: 'weaponRocketTotalAmmo', defaultMagazine: 1, defaultTotal: 8 },
+});
+
 function clamp(v, min, max) {
   return Math.min(max, Math.max(min, v));
 }
@@ -110,6 +120,141 @@ function numParam(value, fallback, min = -Infinity, max = Infinity) {
   const numeric = Number(value);
   const resolved = Number.isFinite(numeric) ? numeric : fallback;
   return clamp(resolved, min, max);
+}
+
+function intParam(value, fallback, min = 0, max = 9999) {
+  return Math.round(numParam(value, fallback, min, max));
+}
+
+function getAmmoSpec(type = getSelectedWeaponType()) {
+  return WEAPON_AMMO_SPECS[type] || WEAPON_AMMO_SPECS.rifle;
+}
+
+function getConfiguredMagazineSize(type = getSelectedWeaponType()) {
+  const spec = getAmmoSpec(type);
+  if (!spec.magazineKey) return 0;
+  return intParam(state.params[spec.magazineKey], spec.defaultMagazine, 1, 9999);
+}
+
+function getConfiguredTotalAmmo(type = getSelectedWeaponType()) {
+  const spec = getAmmoSpec(type);
+  return intParam(state.params[spec.totalKey], spec.defaultTotal, 0, 99999);
+}
+
+function getAmmoRecord(type = getSelectedWeaponType()) {
+  const spec = getAmmoSpec(type);
+  const magazineSize = getConfiguredMagazineSize(type);
+  const totalAmmo = getConfiguredTotalAmmo(type);
+  state.weaponAmmo = state.weaponAmmo || {};
+  let record = state.weaponAmmo[type];
+  if (!record || record._magazineSize !== magazineSize || record._totalAmmo !== totalAmmo) {
+    record = {
+      magazine: spec.magazineKey ? magazineSize : 0,
+      reserve: totalAmmo,
+      _magazineSize: magazineSize,
+      _totalAmmo: totalAmmo,
+    };
+    state.weaponAmmo[type] = record;
+  }
+  return record;
+}
+
+export function resetWeaponAmmo(type = getSelectedWeaponType()) {
+  const spec = getAmmoSpec(type);
+  const magazineSize = getConfiguredMagazineSize(type);
+  const totalAmmo = getConfiguredTotalAmmo(type);
+  state.weaponAmmo = state.weaponAmmo || {};
+  state.weaponAmmo[type] = {
+    magazine: spec.magazineKey ? magazineSize : 0,
+    reserve: totalAmmo,
+    _magazineSize: magazineSize,
+    _totalAmmo: totalAmmo,
+  };
+  syncWeaponAmmoHud();
+}
+
+export function resetAllWeaponAmmo() {
+  state.weaponAmmo = {};
+  Object.keys(WEAPON_AMMO_SPECS).forEach(type => resetWeaponAmmo(type));
+  syncWeaponAmmoHud();
+}
+
+function consumeWeaponAmmo(type = getSelectedWeaponType()) {
+  if (state.params.weaponInfiniteAmmo === true) {
+    syncWeaponAmmoHud();
+    return true;
+  }
+
+  const spec = getAmmoSpec(type);
+  const record = getAmmoRecord(type);
+  if (spec.magazineKey) {
+    if (record.magazine <= 0) {
+      syncWeaponAmmoHud();
+      return false;
+    }
+    record.magazine = Math.max(0, record.magazine - 1);
+    syncWeaponAmmoHud();
+    return true;
+  }
+
+  if (record.reserve <= 0) {
+    syncWeaponAmmoHud();
+    return false;
+  }
+  record.reserve = Math.max(0, record.reserve - 1);
+  syncWeaponAmmoHud();
+  return true;
+}
+
+export function reloadCurrentWeapon() {
+  const type = getSelectedWeaponType();
+  const spec = getAmmoSpec(type);
+  if (!spec.magazineKey) {
+    syncWeaponAmmoHud();
+    return false;
+  }
+
+  const magazineSize = getConfiguredMagazineSize(type);
+  const record = getAmmoRecord(type);
+  if (state.params.weaponInfiniteAmmo === true) {
+    record.magazine = magazineSize;
+    syncWeaponAmmoHud();
+    return true;
+  }
+
+  const missing = Math.max(0, magazineSize - record.magazine);
+  if (missing <= 0 || record.reserve <= 0) {
+    syncWeaponAmmoHud();
+    return false;
+  }
+  const loaded = Math.min(missing, record.reserve);
+  record.magazine += loaded;
+  record.reserve -= loaded;
+  syncWeaponAmmoHud();
+  return loaded > 0;
+}
+
+export function syncWeaponAmmoHud() {
+  const hud = document.getElementById('ammo-hud');
+  if (!hud) return;
+  const p = state.params;
+  const type = getSelectedWeaponType();
+  const spec = getAmmoSpec(type);
+  const record = getAmmoRecord(type);
+  const infinite = p.weaponInfiniteAmmo === true;
+  hud.style.display = p.hudVisible !== false && p.laserEnabled !== false ? '' : 'none';
+  const magazineSize = getConfiguredMagazineSize(type);
+  const reserveText = infinite ? '∞' : String(Math.max(0, record.reserve));
+  const magazineText = spec.magazineKey ? (infinite ? String(magazineSize) : String(Math.max(0, record.magazine))) : '—';
+  const magLabel = spec.magazineKey ? (type === 'rocketLauncher' ? 'CLIP' : 'MAG') : 'MAG';
+  const title = hud.querySelector('[data-ammo-title]');
+  const mag = hud.querySelector('[data-ammo-mag]');
+  const reserve = hud.querySelector('[data-ammo-reserve]');
+  const magLabelEl = hud.querySelector('[data-ammo-mag-label]');
+  if (title) title.textContent = spec.label;
+  if (mag) mag.textContent = magazineText;
+  if (reserve) reserve.textContent = reserveText;
+  if (magLabelEl) magLabelEl.textContent = magLabel;
 }
 
 function weaponValue(prefix, field, fallback, min = -Infinity, max = Infinity) {
@@ -276,7 +421,7 @@ function createProjectileVisual(config) {
     core = new THREE.Mesh(_projectileGeo, coreMat);
   }
   core.name = 'ProjectileCore';
-  core.castShadow = config.visual === 'grenade';
+  core.castShadow = false;
   core.receiveShadow = false;
   group.add(core);
 
@@ -718,6 +863,7 @@ function explodeProjectile(projectile) {
 
 function fireWeapon() {
   const config = getWeaponConfig();
+  if (!consumeWeaponAmmo(config.type)) return;
 
   // Muzzle position: actual right-hand weapon muzzle from the player visual.
   getPlayerWeaponMuzzle(_spawnPos);
@@ -738,6 +884,7 @@ function fireWeapon() {
 export function updateLaserProjectiles(delta, projectileDelta = delta) {
   const p = state.params;
   const config = getWeaponConfig();
+  syncWeaponAmmoHud();
   applyLaserMaterials(config);
   updateExplosionFlashes(delta);
   updateProjectileShockwaves(delta);
