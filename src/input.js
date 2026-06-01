@@ -97,6 +97,17 @@ function requestMouseLook(target) {
   renderer.domElement.requestPointerLock?.();
 }
 
+function trySetPointerCapture(element, pointerId) {
+  if (pointerId === undefined || !element?.setPointerCapture) return;
+  try {
+    element.setPointerCapture(pointerId);
+  } catch (_) {
+    // Some browsers can invalidate the active pointer before capture runs
+    // during pointer lock / right-click input. Mouse look still works without
+    // capture, so ignore the capture failure instead of breaking input setup.
+  }
+}
+
 renderer.domElement.addEventListener('contextmenu', event => event.preventDefault());
 
 renderer.domElement.addEventListener('pointerdown', event => {
@@ -140,7 +151,7 @@ renderer.domElement.addEventListener('pointerdown', event => {
   _lastMouseY = event.clientY;
   state.mouseLookActive = true;
   document.body.classList.add('third-person-mouse-look');
-  renderer.domElement.setPointerCapture?.(event.pointerId);
+  trySetPointerCapture(renderer.domElement, event.pointerId);
   requestMouseLook(event.target);
   event.preventDefault();
 });
