@@ -178,7 +178,7 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   padding: 8px 0 3px;
 }
 
-.sb-subsection { margin: 4px 0; border-top: 1px solid rgba(48,54,61,0.5); }
+.sb-subsection { margin: 4px 0; border-top: 1px solid rgba(48,54,61,0.5); position: relative; }
 .sb-subsection-hdr {
   width: 100%; min-height: 28px; display: flex; align-items: center; gap: 8px;
   background: transparent; border: 0; color: var(--sb-muted); cursor: pointer;
@@ -187,6 +187,32 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
 }
 .sb-subsection-hdr:hover { color: var(--sb-accent); }
 .sb-subsection-hdr .arrow { display: inline-block; margin-left: auto; }
+
+.sb-subsection-undo {
+  position: absolute;
+  top: 5px;
+  right: 24px;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  background: #161b22;
+  color: var(--sb-muted);
+  cursor: pointer;
+  padding: 0;
+  z-index: 2;
+}
+.sb-subsection-undo::before {
+  content: '';
+  display: block;
+  width: 12px;
+  height: 12px;
+  margin: 4px auto;
+  background: currentColor;
+  -webkit-mask: url('../assets/undo.svg') center / contain no-repeat;
+  mask: url('../assets/undo.svg') center / contain no-repeat;
+}
+.sb-subsection-undo:hover { color: var(--sb-accent); border-color: var(--sb-accent); }
 .sb-subsection-body { display: none; padding: 2px 0 4px; }
 .sb-subsection-body.open { display: block; }
 .sidebar.minimized .sb-subsection-body { display: none !important; }
@@ -721,6 +747,23 @@ body.is-paused * {
   display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px;
   overflow-y: auto; max-height: calc(100vh - 150px); padding-right: 4px;
 }
+
+.weapon-reticle-grid {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sb-accent) #161b22;
+}
+.weapon-reticle-grid::-webkit-scrollbar { width: 8px; }
+.weapon-reticle-grid::-webkit-scrollbar-track {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 999px;
+}
+.weapon-reticle-grid::-webkit-scrollbar-thumb {
+  background: var(--sb-accent);
+  border: 2px solid #161b22;
+  border-radius: 999px;
+}
+.weapon-reticle-grid::-webkit-scrollbar-thumb:hover { background: #79c0ff; }
 .weapon-reticle-option {
   min-height: 84px; border: 1px solid #30363d; border-radius: 12px;
   background: #10161f; color: var(--sb-muted); cursor: pointer;

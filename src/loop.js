@@ -52,12 +52,18 @@ function updateBulletTimeActiveIcon() {
     && p.hudBulletTimeActiveIcon !== false
     && p.bulletTimeEnabled !== false
     && active;
-  el.style.display = enabled ? '' : 'none';
+  el.style.display = enabled ? 'block' : 'none';
   if (!enabled) return;
   const size = clamp(Number(p.hudBulletTimeActiveIconSize) || 42, 12, 128);
   const opacity = clamp(Number(p.hudBulletTimeActiveIconOpacity) || 1, 0, 1);
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
+  const asset = new URL('../assets/time.svg', import.meta.url).href;
+  if (el.dataset.btActiveAsset !== asset) {
+    el.dataset.btActiveAsset = asset;
+    el.style.webkitMaskImage = `url("${asset}")`;
+    el.style.maskImage = `url("${asset}")`;
+  }
   el.style.opacity = String(opacity);
 }
 
