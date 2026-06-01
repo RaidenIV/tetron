@@ -386,12 +386,15 @@ const _tmpVec = new THREE.Vector3();
 const _tmpVec2 = new THREE.Vector3();
 const _bulletDir = new THREE.Vector3();
 const _enemyBulletGeo = new THREE.CapsuleGeometry(0.065, 0.44, 5, 10);
+const _enemyBulletGeoCache = new Map();
 const _particleGeo = new THREE.SphereGeometry(1, 6, 4);
 const _enemyBulletMatCache = new Map();
 const _up = new THREE.Vector3(0, 1, 0);
 const _quat = new THREE.Quaternion();
 const _corpseRestAxis = new THREE.Vector3();
 const _corpseRestQuat = new THREE.Quaternion();
+const _npcProjectileRight = new THREE.Vector3();
+const _npcProjectileUp = new THREE.Vector3();
 
 function getDef(type) {
   return ENEMY_DEFS[type] || ENEMY_DEFS[ENEMY_TYPE.RUSHER];
@@ -407,14 +410,46 @@ function getEnemyGeometry(sizeMult) {
   return geo;
 }
 
-function getBulletMaterial(color) {
-  const key = color.toString(16);
+function normalizeHexColor(value, fallback = '#ffffff') {
+  const color = typeof value === 'string' && value.trim() ? value.trim() : fallback;
+  return /^#[0-9a-f]{6}$/i.test(color) ? color : fallback;
+}
+
+function getBulletMaterial(color, { bloom = false, opacity = 0.88 } = {}) {
+  const resolved = typeof color === 'string'
+    ? normalizeHexColor(color, '#ffffff')
+    : `#${(Number(color) >>> 0).toString(16).padStart(6, '0').slice(-6)}`;
+  const key = `${resolved}:${bloom ? 'bloom' : 'solid'}:${opacity.toFixed(2)}`;
   let mat = _enemyBulletMatCache.get(key);
   if (!mat) {
-    mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.88, toneMapped: false });
+    mat = new THREE.MeshBasicMaterial({
+      color: resolved,
+      transparent: true,
+      opacity,
+      toneMapped: !bloom,
+      blending: bloom ? THREE.AdditiveBlending : THREE.NormalBlending,
+      depthWrite: !bloom,
+    });
     _enemyBulletMatCache.set(key, mat);
   }
   return mat;
+}
+
+function getNpcBulletGeometry(config) {
+  const visual = config?.visual || 'solid';
+  const radius = clamp(Number(config?.projectileSize) || 0.22, 0.02, 2);
+  const length = clamp(Number(config?.projectileLength) || radius * 2, 0.02, 12);
+  const key = `${visual}:${radius.toFixed(3)}:${length.toFixed(3)}`;
+  let geo = _enemyBulletGeoCache.get(key);
+  if (!geo) {
+    if (visual === 'grenade') {
+      geo = new THREE.SphereGeometry(radius, 14, 10);
+    } else {
+      geo = new THREE.CapsuleGeometry(Math.max(0.01, radius * 0.5), Math.max(0.01, length), 6, 12);
+    }
+    _enemyBulletGeoCache.set(key, geo);
+  }
+  return geo;
 }
 
 function acquireParticle(color) {
@@ -1229,7 +1264,78 @@ function isLaserLikeWeapon(weapon) {
   return weapon === 'laser' || weapon === 'rifle' || weapon === 'sniperRifle';
 }
 
+const NPC_PLAYER_WEAPON_SPECS = Object.freeze({
+  pistol: { prefix: 'Pistol', fireRate: 3.6, speed: 70, range: 55, damage: 24, spread: 0.01, projectileSize: 0.28, projectileLength: 0.65, projectileColor: '#d8dde6', projectileBloomColor: '#d8dde6', projectileBloom: false, projectileBloomIntensity: 1, projectileBloomSize: 1, visual: 'solid' },
+  rifle: { prefix: 'Rifle', fireRate: 5, speed: 80, range: 42, damage: 34, spread: 0.003, projectileSize: 0.36, projectileLength: 0.84, projectileColor: '#ff1100', projectileBloomColor: '#ff1100', projectileBloom: true, projectileBloomIntensity: 1, projectileBloomSize: 1, visual: 'laser' },
+  shotgun: { prefix: 'Shotgun', fireRate: 1.15, speed: 60, range: 28, damage: 12, spread: 0.16, projectileSize: 0.32, projectileLength: 0.75, projectileColor: '#d8dde6', projectileBloomColor: '#d8dde6', projectileBloom: false, projectileBloomIntensity: 1, projectileBloomSize: 1, visual: 'solid', pellets: 8 },
+  sniperRifle: { prefix: 'Sniper', fireRate: 0.65, speed: 130, range: 180, damage: 120, spread: 0.002, projectileSize: 0.24, projectileLength: 0.56, projectileColor: '#d975ff', projectileBloomColor: '#d975ff', projectileBloom: true, projectileBloomIntensity: 1, projectileBloomSize: 1, visual: 'laser' },
+  grenades: { prefix: 'Grenade', fireRate: 0.72, speed: 16, range: 60, damage: 95, spread: 0.01, projectileSize: 0.25, projectileLength: 0.27, projectileColor: '#429a5c', projectileBloomColor: '#ff8844', projectileBloom: false, projectileBloomIntensity: 1, projectileBloomSize: 1, visual: 'grenade', radius: 5, explosive: true, ballistic: true, fuse: 2.2 },
+  rocketLauncher: { prefix: 'Rocket', fireRate: 0.68, speed: 34, range: 95, damage: 130, spread: 0.004, projectileSize: 0.42, projectileLength: 1.33, projectileColor: '#ff3333', projectileBloomColor: '#ff3333', projectileBloom: true, projectileBloomIntensity: 1, projectileBloomSize: 1, visual: 'rocket', radius: 6, explosive: true, fuse: 4.0 },
+});
+
+function weaponNumber(prefix, field, fallback, min = -Infinity, max = Infinity) {
+  const value = Number(state.params[`weapon${prefix}${field}`]);
+  const resolved = Number.isFinite(value) ? value : fallback;
+  return clamp(resolved, min, max);
+}
+
+function weaponBoolean(prefix, field, fallback = false) {
+  const value = state.params[`weapon${prefix}${field}`];
+  return value === true || value === false ? value : fallback;
+}
+
+function weaponColor(prefix, field, fallback) {
+  return normalizeHexColor(state.params[`weapon${prefix}${field}`], fallback);
+}
+
+function getNpcWeaponShockwaveConfig(spec, cfg) {
+  const p = state.params;
+  const basePrefix = `weapon${spec.prefix}Shockwave`;
+  return {
+    damage: weaponNumber(spec.prefix, 'Damage', spec.damage, 0, 500),
+    radius: weaponNumber(spec.prefix, 'Radius', spec.radius || 5, 0.5, 80),
+    splashDamage: weaponNumber(spec.prefix, 'ShockwaveSplashDamage', p.destructionDestructibleSplashDamage ?? cfg.damage, 0, 500),
+    splashRadius: weaponNumber(spec.prefix, 'ShockwaveSplashRadius', p.destructionDestructibleSplashRadius ?? cfg.radius, 0, 80),
+    splashFalloff: weaponNumber(spec.prefix, 'ShockwaveSplashFalloff', p.destructionDestructibleSplashFalloff ?? 1, 0.1, 4),
+    splashMinFactor: weaponNumber(spec.prefix, 'ShockwaveSplashMinFactor', p.destructionDestructibleSplashMinFactor ?? 0.15, 0, 1),
+    speed: Number(state.params[`${basePrefix}Speed`] ?? p.destructionDestructibleShockwaveSpeed ?? 40),
+    color: normalizeHexColor(state.params[`${basePrefix}Color`], p.destructionDestructibleShockwaveColor || '#ffffff'),
+  };
+}
+
+function getNpcWeaponConfig(npc) {
+  const weapon = getEffectiveWeapon(npc);
+  if (weapon === 'none' || weapon === 'contact') return null;
+  const spec = NPC_PLAYER_WEAPON_SPECS[weapon] || NPC_PLAYER_WEAPON_SPECS.rifle;
+  const prefix = spec.prefix;
+  const cfg = {
+    type: weapon,
+    visual: spec.visual,
+    damage: weaponNumber(prefix, 'Damage', spec.damage, 0, 500),
+    range: weaponNumber(prefix, 'Range', spec.range, 1, 1000),
+    spread: weaponNumber(prefix, 'Spread', spec.spread, 0, 1),
+    fireRate: weaponNumber(prefix, 'FireRate', spec.fireRate, 0.1, 60),
+    speed: weaponNumber(prefix, 'ProjectileSpeed', spec.speed, 0.1, 1000),
+    projectileSize: weaponNumber(prefix, 'ProjectileSize', spec.projectileSize, 0.02, 2),
+    projectileLength: weaponNumber(prefix, 'ProjectileLength', spec.projectileLength, 0.02, 12),
+    projectileColor: weaponColor(prefix, 'ProjectileColor', spec.projectileColor),
+    projectileBloom: weaponBoolean(prefix, 'ProjectileBloom', spec.projectileBloom),
+    projectileBloomColor: weaponColor(prefix, 'ProjectileBloomColor', spec.projectileBloomColor || spec.projectileColor),
+    projectileBloomIntensity: weaponNumber(prefix, 'ProjectileBloomIntensity', spec.projectileBloomIntensity ?? 1, 0, 12),
+    projectileBloomSize: weaponNumber(prefix, 'ProjectileBloomSize', spec.projectileBloomSize ?? 1, 0.1, 8),
+    radius: spec.radius ? weaponNumber(prefix, 'Radius', spec.radius, 0.5, 80) : 0,
+    explosive: spec.explosive === true,
+    ballistic: spec.ballistic === true,
+    fuse: spec.fuse || 4,
+    pellets: weapon === 'shotgun' ? Math.max(1, Math.min(24, Math.round(Number(state.params.weaponShotgunPellets) || spec.pellets || 8))) : 1,
+  };
+  if (cfg.explosive) cfg.shockwave = getNpcWeaponShockwaveConfig(spec, cfg);
+  return cfg;
+}
+
 function getNpcDamage(npc) {
+  const weaponConfig = getNpcWeaponConfig(npc);
+  if (weaponConfig) return weaponConfig.damage;
   const key = npc?.isAlly ? 'allyDamage' : 'enemyDamage';
   return Math.max(0, Number(state.params[key]) || 0);
 }
@@ -1525,55 +1631,151 @@ function updateContactDamage(enemy, delta, targetNpc = null) {
   }
 }
 
+function applyNpcProjectileSpread(dir, spread = 0) {
+  const amount = Math.max(0, Number(spread) || 0);
+  if (amount <= 0) return dir;
+  _npcProjectileRight.crossVectors(dir, _up);
+  if (_npcProjectileRight.lengthSq() < 0.0001) _npcProjectileRight.set(1, 0, 0);
+  else _npcProjectileRight.normalize();
+  _npcProjectileUp.crossVectors(_npcProjectileRight, dir).normalize();
+  dir
+    .addScaledVector(_npcProjectileRight, randomRange(-amount, amount))
+    .addScaledVector(_npcProjectileUp, randomRange(-amount, amount))
+    .normalize();
+  return dir;
+}
+
+function removeNpcProjectileAt(index) {
+  const bullet = enemyBullets[index];
+  enemyBullets.splice(index, 1);
+  disposeEnemyBullet(bullet);
+}
+
+function damagePlayerAt(position, radius, amount) {
+  const playerRadius = Math.max(0.35, Number(state.params.playerRadius) || 0.4);
+  _tmpVec.copy(playerGroup.position);
+  _tmpVec.y += Math.max(0.55, playerRadius + 0.35);
+  if (_tmpVec.distanceTo(position) <= radius + playerRadius) applyPlayerDamage(amount);
+}
+
+function explodeNpcProjectile(bullet) {
+  const position = bullet.mesh.position;
+  const shockwave = bullet.shockwave || {};
+  const radius = Math.max(0.5, Number(shockwave.splashRadius ?? bullet.explosionRadius ?? bullet.radius ?? 4) || 4);
+  const damage = Math.max(0, Number(shockwave.splashDamage ?? bullet.damage) || 0);
+  const falloff = clamp(Number(shockwave.splashFalloff) || 1, 0.1, 4);
+  const minFactor = clamp(Number(shockwave.splashMinFactor) || 0, 0, 1);
+
+  const applyFalloffDamage = (targetPosition, targetRadius = 0.4) => {
+    const distance = position.distanceTo(targetPosition);
+    if (distance > radius + targetRadius) return 0;
+    const normalized = clamp(distance / Math.max(0.001, radius), 0, 1);
+    return damage * Math.max(minFactor, 1 - Math.pow(normalized, falloff));
+  };
+
+  if (bullet.ownerTeam === 'enemy') {
+    const playerRadius = Math.max(0.35, Number(state.params.playerRadius) || 0.4);
+    _tmpVec.copy(playerGroup.position);
+    _tmpVec.y += Math.max(0.55, playerRadius + 0.35);
+    const playerDamage = applyFalloffDamage(_tmpVec, playerRadius);
+    if (playerDamage > 0) applyPlayerDamage(playerDamage);
+    allies.forEach(target => {
+      if (!target?.group) return;
+      _tmpVec.copy(target.group.position);
+      _tmpVec.y = target.mesh.position.y;
+      const amount = applyFalloffDamage(_tmpVec, Math.max(0.35, target.radius || 0.4));
+      if (amount > 0) damageEnemy(target, amount);
+    });
+  } else {
+    enemies.forEach(target => {
+      if (!target?.group) return;
+      _tmpVec.copy(target.group.position);
+      _tmpVec.y = target.mesh.position.y;
+      const amount = applyFalloffDamage(_tmpVec, Math.max(0.35, target.radius || 0.4));
+      if (amount > 0) damageEnemy(target, amount);
+    });
+  }
+}
+
+function createNpcProjectileMesh(config) {
+  const projectileColor = config.projectileBloom ? config.projectileBloomColor : config.projectileColor;
+  const mesh = new THREE.Mesh(
+    getNpcBulletGeometry(config),
+    getBulletMaterial(projectileColor, {
+      bloom: config.projectileBloom === true,
+      opacity: config.projectileBloom === true ? clamp(0.55 + (Number(config.projectileBloomIntensity) || 1) * 0.08, 0.55, 1) : 0.88,
+    }),
+  );
+  mesh.castShadow = config.visual === 'grenade';
+  mesh.receiveShadow = config.visual === 'grenade';
+  return mesh;
+}
+
 function fireEnemyBullet(enemy, targetNpc = null) {
-  const weapon = getEffectiveWeapon(enemy);
-  if (weapon === 'none' || weapon === 'contact') return;
+  const config = getNpcWeaponConfig(enemy);
+  if (!config) return;
   if (enemy.isAlly && !targetNpc) return;
 
-  const color = (weapon === 'sniper' || weapon === 'sniperRifle') ? 0xd975ff : isLaserLikeWeapon(weapon) ? 0xff3333 : enemy.def.projectileColor;
-  const mesh = new THREE.Mesh(_enemyBulletGeo, getBulletMaterial(color));
-  mesh.name = enemy.isAlly ? 'AllyProjectile' : 'EnemyProjectile';
-  if (isLaserLikeWeapon(weapon) && enemy._weaponMuzzle) {
-    updateNpcWeaponVisual(enemy);
-    enemy._weaponMuzzle.getWorldPosition(mesh.position);
-  } else {
-    mesh.position.copy(enemy.group.position);
-    mesh.position.y = enemy.mesh.position.y;
-  }
-
+  const shots = Math.max(1, Number(config.pellets) || 1);
   const targetPosition = targetNpc?.group?.position || playerGroup.position;
   const targetY = targetNpc?.mesh?.position?.y ?? Math.max(0.6, Number(state.params.playerRadius) || 0.4);
-  _bulletDir.set(
-    targetPosition.x - enemy.group.position.x,
-    targetY - mesh.position.y,
-    targetPosition.z - enemy.group.position.z,
-  );
-  if (_bulletDir.lengthSq() < 0.0001) _bulletDir.set(0, 0, 1);
-  _bulletDir.normalize();
-  _quat.setFromUnitVectors(_up, _bulletDir);
-  mesh.quaternion.copy(_quat);
-  scene.add(mesh);
-  const speedMult = (weapon === 'sniper' || weapon === 'sniperRifle') ? 1.35 : isLaserLikeWeapon(weapon) ? 1.6 : weapon === 'rocketLauncher' ? 1.2 : weapon === 'grenades' ? 0.8 : 1.0;
-  enemyBullets.push({
-    mesh,
-    dir: _bulletDir.clone(),
-    life: ENEMY_BULLET_LIFETIME,
-    speed: ENEMY_BULLET_SPEED * speedMult,
-    damage: getNpcDamage(enemy),
-    ownerTeam: enemy.isAlly ? 'ally' : 'enemy',
-    targetTeam: targetNpc ? (targetNpc.isAlly ? 'ally' : 'enemy') : 'player',
-    weapon,
-  });
+
+  for (let shot = 0; shot < shots; shot++) {
+    const mesh = createNpcProjectileMesh(config);
+    mesh.name = enemy.isAlly ? 'AllyProjectile' : 'EnemyProjectile';
+    if (isLaserLikeWeapon(config.type) && enemy._weaponMuzzle) {
+      updateNpcWeaponVisual(enemy);
+      enemy._weaponMuzzle.getWorldPosition(mesh.position);
+    } else {
+      mesh.position.copy(enemy.group.position);
+      mesh.position.y = enemy.mesh.position.y;
+    }
+
+    _bulletDir.set(
+      targetPosition.x - enemy.group.position.x,
+      targetY - mesh.position.y,
+      targetPosition.z - enemy.group.position.z,
+    );
+    if (_bulletDir.lengthSq() < 0.0001) _bulletDir.set(0, 0, 1);
+    _bulletDir.normalize();
+    applyNpcProjectileSpread(_bulletDir, config.spread);
+    _quat.setFromUnitVectors(_up, _bulletDir);
+    mesh.quaternion.copy(_quat);
+    scene.add(mesh);
+
+    const speed = Math.max(0.1, Number(config.speed) || ENEMY_BULLET_SPEED);
+    const maxRange = Math.max(1, Number(config.range) || ENEMY_BULLET_SPEED * ENEMY_BULLET_LIFETIME);
+    const life = config.fuse || Math.max(0.05, maxRange / speed);
+    enemyBullets.push({
+      mesh,
+      dir: _bulletDir.clone(),
+      velocity: _bulletDir.clone().multiplyScalar(speed),
+      life,
+      distance: 0,
+      maxRange,
+      speed,
+      damage: config.damage,
+      radius: Math.max(0.04, Number(config.projectileSize) || 0.25) * 0.5,
+      explosionRadius: Math.max(0.5, Number(config.radius) || 0),
+      shockwave: config.shockwave || null,
+      explosive: config.explosive === true,
+      ballistic: config.ballistic === true,
+      ownerTeam: enemy.isAlly ? 'ally' : 'enemy',
+      targetTeam: targetNpc ? (targetNpc.isAlly ? 'ally' : 'enemy') : 'player',
+      weapon: config.type,
+      spin: new THREE.Vector3(randomRange(-7, 7), randomRange(-7, 7), randomRange(-7, 7)),
+    });
+  }
 }
 
 function updateEnemyShooting(enemy, delta, targetNpc = null) {
-  const weapon = getEffectiveWeapon(enemy);
-  const interval = FIRE_RATE_SECONDS[weapon];
-  if (!interval || enemy.spawnFlashTimer > 0) return;
+  const config = getNpcWeaponConfig(enemy);
+  if (!config || enemy.spawnFlashTimer > 0) return;
   if (enemy.isAlly && !targetNpc) return;
   enemy.shootTimer -= delta;
   if (enemy.shootTimer <= 0) {
     fireEnemyBullet(enemy, targetNpc);
+    const interval = 1 / Math.max(0.1, Number(config.fireRate) || 1);
     enemy.shootTimer = interval * randomRange(0.82, 1.18);
   }
 }
@@ -1584,25 +1786,42 @@ function updateEnemyBullets(delta) {
   for (let i = enemyBullets.length - 1; i >= 0; i--) {
     const bullet = enemyBullets[i];
     bullet.life -= delta;
-    bullet.mesh.position.addScaledVector(bullet.dir, bullet.speed * delta);
+    const before = bullet.mesh.position.clone();
+    if (bullet.ballistic) {
+      bullet.velocity.y -= PARTICLE_GRAVITY * 1.75 * delta;
+      bullet.mesh.position.addScaledVector(bullet.velocity, delta);
+      bullet.mesh.rotation.x += bullet.spin.x * delta;
+      bullet.mesh.rotation.y += bullet.spin.y * delta;
+      bullet.mesh.rotation.z += bullet.spin.z * delta;
+      const floorY = Math.max(0.02, bullet.radius || 0.1);
+      if (bullet.mesh.position.y < floorY) {
+        bullet.mesh.position.y = floorY;
+        bullet.velocity.y = Math.abs(bullet.velocity.y) * 0.42;
+        bullet.velocity.x *= 0.72;
+        bullet.velocity.z *= 0.72;
+      }
+    } else {
+      bullet.mesh.position.addScaledVector(bullet.dir, bullet.speed * delta);
+    }
+    bullet.distance = (Number(bullet.distance) || 0) + before.distanceTo(bullet.mesh.position);
+
     if (isLaserLikeWeapon(bullet.weapon) && bullet.mesh.position.y <= 0.02) {
-      enemyBullets.splice(i, 1);
-      disposeEnemyBullet(bullet);
+      removeNpcProjectileAt(i);
       continue;
     }
-    if (isPlacedObjectHit(bullet.mesh.position, 0.08)) {
-      enemyBullets.splice(i, 1);
-      disposeEnemyBullet(bullet);
+    if (isPlacedObjectHit(bullet.mesh.position, Math.max(0.08, bullet.radius || 0.08))) {
+      if (bullet.explosive) explodeNpcProjectile(bullet);
+      removeNpcProjectileAt(i);
       continue;
     }
 
     if ((bullet.targetTeam || 'player') === 'player') {
       _tmpVec.copy(playerGroup.position);
       _tmpVec.y += Math.max(0.55, playerRadius + 0.35);
-      if (bullet.mesh.position.distanceTo(_tmpVec) <= playerHitRadius) {
-        applyPlayerDamage(bullet.damage);
-        enemyBullets.splice(i, 1);
-        disposeEnemyBullet(bullet);
+      if (bullet.mesh.position.distanceTo(_tmpVec) <= playerHitRadius + Math.max(0, bullet.radius || 0)) {
+        if (bullet.explosive) explodeNpcProjectile(bullet);
+        else applyPlayerDamage(bullet.damage);
+        removeNpcProjectileAt(i);
         continue;
       }
     } else {
@@ -1613,11 +1832,11 @@ function updateEnemyBullets(delta) {
         if (!target?.group) continue;
         _tmpVec.copy(target.group.position);
         _tmpVec.y = target.mesh.position.y;
-        const hitRadius = Math.max(0.22, target.radius || 0.4) + 0.18;
+        const hitRadius = Math.max(0.22, target.radius || 0.4) + 0.18 + Math.max(0, bullet.radius || 0);
         if (bullet.mesh.position.distanceTo(_tmpVec) <= hitRadius) {
-          damageEnemy(target, bullet.damage);
-          enemyBullets.splice(i, 1);
-          disposeEnemyBullet(bullet);
+          if (bullet.explosive) explodeNpcProjectile(bullet);
+          else damageEnemy(target, bullet.damage);
+          removeNpcProjectileAt(i);
           hit = true;
           break;
         }
@@ -1625,9 +1844,9 @@ function updateEnemyBullets(delta) {
       if (hit) continue;
     }
 
-    if (bullet.life <= 0) {
-      enemyBullets.splice(i, 1);
-      disposeEnemyBullet(bullet);
+    if (bullet.life <= 0 || (Number(bullet.maxRange) > 0 && bullet.distance >= bullet.maxRange)) {
+      if (bullet.explosive) explodeNpcProjectile(bullet);
+      removeNpcProjectileAt(i);
     }
   }
 }
