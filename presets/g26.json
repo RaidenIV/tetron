@@ -634,5 +634,22 @@
   "weaponShotgunReloadTime": 1.6,
   "weaponSniperReloadTime": 2,
   "weaponRocketReloadTime": 2.4,
-  "soundSfx_reload": 1
+  "soundSfx_reload": 1,
+  "weaponPistolOffsetX": 0,
+  "weaponPistolOffsetY": 0,
+  "weaponPistolRecoil": 0,
+  "weaponRifleOffsetX": 0,
+  "weaponRifleOffsetY": 0,
+  "weaponRifleRecoil": 0,
+  "weaponShotgunOffsetX": 0,
+  "weaponShotgunOffsetY": 0,
+  "weaponShotgunRecoil": 0,
+  "weaponSniperOffsetX": 0,
+  "weaponSniperOffsetY": 0,
+  "weaponSniperRecoil": 0,
+  "weaponGrenadeOffsetX": 0,
+  "weaponGrenadeOffsetY": 0,
+  "weaponRocketOffsetX": 0,
+  "weaponRocketOffsetY": 0,
+  "weaponRocketRecoil": 0
 }

@@ -7628,6 +7628,19 @@ function weaponReloadKey(spec) {
   return weaponKey(spec.prefix, 'ReloadTime');
 }
 
+function weaponRecoilKey(spec) {
+  if (spec.type === 'grenades') return null;
+  return weaponKey(spec.prefix, 'Recoil');
+}
+
+function weaponOffsetXKey(spec) {
+  return weaponKey(spec.prefix, 'OffsetX');
+}
+
+function weaponOffsetYKey(spec) {
+  return weaponKey(spec.prefix, 'OffsetY');
+}
+
 function weaponAmmoDefaults(spec) {
   switch (spec.type) {
     case 'pistol': return { magazine: 12, total: 60, reloadTime: 1.0 };
@@ -8511,6 +8524,12 @@ function buildWeaponControls(body, spec) {
   if (reloadKey) {
     body.appendChild(slider({ key: reloadKey, label: 'Reload Time', min: 0, max: 10, step: 0.1, dec: 1 }));
   }
+  body.appendChild(slider({ key: weaponOffsetXKey(spec), label: 'Offset X', min: -2, max: 2, step: 0.01, dec: 2, onChange: () => applyPlayerWeaponSettings() }));
+  body.appendChild(slider({ key: weaponOffsetYKey(spec), label: 'Offset Y', min: -2, max: 2, step: 0.01, dec: 2, onChange: () => applyPlayerWeaponSettings() }));
+  const recoilKey = weaponRecoilKey(spec);
+  if (recoilKey) {
+    body.appendChild(slider({ key: recoilKey, label: 'Recoil', min: 0, max: 1, step: 0.01, dec: 2 }));
+  }
   body.appendChild(slider({ key: weaponKey(prefix, 'Damage'), label: 'Damage', min: 0, max: 1000, step: 1, dec: 0 }));
   body.appendChild(slider({ key: weaponKey(prefix, 'Range'), label: 'Range', min: 1, max: 500, step: 1, dec: 0 }));
   body.appendChild(slider({ key: weaponKey(prefix, 'Spread'), label: 'Spread', min: 0, max: 1, step: 0.001, dec: 3 }));
@@ -9298,6 +9317,10 @@ function applyAllParams() {
     p[weaponTotalAmmoKey(spec)] = Math.round(clampSetting(p[weaponTotalAmmoKey(spec)], 0, 9999, ammo.total));
     const reloadKey = weaponReloadKey(spec);
     if (reloadKey) p[reloadKey] = clampSetting(p[reloadKey], 0, 10, ammo.reloadTime);
+    p[weaponOffsetXKey(spec)] = clampSetting(p[weaponOffsetXKey(spec)], -2, 2, d.offsetX ?? 0);
+    p[weaponOffsetYKey(spec)] = clampSetting(p[weaponOffsetYKey(spec)], -2, 2, d.offsetY ?? 0);
+    const recoilKey = weaponRecoilKey(spec);
+    if (recoilKey) p[recoilKey] = clampSetting(p[recoilKey], 0, 1, d.recoil ?? 0);
     p[weaponKey(spec.prefix, 'Damage')] = Math.round(clampSetting(p[weaponKey(spec.prefix, 'Damage')], 0, 1000, d.damage));
     p[weaponKey(spec.prefix, 'Range')] = clampSetting(p[weaponKey(spec.prefix, 'Range')], 1, 500, d.range);
     p[weaponKey(spec.prefix, 'Spread')] = clampSetting(p[weaponKey(spec.prefix, 'Spread')], 0, 1, d.spread);

@@ -124,6 +124,8 @@ const _weaponForwardLocal = new THREE.Vector3(0, 0, -1);
 const _weaponWorldPos = new THREE.Vector3();
 const _weaponAimDir = new THREE.Vector3();
 const _weaponAimQuat = new THREE.Quaternion();
+const _weaponRecoilLocal = new THREE.Vector3();
+let _weaponRecoilOffset = 0;
 
 
 function getPlayerWeaponType() {
@@ -131,6 +133,47 @@ function getPlayerWeaponType() {
   return ['pistol', 'rifle', 'shotgun', 'sniperRifle', 'grenades', 'rocketLauncher'].includes(type)
     ? type
     : 'rifle';
+}
+
+function getPlayerWeaponParamPrefix(type = getPlayerWeaponType()) {
+  switch (type) {
+    case 'pistol': return 'Pistol';
+    case 'shotgun': return 'Shotgun';
+    case 'sniperRifle': return 'Sniper';
+    case 'grenades': return 'Grenade';
+    case 'rocketLauncher': return 'Rocket';
+    case 'rifle':
+    default: return 'Rifle';
+  }
+}
+
+function getWeaponNumericParam(type, field, fallback, min, max) {
+  const prefix = getPlayerWeaponParamPrefix(type);
+  const value = Number(state.params[`weapon${prefix}${field}`]);
+  const resolved = Number.isFinite(value) ? value : fallback;
+  return Math.min(max, Math.max(min, resolved));
+}
+
+function getPlayerWeaponOffsetX(type = getPlayerWeaponType()) {
+  return getWeaponNumericParam(type, 'OffsetX', 0, -2, 2);
+}
+
+function getPlayerWeaponOffsetY(type = getPlayerWeaponType()) {
+  return getWeaponNumericParam(type, 'OffsetY', 0, -2, 2);
+}
+
+function getPlayerWeaponRecoil(type = getPlayerWeaponType()) {
+  if (type === 'grenades') return 0;
+  return getWeaponNumericParam(type, 'Recoil', 0, 0, 1);
+}
+
+export function triggerPlayerWeaponRecoil(type = getPlayerWeaponType(), recoilAmount = null) {
+  if (type === 'grenades') return;
+  const recoil = Number.isFinite(Number(recoilAmount))
+    ? Math.min(1, Math.max(0, Number(recoilAmount)))
+    : getPlayerWeaponRecoil(type);
+  if (recoil <= 0) return;
+  _weaponRecoilOffset = Math.max(_weaponRecoilOffset, recoil);
 }
 
 function getPlayerWeaponSpec(type = getPlayerWeaponType()) {
@@ -246,9 +289,9 @@ function syncPlayerWeaponRestPose() {
   const rightX = Math.cos(az);
   const rightZ = -Math.sin(az);
   const weaponSideGap = 0.105;
-  const rightOffset = radius + weaponSideGap;
+  const rightOffset = radius + weaponSideGap + getPlayerWeaponOffsetX(type);
   const forwardOffset = type === 'grenades' ? 0.02 : 0.12;
-  const baseWeaponHeight = radius + length * 0.56;
+  const baseWeaponHeight = radius + length * 0.56 + getPlayerWeaponOffsetY(type);
 
   playerWeaponGroup.position.set(
     rightX * rightOffset + forwardX * forwardOffset,
@@ -259,9 +302,12 @@ function syncPlayerWeaponRestPose() {
   playerWeaponGroup.visible = true;
 }
 
-function updatePlayerWeaponVisual(aimTarget = null) {
+function updatePlayerWeaponVisual(delta = 0, aimTarget = null) {
   applyPlayerWeaponSettings();
   const type = getPlayerWeaponType();
+  const recoilRecover = Math.min(1, Math.max(0, Number(delta) || 0) * 18);
+  _weaponRecoilOffset += (0 - _weaponRecoilOffset) * recoilRecover;
+  if (_weaponRecoilOffset < 0.0005) _weaponRecoilOffset = 0;
   const p = state.params;
   const az = Number(p.thirdAzimuth) || 0;
   const radius = Math.max(0.25, Number(p.playerRadius) || 0.4);
@@ -271,9 +317,9 @@ function updatePlayerWeaponVisual(aimTarget = null) {
   const rightX = Math.cos(az);
   const rightZ = -Math.sin(az);
   const weaponSideGap = 0.105;
-  const rightOffset = radius + weaponSideGap;
+  const rightOffset = radius + weaponSideGap + getPlayerWeaponOffsetX(type);
   const forwardOffset = type === 'grenades' ? 0.02 : 0.12;
-  const baseWeaponHeight = radius + length * 0.56;
+  const baseWeaponHeight = radius + length * 0.56 + getPlayerWeaponOffsetY(type);
   const ammoReady = playerWeaponHasAmmoForVisual(type);
   const adsLift = (ammoReady && state.isAiming && p.aimEnabled !== false) ? baseWeaponHeight * 0.25 : 0;
 
@@ -288,11 +334,18 @@ function updatePlayerWeaponVisual(aimTarget = null) {
   } else {
     playerWeaponGroup.rotation.set(0, az, 0);
   }
+  if (_weaponRecoilOffset > 0) {
+    _weaponRecoilLocal.set(0, 0, _weaponRecoilOffset).applyQuaternion(playerWeaponGroup.quaternion);
+    playerWeaponGroup.position.add(_weaponRecoilLocal);
+  }
   playerWeaponGroup.visible = true;
 }
 
 export function getPlayerWeaponMuzzle(out = new THREE.Vector3()) {
-  applyPlayerWeaponSettings();
+  const type = getPlayerWeaponType();
+  if (playerWeaponModelKey !== type || !playerWeaponMesh) {
+    rebuildPlayerWeaponVisual(type);
+  }
   playerWeaponGroup.updateWorldMatrix(true, true);
   playerWeaponMuzzle.getWorldPosition(out);
   return out;
@@ -840,7 +893,7 @@ export function updatePlayer(delta, moveForward, moveRight, aimTarget = null) {
   const p = state.params;
   updateJump(delta);
   applyPlayerContactShadow();
-  updatePlayerWeaponVisual(aimTarget);
+  updatePlayerWeaponVisual(delta, aimTarget);
 
   // Walking — poll state.keys each frame + analogue controller left stick
   _v.set(0, 0, 0);

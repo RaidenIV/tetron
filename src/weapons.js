@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { state } from './state.js';
 import { scene, camera } from './renderer.js';
-import { playerGroup, getPlayerWeaponMuzzle } from './player.js';
+import { playerGroup, getPlayerWeaponMuzzle, triggerPlayerWeaponRecoil } from './player.js';
 import { damageEnemiesAt, damageEnemiesInRadius, getEnemies, getAllies } from './enemies.js';
 import { isPlacedObjectHit } from './placer.js';
 import { getSfxVolume, applyBulletTimeAudioPitch, registerManagedAudio, playObjectExplosionSound } from './audio.js';
@@ -374,6 +374,7 @@ function makeWeaponConfig(type, prefix, defaults, extra = {}) {
     projectileBloomSize,
     pellets: 1,
     spread: weaponValue(prefix, 'Spread', defaults.spread, 0, 1),
+    recoil: type === 'grenades' ? 0 : weaponValue(prefix, 'Recoil', defaults.recoil ?? 0, 0, 1),
     visual: defaults.visual,
     ...extra,
   };
@@ -968,6 +969,7 @@ function fireWeapon() {
   }
 
   playShootSound(config);
+  triggerPlayerWeaponRecoil(config.type, config.recoil);
 }
 
 export function updateLaserProjectiles(delta, projectileDelta = delta) {

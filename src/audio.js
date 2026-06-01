@@ -18,6 +18,13 @@ export function getBulletTimeAudioRate() {
 export function applyBulletTimeAudioPitch(audio, baseRate = 1) {
   if (!audio) return audio;
   const rate = clamp((Number(baseRate) || 1) * getBulletTimeAudioRate(), 0.25, 4);
+  try {
+    // Browsers preserve pitch by default when playbackRate changes; disable
+    // that so bullet time audibly drops all managed audio by -3 semitones.
+    audio.preservesPitch = false;
+    audio.mozPreservesPitch = false;
+    audio.webkitPreservesPitch = false;
+  } catch (_) {}
   try { audio.playbackRate = rate; } catch (_) {}
   return audio;
 }
@@ -45,27 +52,6 @@ export function updateBulletTimeAudioPitch() {
   });
 }
 
-export function pauseManagedAudio() {
-  _managedAudio.forEach(audio => {
-    if (!audio) { _managedAudio.delete(audio); return; }
-    if (audio.paused) return;
-    audio.__pausedByGame = true;
-    try { audio.pause(); } catch (_) {}
-  });
-}
-
-export function resumeManagedAudio() {
-  _managedAudio.forEach(audio => {
-    if (!audio) { _managedAudio.delete(audio); return; }
-    if (!audio.__pausedByGame) return;
-    audio.__pausedByGame = false;
-    if (state.params.soundMuted) return;
-    applyBulletTimeAudioPitch(audio, audio.__basePlaybackRate || 1);
-    const playRequest = audio.play?.();
-    if (playRequest?.catch) playRequest.catch(() => {});
-  });
-}
-
 function numeric(value, fallback) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -90,7 +76,7 @@ export function getAudioProximityFactor(sourcePosition = null) {
 
 export function getSfxVolume(key, fallback = 1, sourcePosition = null) {
   const p = state.params;
-  if (state.paused || p.soundMuted) return 0;
+  if (p.soundMuted) return 0;
   const master = clamp(numeric(p.soundSfxVolume, 1), 0, 1);
   const channel = clamp(numeric(p[key], fallback), 0, 1);
   const proximity = getAudioProximityFactor(sourcePosition);
