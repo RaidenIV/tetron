@@ -123,5 +123,5 @@ function playBulletTimeSound(templateRef, assetPath, volumeKey) {
 
 export function playBulletTimeActivationSounds() {
   _bulletTimeSlowEl = playBulletTimeSound(_bulletTimeSlowEl, './assets/slow.wav', 'soundSfx_bullet_time_slow');
-  _bulletTimeHeartEl = playBulletTimeSound(_bulletTimeHeartEl, './assets/heart.wav', 'soundSfx_bullet_time_heart');
+  _bulletTimeHeartEl = playBulletTimeSound(_bulletTimeHeartEl, './assets/heart.mp3', 'soundSfx_bullet_time_heart');
 }
