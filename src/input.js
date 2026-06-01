@@ -19,6 +19,11 @@ let _mouseDragActive = false;
 let _lastMouseX = 0;
 let _lastMouseY = 0;
 let _adsHeldAtLockRequest = false; // tracks if right-click was held when pointer lock was requested
+let _mousePrimaryDown = false;
+let _mouseSecondaryDown = false;
+let _controllerPrimaryDown = false;
+let _controllerAimDown = false;
+let _controllerSecondaryDown = false;
 
 function clamp(v, min, max) {
   return Math.min(max, Math.max(min, v));
@@ -44,6 +49,35 @@ function isViewportTarget(target) {
   return target === renderer.domElement || target === document.body || target === document.documentElement;
 }
 
+function isPlacerSlotActive() {
+  return (state.activeSlot ?? 0) === 1;
+}
+
+function syncGameplayButtonState() {
+  if (state.paused) {
+    state.primaryFire = false;
+    state.secondaryFire = false;
+    state.isAiming = false;
+    return;
+  }
+
+  const placerActive = isPlacerSlotActive();
+  state.primaryFire = _mousePrimaryDown || _controllerPrimaryDown;
+  if (placerActive) {
+    state.secondaryFire = _mouseSecondaryDown || _controllerSecondaryDown;
+    state.isAiming = false;
+  } else {
+    state.secondaryFire = false;
+    state.isAiming = state.params.aimEnabled !== false && (_mouseSecondaryDown || _controllerAimDown);
+  }
+}
+
+function clearMouseButtonState() {
+  _mousePrimaryDown = false;
+  _mouseSecondaryDown = false;
+  syncGameplayButtonState();
+}
+
 function isMouseLookEnabled() {
   return state.params.thirdMouseLook !== false;
 }
@@ -64,6 +98,11 @@ export function clearGameplayInput() {
   state.jumpQueued = false;
   state.jumpAirJumpsUsed = 0;
   state.isAiming = false;
+  _mousePrimaryDown = false;
+  _mouseSecondaryDown = false;
+  _controllerPrimaryDown = false;
+  _controllerAimDown = false;
+  _controllerSecondaryDown = false;
   _mouseDragActive = false;
   // clear analogue controller axes
   state.controllerMoveX = 0;
@@ -96,8 +135,17 @@ function applyMouseLookDelta(dx, dy) {
 function requestMouseLook(target) {
   if (!canUseMouseLook(target)) return;
   if (document.pointerLockElement === renderer.domElement) return;
-  _adsHeldAtLockRequest = state.isAiming;
-  renderer.domElement.requestPointerLock?.();
+  if (typeof document.hasFocus === 'function' && !document.hasFocus()) return;
+  _adsHeldAtLockRequest = _mouseSecondaryDown;
+  try {
+    renderer.domElement.tabIndex = renderer.domElement.tabIndex || 0;
+    renderer.domElement.focus?.({ preventScroll: true });
+    const lockRequest = renderer.domElement.requestPointerLock?.();
+    lockRequest?.catch?.(() => {});
+  } catch (_) {
+    // Pointer lock can be denied while the page is regaining focus. ADS/fire
+    // state is tracked independently, so mouse input still works without lock.
+  }
 }
 
 function trySetPointerCapture(element, pointerId) {
@@ -115,8 +163,11 @@ renderer.domElement.addEventListener('contextmenu', event => event.preventDefaul
 
 renderer.domElement.addEventListener('pointerdown', event => {
   if (state.paused) {
+    _mousePrimaryDown = false;
+    _mouseSecondaryDown = false;
     state.primaryFire = false;
     state.secondaryFire = false;
+    state.isAiming = false;
     return;
   }
 
@@ -128,22 +179,20 @@ renderer.domElement.addEventListener('pointerdown', event => {
 
   if (event.button === 0 && isViewportTarget(event.target)) {
     if (placerActive && (event.ctrlKey || event.metaKey)) {
+      _mousePrimaryDown = false;
       state.primaryFire = false;
       state.placerSelectionRequest = { toggle: true, additive: true };
       event.preventDefault();
       return;
     }
-    state.primaryFire = true;
+    _mousePrimaryDown = true;
+    syncGameplayButtonState();
   }
 
   // Right-click removes placed objects while the placer is active; otherwise it enters ADS.
   if (event.button === 2 && isViewportTarget(event.target)) {
-    if (placerActive) {
-      state.secondaryFire = true;
-      state.isAiming = false;
-    } else if (state.params.aimEnabled !== false) {
-      state.isAiming = true;
-    }
+    _mouseSecondaryDown = true;
+    syncGameplayButtonState();
   }
 
   if (!canUseMouseLook(event.target)) return;
@@ -177,12 +226,12 @@ function stopMouseDrag(event) {
   // The physical button is still held, so don't clear button state.
   if (event?.type === 'pointercancel') return;
   if (!event || event.button === 0) {
-    state.primaryFire = false;
+    _mousePrimaryDown = false;
   }
   if (!event || event.button === 2) {
-    state.isAiming = false;
-    state.secondaryFire = false;
+    _mouseSecondaryDown = false;
   }
+  syncGameplayButtonState();
 
   _mouseDragActive = false;
   try {
@@ -209,8 +258,9 @@ document.addEventListener('pointerlockchange', () => {
     // Restore isAiming if right-click was held when pointer lock was requested.
     // pointercancel fires during lock acquisition and clears isAiming, even though
     // the physical button is still held.
-    if (_adsHeldAtLockRequest && state.params.aimEnabled !== false) {
-      state.isAiming = true;
+    if (_adsHeldAtLockRequest) {
+      _mouseSecondaryDown = true;
+      syncGameplayButtonState();
     }
     _adsHeldAtLockRequest = false;
   }
@@ -230,37 +280,40 @@ document.addEventListener('mousedown', event => {
   if (document.pointerLockElement !== renderer.domElement) return;
   if (event.button === 0) {
     if ((state.activeSlot ?? 0) === 1 && (event.ctrlKey || event.metaKey)) {
+      _mousePrimaryDown = false;
       state.primaryFire = false;
       state.placerSelectionRequest = { toggle: true, additive: true };
       event.preventDefault();
       return;
     }
-    state.primaryFire = true;
+    _mousePrimaryDown = true;
+    syncGameplayButtonState();
   }
   if (event.button === 2) {
-    if ((state.activeSlot ?? 0) === 1) {
-      state.secondaryFire = true;
-      state.isAiming = false;
-    } else if (state.params.aimEnabled !== false) {
-      state.isAiming = true;
-    }
+    _mouseSecondaryDown = true;
+    syncGameplayButtonState();
   }
 });
 
 document.addEventListener('mouseup', event => {
-  if (event.button === 0) state.primaryFire = false;
-  if (event.button === 2) {
-    state.secondaryFire = false;
-    state.isAiming = false;
-  }
+  if (event.button === 0) _mousePrimaryDown = false;
+  if (event.button === 2) _mouseSecondaryDown = false;
+  syncGameplayButtonState();
 });
 
 document.addEventListener('pointerlockchange', () => {
-  if (document.pointerLockElement !== renderer.domElement) {
-    state.primaryFire = false;
-    state.secondaryFire = false;
-    state.isAiming = false;
-  }
+  // Losing pointer lock should not cancel a held mouse button. Browsers can exit
+  // lock during right-click/ADS setup; button release is handled by mouseup.
+  syncGameplayButtonState();
+});
+
+window.addEventListener('blur', () => {
+  _mousePrimaryDown = false;
+  _mouseSecondaryDown = false;
+  _controllerPrimaryDown = false;
+  _controllerAimDown = false;
+  _controllerSecondaryDown = false;
+  syncGameplayButtonState();
 });
 
 
@@ -275,9 +328,7 @@ function togglePlacerAssetModal() {
     return;
   }
 
-  state.primaryFire = false;
-  state.secondaryFire = false;
-  state.isAiming = false;
+  clearMouseButtonState();
   document.exitPointerLock?.();
   document.body.classList.remove('third-person-mouse-look');
   if (window.__openPlacerAssetModal) window.__openPlacerAssetModal();
@@ -295,9 +346,7 @@ function togglePlacerTransformModal() {
     return;
   }
 
-  state.primaryFire = false;
-  state.secondaryFire = false;
-  state.isAiming = false;
+  clearMouseButtonState();
   document.exitPointerLock?.();
   document.body.classList.remove('third-person-mouse-look');
   if (window.__openPlacerTransformModal) window.__openPlacerTransformModal();
@@ -420,8 +469,7 @@ window.addEventListener('wheel', e => {
   const slots = 2; // 0=laser, 1=placer
   const dir   = e.deltaY > 0 ? 1 : -1;
   state.activeSlot = ((state.activeSlot ?? 0) + dir + slots) % slots;
-  state.isAiming = false;
-  state.secondaryFire = false;
+  syncGameplayButtonState();
   e.preventDefault();
 }, { passive: false });
 
@@ -466,6 +514,10 @@ export function updateController(delta) {
     state.controllerMoveX = 0;
     state.controllerMoveZ = 0;
     state.controllerConnected = false;
+    _controllerPrimaryDown = false;
+    _controllerAimDown = false;
+    _controllerSecondaryDown = false;
+    syncGameplayButtonState();
     return;
   }
 
@@ -480,6 +532,10 @@ export function updateController(delta) {
   if (!pad) {
     state.controllerMoveX = 0;
     state.controllerMoveZ = 0;
+    _controllerPrimaryDown = false;
+    _controllerAimDown = false;
+    _controllerSecondaryDown = false;
+    syncGameplayButtonState();
     return;
   }
 
@@ -500,6 +556,10 @@ export function updateController(delta) {
   function justPressed(i) { return pressed(i) && !prev[i]; }
 
   if (state.paused) {
+    _controllerPrimaryDown = false;
+    _controllerAimDown = false;
+    _controllerSecondaryDown = false;
+    syncGameplayButtonState();
     // In paused state only allow Options toggle.
     if (justPressed(9)) {
       _togglePanel?.();
@@ -543,28 +603,22 @@ export function updateController(delta) {
   const r2Value = pad.buttons[7]?.value ?? 0;
   const r1Value = pad.buttons[5]?.value ?? 0;
   const firePressed = r2Value >= fireThresh || r1Value >= fireThresh;
-  if (firePressed && !state.primaryFire) {
+  if (firePressed && !_controllerPrimaryDown) {
     rumble(pad, 0, 0.25, 60);
   }
-  // Controller fire: only overwrite primaryFire=false when the gamepad trigger
-  // is released AND no mouse button is currently driving it. This prevents an
-  // idle connected gamepad from clearing mouse left-click fire every frame.
-  if (firePressed) {
-    state.primaryFire = true;
-  } else if (!state.isAiming) {
-    // Safe to clear: ADS is not active, so this isn't a simultaneous ADS+fire scenario.
-    state.primaryFire = false;
-  }
+  _controllerPrimaryDown = firePressed;
 
   // ── L2 (button 6) → remove while placing, otherwise aim (ADS) ─────────────
   const l2Value = pad.buttons[6]?.value ?? 0;
+  const aimPressed = l2Value >= fireThresh;
   if ((state.activeSlot ?? 0) === 1) {
-    state.secondaryFire = l2Value >= fireThresh;
-    state.isAiming = false;
+    _controllerSecondaryDown = aimPressed;
+    _controllerAimDown = false;
   } else {
-    state.secondaryFire = false;
-    state.isAiming = state.params.aimEnabled !== false && l2Value >= fireThresh;
+    _controllerSecondaryDown = false;
+    _controllerAimDown = aimPressed;
   }
+  syncGameplayButtonState();
 
   // ── Cross (0) → jump ───────────────────────────────────────────────────────
   if (pressed(0)) {
