@@ -81,6 +81,9 @@ const _explosionMat = new THREE.MeshBasicMaterial({
 const _activeProjectiles = [];
 const _activeExplosions = [];
 const _activeProjectileShockwaves = [];
+const _activeProjectileParticles = [];
+const _projectileParticlePool = [];
+const PROJECTILE_PARTICLE_GRAVITY = 18;
 let _weaponCooldown = 0;
 let _projectileShockwaveId = 1;
 
@@ -192,6 +195,13 @@ function getWeaponShockwaveConfig(prefix, radius, damage) {
     splashRadius: numParam(p[`${basePrefix}SplashRadius`], splashRadiusFallback, 0, 80),
     splashFalloff: numParam(p[`${basePrefix}SplashFalloff`], p.destructionDestructibleSplashFalloff ?? 1, 0.1, 4),
     splashMinFactor: numParam(p[`${basePrefix}SplashMinFactor`], p.destructionDestructibleSplashMinFactor ?? 0.15, 0, 1),
+    particleCount: Math.max(0, Math.round(numParam(p[`${basePrefix}ParticleCount`], p.destructionDestructibleParticleCount ?? 40, 0, 250))),
+    particleSize: numParam(p[`${basePrefix}ParticleSize`], p.destructionDestructibleParticleSize ?? 0.25, 0.05, 2),
+    particleSpeed: numParam(p[`${basePrefix}ParticleSpeed`], p.destructionDestructibleParticleSpeed ?? 6, 0.1, 8),
+    particleGlow: numParam(p[`${basePrefix}ParticleGlow`], p.destructionDestructibleParticleGlow ?? 8, 0, 24),
+    particleDespawnTime: numParam(p[`${basePrefix}ParticleDespawnTime`], p.destructionDestructibleParticleDespawnTime ?? 1, 0.1, 10),
+    particleColor: hexColor(p[`${basePrefix}ParticleColor`], p.destructionDestructibleColor || '#ffffff'),
+    particlePhysics: p[`${basePrefix}ParticlePhysics`] === 'ethereal' ? 'ethereal' : 'gravity',
     radius: Math.max(0.5, Number(radius) || 5),
     damage: Math.max(0, Number(damage) || 0),
   };
@@ -415,6 +425,108 @@ function updateProjectileShockwaves(delta) {
   }
 }
 
+function acquireProjectileParticle(color) {
+  const mesh = _projectileParticlePool.pop() || new THREE.Mesh(
+    new THREE.SphereGeometry(1, 8, 6),
+    new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 0,
+      transparent: true,
+      opacity: 1,
+      roughness: 0.52,
+      metalness: 0.05,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+  );
+  mesh.material.color.set(color);
+  mesh.material.emissive.set(color);
+  mesh.material.opacity = 1;
+  mesh.material.emissiveIntensity = 0;
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  mesh.visible = true;
+  scene.add(mesh);
+  return mesh;
+}
+
+function releaseProjectileParticle(particle) {
+  scene.remove(particle.mesh);
+  particle.mesh.visible = false;
+  _projectileParticlePool.push(particle.mesh);
+}
+
+function spawnProjectileExplosionParticles(position, cfg = {}) {
+  const count = Math.max(0, Math.min(250, Math.round(Number(cfg.particleCount) || 0)));
+  if (count <= 0) return;
+  const color = new THREE.Color(hexColor(cfg.particleColor, cfg.color || '#ffffff'));
+  const size = clamp(Number(cfg.particleSize) || 0.25, 0.05, 2);
+  const speedMult = clamp(Number(cfg.particleSpeed) || 1, 0.1, 8);
+  const glow = clamp(Number(cfg.particleGlow) || 0, 0, 24);
+  const maxLife = clamp(Number(cfg.particleDespawnTime) || 1, 0.1, 10);
+  const physics = cfg.particlePhysics === 'ethereal' ? 'ethereal' : 'gravity';
+
+  for (let i = 0; i < count; i++) {
+    const mesh = acquireProjectileParticle(color);
+    const baseRadius = (0.08 + Math.random() * 0.14) * size;
+    const yaw = Math.random() * Math.PI * 2;
+    const pitch = (Math.random() - 0.2) * Math.PI * 0.75;
+    const speed = (3.5 + Math.random() * 8.5) * speedMult;
+    mesh.position.copy(position);
+    mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    mesh.scale.setScalar(baseRadius);
+    _activeProjectileParticles.push({
+      mesh,
+      baseRadius,
+      vx: Math.cos(yaw) * Math.cos(pitch) * speed,
+      vy: Math.sin(pitch) * speed + (physics === 'gravity' ? 2.25 * speedMult : 0.65 * speedMult),
+      vz: Math.sin(yaw) * Math.cos(pitch) * speed,
+      rx: (Math.random() - 0.5) * 8,
+      ry: (Math.random() - 0.5) * 8,
+      rz: (Math.random() - 0.5) * 8,
+      life: maxLife,
+      maxLife,
+      glowCap: glow,
+      physics,
+    });
+  }
+}
+
+function updateProjectileExplosionParticles(delta) {
+  for (let i = _activeProjectileParticles.length - 1; i >= 0; i--) {
+    const particle = _activeProjectileParticles[i];
+    particle.life -= delta;
+    if (particle.life <= 0) {
+      _activeProjectileParticles.splice(i, 1);
+      releaseProjectileParticle(particle);
+      continue;
+    }
+    particle.mesh.position.x += particle.vx * delta;
+    particle.mesh.position.y += particle.vy * delta;
+    particle.mesh.position.z += particle.vz * delta;
+    particle.mesh.rotation.x += particle.rx * delta;
+    particle.mesh.rotation.y += particle.ry * delta;
+    particle.mesh.rotation.z += particle.rz * delta;
+    if (particle.physics === 'gravity') {
+      particle.vy -= PROJECTILE_PARTICLE_GRAVITY * delta;
+      if (particle.mesh.position.y < 0.03) {
+        particle.mesh.position.y = 0.03;
+        particle.vy = Math.abs(particle.vy) * 0.24;
+        particle.vx *= 0.82;
+        particle.vz *= 0.82;
+      }
+    } else {
+      particle.vy += 0.18 * delta;
+    }
+    const t = clamp(particle.life / particle.maxLife, 0, 1);
+    particle.mesh.scale.setScalar(Math.max(0.001, t * 1.15 * particle.baseRadius));
+    particle.mesh.material.opacity = t;
+    particle.mesh.material.emissiveIntensity = Math.max(0, t * particle.glowCap * getOverallBloomFactor());
+  }
+}
+
+
 // ── Two-stage aim resolver (AIMING.md) ───────────────────────────────────────
 
 /**
@@ -594,8 +706,12 @@ function explodeProjectile(projectile) {
   const radius = Math.max(0.5, Number(config.radius) || Number(config.shockwave?.splashRadius) || 4);
   playObjectExplosionSound(visual.group.position);
   spawnExplosionFlash(visual.group.position, radius);
-  if (config.shockwave) spawnProjectileShockwave(visual.group.position, config.shockwave);
-  else damageEnemiesInRadius(visual.group.position, radius, Math.max(1, Number(config.damage) || 1), 1.15);
+  if (config.shockwave) {
+    spawnProjectileExplosionParticles(visual.group.position, config.shockwave);
+    spawnProjectileShockwave(visual.group.position, config.shockwave);
+  } else {
+    damageEnemiesInRadius(visual.group.position, radius, Math.max(1, Number(config.damage) || 1), 1.15);
+  }
   disposeProjectile(projectile);
 }
 
@@ -624,6 +740,7 @@ export function updateLaserProjectiles(delta, projectileDelta = delta) {
   applyLaserMaterials(config);
   updateExplosionFlashes(delta);
   updateProjectileShockwaves(delta);
+  updateProjectileExplosionParticles(delta);
   const fireRate = Math.max(0.1, Number(config.fireRate) || 1);
   const interval = 1 / fireRate;
 

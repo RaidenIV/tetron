@@ -334,8 +334,18 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   color: #58a6ff;
   width: 24px;
   height: 24px;
+  flex: 0 0 auto;
+  background: currentColor;
+  background-color: currentColor;
   -webkit-mask-image: var(--bt-icon-url);
   mask-image: var(--bt-icon-url);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  opacity: 1;
   transition: opacity 0.18s ease, filter 0.18s ease;
 }
 .game-hud-content { width: 210px; }
