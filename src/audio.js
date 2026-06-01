@@ -52,6 +52,27 @@ export function updateBulletTimeAudioPitch() {
   });
 }
 
+export function pauseManagedAudio() {
+  _managedAudio.forEach(audio => {
+    if (!audio) { _managedAudio.delete(audio); return; }
+    if (audio.paused) return;
+    audio.__pausedByGame = true;
+    try { audio.pause(); } catch (_) {}
+  });
+}
+
+export function resumeManagedAudio() {
+  _managedAudio.forEach(audio => {
+    if (!audio) { _managedAudio.delete(audio); return; }
+    if (!audio.__pausedByGame) return;
+    audio.__pausedByGame = false;
+    if (state.params.soundMuted) return;
+    applyBulletTimeAudioPitch(audio, audio.__basePlaybackRate || 1);
+    const playRequest = audio.play?.();
+    if (playRequest?.catch) playRequest.catch(() => {});
+  });
+}
+
 function numeric(value, fallback) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -76,7 +97,7 @@ export function getAudioProximityFactor(sourcePosition = null) {
 
 export function getSfxVolume(key, fallback = 1, sourcePosition = null) {
   const p = state.params;
-  if (p.soundMuted) return 0;
+  if (state.paused || p.soundMuted) return 0;
   const master = clamp(numeric(p.soundSfxVolume, 1), 0, 1);
   const channel = clamp(numeric(p[key], fallback), 0, 1);
   const proximity = getAudioProximityFactor(sourcePosition);
