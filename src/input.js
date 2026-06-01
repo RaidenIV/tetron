@@ -620,16 +620,22 @@ export function updateController(delta) {
   if (firePressed && !state.primaryFire) {
     rumble(pad, 0, 0.25, 60);
   }
-  state.primaryFire = firePressed;
+  // OR controller fire onto mouse/keyboard state — don't clobber left-mouse-held
+  // firing when a gamepad is connected but its trigger is not pressed.
+  if (firePressed) state.primaryFire = true;
+  else if (!_leftMouseDown) state.primaryFire = false;
 
   // ── L2 (button 6) → remove while placing, otherwise aim (ADS) ─────────────
   const l2Value = pad.buttons[6]?.value ?? 0;
+  const adsPressed = l2Value >= fireThresh;
   if ((state.activeSlot ?? 0) === 1) {
-    state.secondaryFire = l2Value >= fireThresh;
+    state.secondaryFire = adsPressed;
     state.isAiming = false;
   } else {
     state.secondaryFire = false;
-    state.isAiming = state.params.aimEnabled !== false && l2Value >= fireThresh;
+    // OR controller ADS onto mouse ADS — don't clear mouse isAiming when L2 is idle
+    if (adsPressed) state.isAiming = state.params.aimEnabled !== false;
+    else if (!_rightMouseDown) state.isAiming = false;
   }
 
   // ── Cross (0) → jump ───────────────────────────────────────────────────────
