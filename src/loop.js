@@ -13,7 +13,7 @@ import { updateLaserProjectiles, resolveAimTarget, aimResult } from './weapons.j
 import { updateEnemies, getEnemyMeshes, tagEnemy, getEnemies, getAllies } from './enemies.js';
 import { updatePlacer } from './placer.js';
 import { updateController } from './input.js';
-import { updateBulletTimeAudioPitch } from './audio.js';
+import { updateBulletTimeAudioPitch, playBulletTimeActivationSounds } from './audio.js';
 
 const clock = new THREE.Clock();
 // ── Radar canvas ──────────────────────────────────────────────────────────────
@@ -205,6 +205,7 @@ function updateTimeSlow(delta) {
       state.slowScale = clamp(Number(p.bulletTimeScale) || 0.35, 0.05, 1.0);
       state.slowTimer = duration;
       state.slowCooldown = cooldown;
+      playBulletTimeActivationSounds();
     }
   }
 

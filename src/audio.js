@@ -103,3 +103,25 @@ export function playObjectExplosionSound(sourcePosition = null) {
   applyBulletTimeAudioPitch(sound);
   sound.play().catch(() => {});
 }
+
+let _bulletTimeSlowEl = null;
+let _bulletTimeHeartEl = null;
+
+function playBulletTimeSound(templateRef, assetPath, volumeKey) {
+  const volume = getSfxVolume(volumeKey, 1);
+  if (volume <= 0) return templateRef;
+
+  if (!templateRef) templateRef = registerManagedAudio(new Audio(assetPath));
+  const sound = templateRef.paused ? templateRef : templateRef.cloneNode();
+  registerManagedAudio(sound, 1);
+  sound.volume = volume;
+  sound.currentTime = 0;
+  applyBulletTimeAudioPitch(sound);
+  sound.play().catch(() => {});
+  return templateRef;
+}
+
+export function playBulletTimeActivationSounds() {
+  _bulletTimeSlowEl = playBulletTimeSound(_bulletTimeSlowEl, './assets/slow.wav', 'soundSfx_bullet_time_slow');
+  _bulletTimeHeartEl = playBulletTimeSound(_bulletTimeHeartEl, './assets/heart.wav', 'soundSfx_bullet_time_heart');
+}

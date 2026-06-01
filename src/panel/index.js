@@ -7307,6 +7307,8 @@ function buildSound(body) {
     ['Jump',           'soundSfx_jump'],
     ['Player Hit',     'soundSfx_player_hit'],
     ['Enemy Grunt',    'soundSfx_enemy_grunt'],
+    ['Bullet Time Slow', 'soundSfx_bullet_time_slow'],
+    ['Bullet Time Heart', 'soundSfx_bullet_time_heart'],
     ['Standard Hit',   'soundSfx_standard_hit'],
     ['Elite Hit',    'soundSfx_elite_hit'],
     ['Explode',      'soundSfx_explode'],

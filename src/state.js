@@ -500,6 +500,8 @@ export const state = {
       "soundSfx_jump": 1,
       "soundSfx_enemy_grunt": 1,
       "soundSfx_object_explode": 1,
+      "soundSfx_bullet_time_slow": 1,
+      "soundSfx_bullet_time_heart": 1,
       "destructionDestructibleShockwaveSpeed": 40,
       "destructionDestructibleShockwaveColor": "#ffffff",
       "destructionDestructibleShockwaveFadeTime": 0.12,
