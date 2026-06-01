@@ -83,7 +83,6 @@ const _activeExplosions = [];
 const _activeProjectileShockwaves = [];
 let _weaponCooldown = 0;
 let _projectileShockwaveId = 1;
-let _shellSequenceIndex = 0;
 
 function clamp(v, min, max) {
   return Math.min(max, Math.max(min, v));
@@ -460,14 +459,6 @@ function getProjectileDirection(spawnPos, targetPoint, out) {
 
 // ── Shoot sound ───────────────────────────────────────────────────────────────
 const _audioCache = new Map();
-const RIFLE_SHELL_SEQUENCE = [
-  './assets/shell1.wav',
-  './assets/shell2.wav',
-  './assets/shell3.wav',
-  './assets/shell4.wav',
-  './assets/shell5.wav',
-  './assets/shell6.wav',
-];
 
 function playWeaponAsset(path, volume, playbackRate = 1) {
   if (!volume || state.params.soundMuted) return;
@@ -481,16 +472,6 @@ function playWeaponAsset(path, volume, playbackRate = 1) {
   audio.volume = clamp(volume, 0, 1);
   audio.playbackRate = playbackRate;
   audio.play().catch(() => {});
-}
-
-function scheduleRifleShellSound() {
-  const volume = getSfxVolume('soundSfx_shoot', 1) * 0.75;
-  if (volume <= 0) return;
-  const path = RIFLE_SHELL_SEQUENCE[_shellSequenceIndex % RIFLE_SHELL_SEQUENCE.length];
-  _shellSequenceIndex += 1;
-  globalThis.setTimeout(() => {
-    playWeaponAsset(path, volume, 0.96 + Math.random() * 0.08);
-  }, 500);
 }
 
 function playShootSound(config) {
@@ -563,7 +544,6 @@ function createProjectile(config, dir) {
     ),
   };
   _activeProjectiles.push(projectile);
-  if (config.type === 'rifle') scheduleRifleShellSound();
 }
 
 function explodeProjectile(projectile) {
