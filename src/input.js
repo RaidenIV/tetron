@@ -18,6 +18,7 @@ const _dv = new THREE.Vector3();
 let _mouseDragActive = false;
 let _lastMouseX = 0;
 let _lastMouseY = 0;
+let _adsHeldAtLockRequest = false; // tracks if right-click was held when pointer lock was requested
 
 function clamp(v, min, max) {
   return Math.min(max, Math.max(min, v));
@@ -95,6 +96,7 @@ function applyMouseLookDelta(dx, dy) {
 function requestMouseLook(target) {
   if (!canUseMouseLook(target)) return;
   if (document.pointerLockElement === renderer.domElement) return;
+  _adsHeldAtLockRequest = state.isAiming;
   renderer.domElement.requestPointerLock?.();
 }
 
@@ -171,6 +173,9 @@ window.addEventListener('pointermove', event => {
 });
 
 function stopMouseDrag(event) {
+  // pointercancel fires when requestPointerLock() releases pointer capture.
+  // The physical button is still held, so don't clear button state.
+  if (event?.type === 'pointercancel') return;
   if (!event || event.button === 0) {
     state.primaryFire = false;
   }
@@ -199,7 +204,16 @@ window.addEventListener('pointercancel', stopMouseDrag);
 // camera continuously, like a desktop third-person action shooter. ESC exits lock.
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === renderer.domElement;
-  if (locked) setPointerAimCenter();
+  if (locked) {
+    setPointerAimCenter();
+    // Restore isAiming if right-click was held when pointer lock was requested.
+    // pointercancel fires during lock acquisition and clears isAiming, even though
+    // the physical button is still held.
+    if (_adsHeldAtLockRequest && state.params.aimEnabled !== false) {
+      state.isAiming = true;
+    }
+    _adsHeldAtLockRequest = false;
+  }
   state.mouseLookActive = locked || _mouseDragActive;
   document.body.classList.toggle('third-person-mouse-look', state.mouseLookActive);
 });
