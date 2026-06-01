@@ -16,15 +16,8 @@ export function initInput({ togglePanel }) {
 
 const _dv = new THREE.Vector3();
 let _mouseDragActive = false;
-let _leftMouseDown = false;
-let _rightMouseDown = false;
-let _pointerLockPending = false; // true between requestPointerLock() and pointerlockchange
 let _lastMouseX = 0;
 let _lastMouseY = 0;
-
-if (renderer?.domElement && !renderer.domElement.hasAttribute('tabindex')) {
-  renderer.domElement.tabIndex = 0;
-}
 
 function clamp(v, min, max) {
   return Math.min(max, Math.max(min, v));
@@ -71,8 +64,6 @@ export function clearGameplayInput() {
   state.jumpAirJumpsUsed = 0;
   state.isAiming = false;
   _mouseDragActive = false;
-  _leftMouseDown = false;
-  _rightMouseDown = false;
   // clear analogue controller axes
   state.controllerMoveX = 0;
   state.controllerMoveZ = 0;
@@ -104,57 +95,7 @@ function applyMouseLookDelta(dx, dy) {
 function requestMouseLook(target) {
   if (!canUseMouseLook(target)) return;
   if (document.pointerLockElement === renderer.domElement) return;
-
-  try {
-    renderer.domElement.focus?.({ preventScroll: true });
-  } catch (_) {
-    try { renderer.domElement.focus?.(); } catch (_) {}
-  }
-
-  if (!document.hasFocus()) return;
-
-  try {
-    _pointerLockPending = true;
-    const request = renderer.domElement.requestPointerLock?.();
-    if (request?.catch) request.catch(() => { _pointerLockPending = false; });
-  } catch (_) {
-    _pointerLockPending = false;
-    // Pointer lock can be denied if the browser tab/window is not focused.
-    // Mouse-drag camera control still works without pointer lock.
-  }
-}
-
-function applyWeaponMouseButtons(event, target = event?.target) {
-  if (state.paused) return;
-  const locked = document.pointerLockElement === renderer.domElement;
-  if (!locked && !isViewportTarget(target)) return;
-
-  const buttons = Number(event?.buttons);
-  if (!Number.isFinite(buttons) || buttons <= 0) return;
-
-  const placerActive = (state.activeSlot ?? 0) === 1;
-  const leftDown = (buttons & 1) !== 0;
-  const rightDown = (buttons & 2) !== 0;
-
-  if (leftDown) {
-    _leftMouseDown = true;
-    if (placerActive && (event.ctrlKey || event.metaKey)) {
-      state.primaryFire = false;
-      state.placerSelectionRequest = { toggle: true, additive: true };
-    } else {
-      state.primaryFire = true;
-    }
-  }
-
-  if (rightDown) {
-    _rightMouseDown = true;
-    if (placerActive) {
-      state.secondaryFire = true;
-      state.isAiming = false;
-    } else if (state.params.aimEnabled !== false) {
-      state.isAiming = true;
-    }
-  }
+  renderer.domElement.requestPointerLock?.();
 }
 
 function trySetPointerCapture(element, pointerId) {
@@ -184,7 +125,6 @@ renderer.domElement.addEventListener('pointerdown', event => {
   const placerActive = (state.activeSlot ?? 0) === 1;
 
   if (event.button === 0 && isViewportTarget(event.target)) {
-    _leftMouseDown = true;
     if (placerActive && (event.ctrlKey || event.metaKey)) {
       state.primaryFire = false;
       state.placerSelectionRequest = { toggle: true, additive: true };
@@ -196,7 +136,6 @@ renderer.domElement.addEventListener('pointerdown', event => {
 
   // Right-click removes placed objects while the placer is active; otherwise it enters ADS.
   if (event.button === 2 && isViewportTarget(event.target)) {
-    _rightMouseDown = true;
     if (placerActive) {
       state.secondaryFire = true;
       state.isAiming = false;
@@ -204,12 +143,6 @@ renderer.domElement.addEventListener('pointerdown', event => {
       state.isAiming = true;
     }
   }
-
-  // Browsers can route combined right-click ADS + left-click fire input through
-  // the `buttons` bitmask instead of separate button events, especially around
-  // pointer lock. Keep both states latched from the bitmask so ADS never blocks
-  // the primary-fire button.
-  applyWeaponMouseButtons(event);
 
   if (!canUseMouseLook(event.target)) return;
   if (event.button !== 0 && event.button !== 2) return;
@@ -238,28 +171,15 @@ window.addEventListener('pointermove', event => {
 });
 
 function stopMouseDrag(event) {
-  // Only a real pointerup (physical button release) should clear latched button state.
-  // pointercancel fires when requestPointerLock() releases pointer capture — the physical
-  // button is still held, so we must NOT clear any button state on cancel.
-  if (event?.type === 'pointercancel') {
-    // Just release capture; do not touch button state.
-    try {
-      if (event?.pointerId !== undefined) renderer.domElement.releasePointerCapture?.(event.pointerId);
-    } catch (_) {}
-    return;
-  }
-
   if (!event || event.button === 0) {
-    _leftMouseDown = false;
     state.primaryFire = false;
   }
   if (!event || event.button === 2) {
-    _rightMouseDown = false;
     state.isAiming = false;
     state.secondaryFire = false;
   }
 
-  _mouseDragActive = _leftMouseDown || _rightMouseDown;
+  _mouseDragActive = false;
   try {
     if (event?.pointerId !== undefined) renderer.domElement.releasePointerCapture?.(event.pointerId);
   } catch (_) {
@@ -267,8 +187,8 @@ function stopMouseDrag(event) {
   }
 
   if (document.pointerLockElement !== renderer.domElement) {
-    state.mouseLookActive = _mouseDragActive;
-    document.body.classList.toggle('third-person-mouse-look', state.mouseLookActive);
+    state.mouseLookActive = false;
+    document.body.classList.remove('third-person-mouse-look');
   }
 }
 
@@ -279,18 +199,7 @@ window.addEventListener('pointercancel', stopMouseDrag);
 // camera continuously, like a desktop third-person action shooter. ESC exits lock.
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === renderer.domElement;
-  _pointerLockPending = false;
-  if (locked) {
-    setPointerAimCenter();
-    // Pointer lock entry fires pointercancel which may have cleared isAiming even
-    // though the right mouse button is still physically held. Restore both here.
-    if (_rightMouseDown && state.params.aimEnabled !== false && (state.activeSlot ?? 0) === 0) {
-      state.isAiming = true;
-    }
-    if (_leftMouseDown && (state.activeSlot ?? 0) === 0) {
-      state.primaryFire = true;
-    }
-  }
+  if (locked) setPointerAimCenter();
   state.mouseLookActive = locked || _mouseDragActive;
   document.body.classList.toggle('third-person-mouse-look', state.mouseLookActive);
 });
@@ -298,28 +207,14 @@ document.addEventListener('pointerlockchange', () => {
 document.addEventListener('mousemove', event => {
   if (state.paused) return;
   if (document.pointerLockElement !== renderer.domElement) return;
-  applyWeaponMouseButtons(event, renderer.domElement);
-  // In pointer lock the browser may not always include both buttons in
-  // event.buttons during simultaneous left+right click. Fall back to the
-  // latched _leftMouseDown / _rightMouseDown flags so ADS never silently
-  // blocks firing and firing never silently clears ADS.
-  if (_leftMouseDown && (state.activeSlot ?? 0) === 0) state.primaryFire = true;
-  if (_rightMouseDown && state.params.aimEnabled !== false && (state.activeSlot ?? 0) === 0) {
-    state.isAiming = true;
-  }
   setPointerAimCenter();
   applyMouseLookDelta(event.movementX || 0, event.movementY || 0);
 });
 
 document.addEventListener('mousedown', event => {
   if (state.paused) return;
-  const locked = document.pointerLockElement === renderer.domElement;
-  if (!locked && !isViewportTarget(event.target)) return;
-
-  applyWeaponMouseButtons(event, locked ? renderer.domElement : event.target);
-
+  if (document.pointerLockElement !== renderer.domElement) return;
   if (event.button === 0) {
-    _leftMouseDown = true;
     if ((state.activeSlot ?? 0) === 1 && (event.ctrlKey || event.metaKey)) {
       state.primaryFire = false;
       state.placerSelectionRequest = { toggle: true, additive: true };
@@ -329,7 +224,6 @@ document.addEventListener('mousedown', event => {
     state.primaryFire = true;
   }
   if (event.button === 2) {
-    _rightMouseDown = true;
     if ((state.activeSlot ?? 0) === 1) {
       state.secondaryFire = true;
       state.isAiming = false;
@@ -340,25 +234,18 @@ document.addEventListener('mousedown', event => {
 });
 
 document.addEventListener('mouseup', event => {
-  if (event.button === 0) {
-    _leftMouseDown = false;
-    state.primaryFire = false;
-  }
+  if (event.button === 0) state.primaryFire = false;
   if (event.button === 2) {
-    _rightMouseDown = false;
     state.secondaryFire = false;
     state.isAiming = false;
   }
-  _mouseDragActive = _leftMouseDown || _rightMouseDown;
 });
 
 document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement !== renderer.domElement) {
-    if (!_leftMouseDown) state.primaryFire = false;
-    if (!_rightMouseDown) {
-      state.secondaryFire = false;
-      state.isAiming = false;
-    }
+    state.primaryFire = false;
+    state.secondaryFire = false;
+    state.isAiming = false;
   }
 });
 
@@ -645,22 +532,24 @@ export function updateController(delta) {
   if (firePressed && !state.primaryFire) {
     rumble(pad, 0, 0.25, 60);
   }
-  // OR controller fire onto mouse/keyboard state — don't clobber left-mouse-held
-  // firing when a gamepad is connected but its trigger is not pressed.
-  if (firePressed) state.primaryFire = true;
-  else if (!_leftMouseDown) state.primaryFire = false;
+  // Controller fire: only overwrite primaryFire=false when the gamepad trigger
+  // is released AND no mouse button is currently driving it. This prevents an
+  // idle connected gamepad from clearing mouse left-click fire every frame.
+  if (firePressed) {
+    state.primaryFire = true;
+  } else if (!state.isAiming) {
+    // Safe to clear: ADS is not active, so this isn't a simultaneous ADS+fire scenario.
+    state.primaryFire = false;
+  }
 
   // ── L2 (button 6) → remove while placing, otherwise aim (ADS) ─────────────
   const l2Value = pad.buttons[6]?.value ?? 0;
-  const adsPressed = l2Value >= fireThresh;
   if ((state.activeSlot ?? 0) === 1) {
-    state.secondaryFire = adsPressed;
+    state.secondaryFire = l2Value >= fireThresh;
     state.isAiming = false;
   } else {
     state.secondaryFire = false;
-    // OR controller ADS onto mouse ADS — don't clear mouse isAiming when L2 is idle
-    if (adsPressed) state.isAiming = state.params.aimEnabled !== false;
-    else if (!_rightMouseDown) state.isAiming = false;
+    state.isAiming = state.params.aimEnabled !== false && l2Value >= fireThresh;
   }
 
   // ── Cross (0) → jump ───────────────────────────────────────────────────────
