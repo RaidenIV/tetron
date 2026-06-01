@@ -720,7 +720,7 @@ function fireWeapon() {
   const config = getWeaponConfig();
 
   // Muzzle position: actual right-hand weapon muzzle from the player visual.
-  getPlayerWeaponMuzzle(_spawnPos);
+  getPlayerWeaponMuzzle(_spawnPos, aimResult.point);
 
   // Stage 2: aim from muzzle toward the pre-resolved aim target point.
   const targetPoint = aimResult.point;

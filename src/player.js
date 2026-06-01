@@ -121,6 +121,12 @@ let playerWeaponMesh = null;
 let playerWeaponModelKey = '';
 let playerWeaponLength = 1.125;
 
+const _playerWeaponLocalForward = new THREE.Vector3(0, 0, -1);
+const _playerWeaponWorldOrigin = new THREE.Vector3();
+const _playerWeaponAimDir = new THREE.Vector3();
+const _playerWeaponWorldQuat = new THREE.Quaternion();
+const _playerWeaponParentWorldQuat = new THREE.Quaternion();
+
 function getPlayerWeaponType() {
   const type = state.params.playerWeaponType;
   return ['pistol', 'rifle', 'shotgun', 'sniperRifle', 'grenades', 'rocketLauncher'].includes(type)
@@ -194,7 +200,35 @@ export function applyPlayerWeaponSettings() {
   playerWeaponMat.needsUpdate = true;
 }
 
-function updatePlayerWeaponVisual() {
+function isVector3Like(value) {
+  return value && Number.isFinite(value.x) && Number.isFinite(value.y) && Number.isFinite(value.z);
+}
+
+function aimPlayerWeaponAt(targetPoint, fallbackYaw) {
+  if (!isVector3Like(targetPoint)) {
+    playerWeaponGroup.rotation.set(0, fallbackYaw, 0);
+    return;
+  }
+
+  playerWeaponGroup.getWorldPosition(_playerWeaponWorldOrigin);
+  _playerWeaponAimDir.copy(targetPoint).sub(_playerWeaponWorldOrigin);
+  if (_playerWeaponAimDir.lengthSq() < 0.0001) {
+    playerWeaponGroup.rotation.set(0, fallbackYaw, 0);
+    return;
+  }
+
+  _playerWeaponAimDir.normalize();
+  _playerWeaponWorldQuat.setFromUnitVectors(_playerWeaponLocalForward, _playerWeaponAimDir);
+
+  if (playerWeaponGroup.parent) {
+    playerWeaponGroup.parent.getWorldQuaternion(_playerWeaponParentWorldQuat).invert();
+    playerWeaponGroup.quaternion.copy(_playerWeaponParentWorldQuat.multiply(_playerWeaponWorldQuat));
+  } else {
+    playerWeaponGroup.quaternion.copy(_playerWeaponWorldQuat);
+  }
+}
+
+function updatePlayerWeaponVisual(aimTarget = null) {
   applyPlayerWeaponSettings();
   const type = getPlayerWeaponType();
   const p = state.params;
@@ -216,12 +250,16 @@ function updatePlayerWeaponVisual() {
     baseWeaponHeight + adsLift,
     rightZ * rightOffset + forwardZ * forwardOffset
   );
-  playerWeaponGroup.rotation.set(0, az, 0);
+  if (state.isAiming && p.aimEnabled !== false && isVector3Like(aimTarget)) {
+    aimPlayerWeaponAt(aimTarget, az);
+  } else {
+    playerWeaponGroup.rotation.set(0, az, 0);
+  }
   playerWeaponGroup.visible = true;
 }
 
-export function getPlayerWeaponMuzzle(out = new THREE.Vector3()) {
-  updatePlayerWeaponVisual();
+export function getPlayerWeaponMuzzle(out = new THREE.Vector3(), aimTarget = null) {
+  updatePlayerWeaponVisual(aimTarget);
   playerWeaponMuzzle.getWorldPosition(out);
   return out;
 }
@@ -764,11 +802,11 @@ function updateJump(delta) {
 
 const _v = new THREE.Vector3();
 
-export function updatePlayer(delta, moveForward, moveRight) {
+export function updatePlayer(delta, moveForward, moveRight, aimTarget = null) {
   const p = state.params;
   updateJump(delta);
   applyPlayerContactShadow();
-  updatePlayerWeaponVisual();
+  updatePlayerWeaponVisual(aimTarget);
 
   // Walking — poll state.keys each frame + analogue controller left stick
   _v.set(0, 0, 0);

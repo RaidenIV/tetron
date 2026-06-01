@@ -290,7 +290,7 @@ export function tick() {
   }
 
   updateTimeSlow(delta);
-  updatePlayer(delta, getMoveForward(), getMoveRight());
+  updatePlayer(delta, getMoveForward(), getMoveRight(), aimResult.point);
   updateDashStreaks(delta);
 
   const worldDelta = delta * state.worldScale;

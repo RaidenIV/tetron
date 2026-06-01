@@ -396,6 +396,13 @@ const _corpseRestAxis = new THREE.Vector3();
 const _corpseRestQuat = new THREE.Quaternion();
 const _npcProjectileRight = new THREE.Vector3();
 const _npcProjectileUp = new THREE.Vector3();
+const _npcWeaponLocalForward = new THREE.Vector3(0, 0, 1);
+const _npcWeaponWorldOrigin = new THREE.Vector3();
+const _npcWeaponAimDir = new THREE.Vector3();
+const _npcWeaponWorldQuat = new THREE.Quaternion();
+const _npcWeaponParentWorldQuat = new THREE.Quaternion();
+const _npcAimPoint = new THREE.Vector3();
+const _npcFireTargetPoint = new THREE.Vector3();
 
 function getDef(type) {
   return ENEMY_DEFS[type] || ENEMY_DEFS[ENEMY_TYPE.RUSHER];
@@ -733,7 +740,48 @@ function makeNpcRifleVisual(npc) {
   updateNpcWeaponVisual(npc);
 }
 
-function updateNpcWeaponVisual(npc) {
+function isWorldPointLike(value) {
+  return value && Number.isFinite(value.x) && Number.isFinite(value.y) && Number.isFinite(value.z);
+}
+
+function aimNpcWeaponAt(npc, targetPoint) {
+  if (!npc?._weaponGroup || !isWorldPointLike(targetPoint)) {
+    npc?._weaponGroup?.rotation.set(0, 0, 0);
+    return;
+  }
+
+  npc._weaponGroup.getWorldPosition(_npcWeaponWorldOrigin);
+  _npcWeaponAimDir.copy(targetPoint).sub(_npcWeaponWorldOrigin);
+  if (_npcWeaponAimDir.lengthSq() < 0.0001) {
+    npc._weaponGroup.rotation.set(0, 0, 0);
+    return;
+  }
+
+  _npcWeaponAimDir.normalize();
+  _npcWeaponWorldQuat.setFromUnitVectors(_npcWeaponLocalForward, _npcWeaponAimDir);
+
+  if (npc._weaponGroup.parent) {
+    npc._weaponGroup.parent.getWorldQuaternion(_npcWeaponParentWorldQuat).invert();
+    npc._weaponGroup.quaternion.copy(_npcWeaponParentWorldQuat.multiply(_npcWeaponWorldQuat));
+  } else {
+    npc._weaponGroup.quaternion.copy(_npcWeaponWorldQuat);
+  }
+}
+
+function getNpcAimPoint(targetNpc = null, out = _npcAimPoint) {
+  if (targetNpc?.group) {
+    out.copy(targetNpc.group.position);
+    out.y += targetNpc.mesh?.position?.y ?? Math.max(0.6, (targetNpc.radius || BASE_RADIUS) + 0.35);
+    return out;
+  }
+
+  const playerRadius = Math.max(0.35, Number(state.params.playerRadius) || 0.4);
+  out.copy(playerGroup.position);
+  out.y += Math.max(0.6, playerRadius + 0.35);
+  return out;
+}
+
+function updateNpcWeaponVisual(npc, targetPoint = null) {
   if (!npc?._weaponGroup) return;
   const weapon = getEffectiveWeapon(npc);
   const visible = weapon === 'rifle' || weapon === 'laser';
@@ -746,15 +794,20 @@ function updateNpcWeaponVisual(npc) {
   const radius = Math.max(0.25, Number(npc.radius) || BASE_RADIUS);
   const bodyLength = Math.max(0.5, BASE_LENGTH * (Number(npc.sizeMult) || 1));
   const transformKey = `${radius.toFixed(3)}:${bodyLength.toFixed(3)}`;
-  if (npc._weaponTransformKey === transformKey) return;
+  if (npc._weaponTransformKey !== transformKey) {
+    npc._weaponGroup.position.set(
+      radius + NPC_RIFLE.sideGap,
+      radius + bodyLength * 0.56,
+      NPC_RIFLE.forwardOffset,
+    );
+    npc._weaponTransformKey = transformKey;
+  }
 
-  npc._weaponGroup.position.set(
-    radius + NPC_RIFLE.sideGap,
-    radius + bodyLength * 0.56,
-    NPC_RIFLE.forwardOffset,
-  );
-  npc._weaponGroup.rotation.set(0, 0, 0);
-  npc._weaponTransformKey = transformKey;
+  if (isWorldPointLike(targetPoint)) {
+    aimNpcWeaponAt(npc, targetPoint);
+  } else {
+    npc._weaponGroup.rotation.set(0, 0, 0);
+  }
 }
 
 
@@ -1718,25 +1771,20 @@ function fireEnemyBullet(enemy, targetNpc = null) {
   if (enemy.isAlly && !targetNpc) return;
 
   const shots = Math.max(1, Number(config.pellets) || 1);
-  const targetPosition = targetNpc?.group?.position || playerGroup.position;
-  const targetY = targetNpc?.mesh?.position?.y ?? Math.max(0.6, Number(state.params.playerRadius) || 0.4);
+  const targetPoint = getNpcAimPoint(targetNpc, _npcFireTargetPoint);
 
   for (let shot = 0; shot < shots; shot++) {
     const mesh = createNpcProjectileMesh(config);
     mesh.name = enemy.isAlly ? 'AllyProjectile' : 'EnemyProjectile';
     if (isLaserLikeWeapon(config.type) && enemy._weaponMuzzle) {
-      updateNpcWeaponVisual(enemy);
+      updateNpcWeaponVisual(enemy, targetPoint);
       enemy._weaponMuzzle.getWorldPosition(mesh.position);
     } else {
       mesh.position.copy(enemy.group.position);
       mesh.position.y = enemy.mesh.position.y;
     }
 
-    _bulletDir.set(
-      targetPosition.x - enemy.group.position.x,
-      targetY - mesh.position.y,
-      targetPosition.z - enemy.group.position.z,
-    );
+    _bulletDir.copy(targetPoint).sub(mesh.position);
     if (_bulletDir.lengthSq() < 0.0001) _bulletDir.set(0, 0, 1);
     _bulletDir.normalize();
     applyNpcProjectileSpread(_bulletDir, config.spread);
@@ -1944,7 +1992,7 @@ function updateAllyMovement(ally, delta, elapsedTime, index, target = null) {
     ally.material.emissive.set(ally.def.color);
     ally.material.emissiveIntensity = 0.06;
   }
-  updateNpcWeaponVisual(ally);
+  updateNpcWeaponVisual(ally, target ? getNpcAimPoint(target, _npcAimPoint) : null);
   updateNpcHealthBar(ally);
 }
 
@@ -1973,13 +2021,14 @@ export function updateEnemies(delta, elapsedTime = 0) {
     enemy.spawnFlashTimer = Math.max(0, enemy.spawnFlashTimer - delta);
     const target = findNearestOpponent(enemy);
     updateEnemyMovement(enemy, delta, target);
-    updateEnemyShooting(enemy, delta, target);
-    updateContactDamage(enemy, delta, target);
 
     const lookPos = target?.group?.position || playerGroup.position;
     const dx = lookPos.x - enemy.group.position.x;
     const dz = lookPos.z - enemy.group.position.z;
     enemy.group.rotation.y = Math.atan2(dx, dz);
+
+    updateEnemyShooting(enemy, delta, target);
+    updateContactDamage(enemy, delta, target);
     enemy.mesh.position.y = (BASE_RADIUS + BASE_LENGTH / 2) * enemy.sizeMult;
 
     const flash = enemy.spawnFlashTimer > 0;
@@ -1989,7 +2038,7 @@ export function updateEnemies(delta, elapsedTime = 0) {
       enemy.material.emissive.set(enemy.def.color);
       enemy.material.emissiveIntensity = 0.06;
     }
-    updateNpcWeaponVisual(enemy);
+    updateNpcWeaponVisual(enemy, getNpcAimPoint(target, _npcAimPoint));
     updateNpcHealthBar(enemy);
   }
 
