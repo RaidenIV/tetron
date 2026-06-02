@@ -12,7 +12,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { scene, camera } from './renderer.js';
 import { state } from './state.js';
 import { playerGroup } from './player.js';
-import { getSfxVolume, applyBulletTimeAudioPitch, registerManagedAudio } from './audio.js';
+import { getSfxVolume, applyBulletTimeAudioPitch, registerManagedAudio, playObjectExplosionSound } from './audio.js';
 import { resolveCircleAgainstPlacedObjects, isPlacedObjectHit } from './placer.js';
 
 export const ENEMY_TYPE = Object.freeze({
@@ -511,6 +511,8 @@ const enemyBullets = [];
 const destructionParticles = [];
 const enemyCorpses = [];
 const particlePool = [];
+const npcProjectileShockwaves = [];
+let _npcProjectileShockwaveId = 1;
 
 const _enemyGeoCache = new Map();
 const _tmpVec = new THREE.Vector3();
@@ -519,6 +521,7 @@ const _bulletDir = new THREE.Vector3();
 const _enemyBulletGeo = new THREE.CapsuleGeometry(0.065, 0.44, 5, 10);
 const _enemyBulletGeoCache = new Map();
 const _particleGeo = new THREE.SphereGeometry(1, 6, 4);
+const _npcProjectileShockwaveGeo = new THREE.SphereGeometry(1, 32, 16);
 const _enemyBulletMatCache = new Map();
 const _up = new THREE.Vector3(0, 1, 0);
 const _quat = new THREE.Quaternion();
@@ -1706,15 +1709,28 @@ function shouldShowNpcRifleTracer(config) {
 function getNpcWeaponShockwaveConfig(spec, cfg) {
   const p = state.params;
   const basePrefix = `weapon${spec.prefix}Shockwave`;
+  const splashRadiusFallback = spec.prefix === 'Rocket'
+    ? (p.destructionDestructibleSplashRadius ?? cfg.radius ?? 6)
+    : (p.destructionDestructibleSplashRadius ?? cfg.radius ?? 5);
   return {
     damage: weaponNumber(spec.prefix, 'Damage', spec.damage, 0, 500),
     radius: weaponNumber(spec.prefix, 'Radius', spec.radius || 5, 0.5, 80),
+    speed: clamp(Number(p[`${basePrefix}Speed`] ?? p.destructionDestructibleShockwaveSpeed ?? 40), 0, 40),
+    color: normalizeHexColor(p[`${basePrefix}Color`], p.destructionDestructibleShockwaveColor || '#ffffff'),
+    transparency: clamp(Number(p[`${basePrefix}Transparency`] ?? p.destructionDestructibleShockwaveTransparency ?? 0.1), 0, 1),
+    fadeTime: clamp(Number(p[`${basePrefix}FadeTime`] ?? p.destructionDestructibleShockwaveFadeTime ?? 0.12), 0.05, 3),
+    delay: clamp(Number(p[`${basePrefix}Delay`] ?? p.destructionDestructibleShockwaveDelay ?? 0), 0, 3),
     splashDamage: weaponNumber(spec.prefix, 'ShockwaveSplashDamage', p.destructionDestructibleSplashDamage ?? cfg.damage, 0, 500),
-    splashRadius: weaponNumber(spec.prefix, 'ShockwaveSplashRadius', p.destructionDestructibleSplashRadius ?? cfg.radius, 0, 80),
+    splashRadius: weaponNumber(spec.prefix, 'ShockwaveSplashRadius', splashRadiusFallback, 0, 80),
     splashFalloff: weaponNumber(spec.prefix, 'ShockwaveSplashFalloff', p.destructionDestructibleSplashFalloff ?? 1, 0.1, 4),
     splashMinFactor: weaponNumber(spec.prefix, 'ShockwaveSplashMinFactor', p.destructionDestructibleSplashMinFactor ?? 0.15, 0, 1),
-    speed: Number(state.params[`${basePrefix}Speed`] ?? p.destructionDestructibleShockwaveSpeed ?? 40),
-    color: normalizeHexColor(state.params[`${basePrefix}Color`], p.destructionDestructibleShockwaveColor || '#ffffff'),
+    particleCount: Math.max(0, Math.round(clamp(Number(p[`${basePrefix}ParticleCount`] ?? p.destructionDestructibleParticleCount ?? 40), 0, 250))),
+    particleSize: clamp(Number(p[`${basePrefix}ParticleSize`] ?? p.destructionDestructibleParticleSize ?? 0.25), 0.05, 2),
+    particleSpeed: clamp(Number(p[`${basePrefix}ParticleSpeed`] ?? p.destructionDestructibleParticleSpeed ?? 6), 0.1, 8),
+    particleGlow: clamp(Number(p[`${basePrefix}ParticleGlow`] ?? p.destructionDestructibleParticleGlow ?? 8), 0, 24),
+    particleDespawnTime: clamp(Number(p[`${basePrefix}ParticleDespawnTime`] ?? p.destructionDestructibleParticleDespawnTime ?? 1), 0.1, 10),
+    particleColor: normalizeHexColor(p[`${basePrefix}ParticleColor`], p.destructionDestructibleColor || '#ffffff'),
+    particlePhysics: p[`${basePrefix}ParticlePhysics`] === 'ethereal' ? 'ethereal' : 'gravity',
   };
 }
 
@@ -1738,6 +1754,7 @@ function getNpcWeaponConfig(npc) {
     projectileBloomColor: weaponColor(prefix, 'ProjectileBloomColor', spec.projectileBloomColor || spec.projectileColor),
     projectileBloomIntensity: weaponNumber(prefix, 'ProjectileBloomIntensity', spec.projectileBloomIntensity ?? 1, 0, 12),
     projectileBloomSize: weaponNumber(prefix, 'ProjectileBloomSize', spec.projectileBloomSize ?? 1, 0.1, 8),
+    recoil: weaponNumber(prefix, 'Recoil', spec.recoil ?? 0, 0, 1),
     radius: spec.radius ? weaponNumber(prefix, 'Radius', spec.radius, 0.5, 80) : 0,
     explosive: spec.explosive === true,
     ballistic: spec.ballistic === true,
@@ -2019,6 +2036,9 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
 function updateContactDamage(enemy, delta, targetNpc = null) {
   if (getEffectiveWeapon(enemy) === 'none') return;
 
+  if (targetNpc && !isTargetWithinNpcAwareness(enemy, targetNpc)) return;
+  if (!targetNpc && !enemy.isAlly && !isPlayerWithinNpcAwareness(enemy)) return;
+
   if (targetNpc) {
     _tmpVec.set(
       targetNpc.group.position.x - enemy.group.position.x, 0,
@@ -2061,6 +2081,130 @@ function updateContactDamage(enemy, delta, targetNpc = null) {
   }
 }
 
+// ── NPC weapon sound / projectile explosion visuals ──────────────────────────
+const _npcWeaponAudioCache = new Map();
+
+function playNpcWeaponAsset(path, volume, playbackRate = 1) {
+  if (!volume || state.params.soundMuted) return;
+  let base = _npcWeaponAudioCache.get(path);
+  if (!base) {
+    base = registerManagedAudio(new Audio(path), playbackRate);
+    _npcWeaponAudioCache.set(path, base);
+  }
+  const audio = base.paused ? base : base.cloneNode();
+  registerManagedAudio(audio, playbackRate);
+  audio.currentTime = 0;
+  audio.volume = clamp(volume, 0, 1);
+  applyBulletTimeAudioPitch(audio, playbackRate);
+  audio.play().catch(() => {});
+}
+
+function playNpcShootSound(config, sourcePosition = null) {
+  const volume = getSfxVolume('soundSfx_shoot', 1, sourcePosition);
+  if (!volume || !config) return;
+  if (config.type === 'grenades') {
+    playNpcWeaponAsset('./assets/throw.wav', volume, 0.94 + Math.random() * 0.12);
+    return;
+  }
+  if (config.type === 'rifle') {
+    playNpcWeaponAsset('./assets/blaster2.wav', volume, 0.96 + Math.random() * 0.08);
+    return;
+  }
+  const pitchByWeapon = {
+    pistol: 1.16,
+    shotgun: 0.78,
+    sniperRifle: 0.62,
+    rocketLauncher: 0.58,
+  };
+  playNpcWeaponAsset('./assets/blaster1.wav', volume, (pitchByWeapon[config.type] || 1) * (0.94 + Math.random() * 0.12));
+}
+
+function spawnNpcProjectileShockwave(position, cfg = {}) {
+  const speed = Math.max(0, Number(cfg.speed) || 0);
+  const fadeTime = clamp(Number(cfg.fadeTime) || 0.12, 0.05, 3);
+  const visualMaxRadius = Math.max(0, speed * fadeTime);
+  const opacity = clamp(Number(cfg.transparency) || 0, 0, 1);
+  if (visualMaxRadius <= 0 || opacity <= 0) return;
+
+  const material = new THREE.MeshBasicMaterial({
+    color: normalizeHexColor(cfg.color, '#ffffff'),
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+  });
+  const mesh = new THREE.Mesh(_npcProjectileShockwaveGeo, material);
+  mesh.name = `NpcWeaponShockwave_${_npcProjectileShockwaveId++}`;
+  mesh.position.copy(position);
+  mesh.scale.setScalar(0.001);
+  mesh.visible = false;
+  scene.add(mesh);
+  npcProjectileShockwaves.push({
+    mesh,
+    speed,
+    visualMaxRadius,
+    opacity,
+    fadeTime,
+    age: -clamp(Number(cfg.delay) || 0, 0, 3),
+  });
+}
+
+function updateNpcProjectileShockwaves(delta) {
+  for (let i = npcProjectileShockwaves.length - 1; i >= 0; i--) {
+    const shockwave = npcProjectileShockwaves[i];
+    shockwave.age += delta;
+    if (shockwave.age < 0) {
+      shockwave.mesh.visible = false;
+      continue;
+    }
+    const t = clamp(shockwave.age / shockwave.fadeTime, 0, 1);
+    const visualRadius = Math.max(0.001, Math.min(shockwave.visualMaxRadius, shockwave.speed > 0 ? shockwave.speed * shockwave.age : shockwave.visualMaxRadius * t));
+    shockwave.mesh.visible = true;
+    shockwave.mesh.scale.setScalar(visualRadius);
+    shockwave.mesh.material.opacity = shockwave.opacity * (1 - t);
+    if (shockwave.age >= shockwave.fadeTime) {
+      scene.remove(shockwave.mesh);
+      shockwave.mesh.material?.dispose?.();
+      npcProjectileShockwaves.splice(i, 1);
+    }
+  }
+}
+
+function spawnNpcProjectileExplosionParticles(position, cfg = {}) {
+  const count = Math.max(0, Math.min(250, Math.round(Number(cfg.particleCount) || 0)));
+  if (count <= 0) return;
+  const color = hexToNumber(normalizeHexColor(cfg.particleColor, cfg.color || '#ffffff'), 0xffffff);
+  const size = clamp(Number(cfg.particleSize) || 0.25, 0.05, 2);
+  const speedMult = clamp(Number(cfg.particleSpeed) || 1, 0.1, 8);
+  const glow = clamp(Number(cfg.particleGlow) || 0, 0, 24);
+  const maxLife = clamp(Number(cfg.particleDespawnTime) || 1, 0.1, 10);
+  const physics = cfg.particlePhysics === 'ethereal' ? 'ethereal' : 'gravity';
+
+  for (let i = 0; i < count; i++) {
+    const mesh = acquireParticle(color);
+    const baseRadius = (0.08 + Math.random() * 0.14) * size;
+    const yaw = Math.random() * Math.PI * 2;
+    const pitch = (Math.random() - 0.2) * Math.PI * 0.75;
+    const speed = (3.5 + Math.random() * 8.5) * speedMult;
+    mesh.position.copy(position);
+    mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    mesh.scale.setScalar(baseRadius);
+    destructionParticles.push({
+      mesh,
+      baseRadius,
+      vx: Math.cos(yaw) * Math.cos(pitch) * speed,
+      vy: Math.sin(pitch) * speed + (physics === 'gravity' ? 2.25 * speedMult : 0.65 * speedMult),
+      vz: Math.sin(yaw) * Math.cos(pitch) * speed,
+      life: maxLife,
+      maxLife,
+      glowCap: glow,
+      physics,
+    });
+  }
+}
+
 function applyNpcProjectileSpread(dir, spread = 0) {
   const amount = Math.max(0, Number(spread) || 0);
   if (amount <= 0) return dir;
@@ -2088,6 +2232,11 @@ function damagePlayerAt(position, radius, amount) {
 function explodeNpcProjectile(bullet) {
   const position = bullet.mesh.position;
   const shockwave = bullet.shockwave || {};
+  playObjectExplosionSound(position);
+  if (shockwave) {
+    spawnNpcProjectileExplosionParticles(position, shockwave);
+    spawnNpcProjectileShockwave(position, shockwave);
+  }
   const radius = Math.max(0.5, Number(shockwave.splashRadius ?? bullet.explosionRadius ?? bullet.radius ?? 4) || 4);
   const damage = Math.max(0, Number(shockwave.splashDamage ?? bullet.damage) || 0);
   const falloff = clamp(Number(shockwave.splashFalloff) || 1, 0.1, 4);
@@ -2181,12 +2330,17 @@ function fireEnemyBullet(enemy, targetNpc = null, config = getNpcWeaponConfig(en
       spin: new THREE.Vector3(randomRange(-7, 7), randomRange(-7, 7), randomRange(-7, 7)),
     });
   }
+  playNpcShootSound(config, enemy.group?.position || null);
 }
 
 function updateEnemyShooting(enemy, delta, targetNpc = null) {
   const config = getNpcWeaponConfig(enemy);
   if (!config || enemy.spawnFlashTimer > 0) return;
-  if (enemy.isAlly && !targetNpc) return;
+  if (targetNpc) {
+    if (!isTargetWithinNpcAwareness(enemy, targetNpc)) return;
+  } else if (enemy.isAlly || !isPlayerWithinNpcAwareness(enemy)) {
+    return;
+  }
   updateNpcReload(enemy, config.type, delta);
   enemy.shootTimer -= delta;
   if (enemy.shootTimer <= 0) {
@@ -2291,15 +2445,29 @@ function findNearestAlly(position, maxRange = Infinity) {
   return nearest;
 }
 
-function getNpcEngagementRange(npc) {
-  const awareness = getNpcAwarenessRange(npc);
-  const weaponRange = Number(getNpcWeaponConfig(npc)?.range);
-  return Math.max(awareness, Number.isFinite(weaponRange) ? weaponRange : 0);
+function getNpcAttackRange(npc) {
+  return getNpcAwarenessRange(npc);
+}
+
+function isTargetWithinNpcAwareness(npc, targetNpc) {
+  if (!isLiveNpc(npc) || !isLiveNpc(targetNpc)) return false;
+  const range = getNpcAttackRange(npc);
+  const dx = targetNpc.group.position.x - npc.group.position.x;
+  const dz = targetNpc.group.position.z - npc.group.position.z;
+  return dx * dx + dz * dz <= range * range;
+}
+
+function isPlayerWithinNpcAwareness(npc) {
+  if (!isLiveNpc(npc)) return false;
+  const range = getNpcAttackRange(npc);
+  const dx = playerGroup.position.x - npc.group.position.x;
+  const dz = playerGroup.position.z - npc.group.position.z;
+  return dx * dx + dz * dz <= range * range;
 }
 
 function findNearestOpponent(npc) {
   if (!isLiveNpc(npc)) return null;
-  const range = getNpcEngagementRange(npc);
+  const range = getNpcAttackRange(npc);
   return npc.isAlly
     ? findNearestEnemy(npc.group.position, range)
     : findNearestAlly(npc.group.position, range);
@@ -2429,6 +2597,7 @@ export function updateEnemies(delta, elapsedTime = 0) {
   _spatialHash.rebuild(getActiveNpcs());
 
   updateEnemyBullets(delta);
+  updateNpcProjectileShockwaves(delta);
   updateDestructionParticles(delta);
   updateEnemyCorpses(delta);
 }
