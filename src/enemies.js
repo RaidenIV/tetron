@@ -2056,8 +2056,25 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
     speedMult = 1.05;
   } else if (behavior === 'keepDistance') {
     const desired = 14;
-    if (dist < desired) { seekX = -toTargetX; seekZ = -toTargetZ; speedMult = 1.05; }
-    else if (dist > desired + 2) { seekX = toTargetX; seekZ = toTargetZ; speedMult = 0.85; }
+    if (dist < desired - 1.25) {
+      seekX = -toTargetX;
+      seekZ = -toTargetZ;
+      speedMult = 1.05;
+    } else if (dist > desired + 2) {
+      seekX = toTargetX;
+      seekZ = toTargetZ;
+      speedMult = 0.85;
+    } else if (targetNpc) {
+      // While actively fighting another NPC, keep-distance actors should not
+      // freeze once they reach their preferred range. Strafe around the target
+      // while maintaining radius so allies/enemies visibly keep moving during
+      // attacks instead of becoming stationary turrets.
+      const strafeSign = enemy.__combatStrafeSign || (enemy.__combatStrafeSign = Math.random() < 0.5 ? -1 : 1);
+      const radialBias = clamp((dist - desired) / 2.5, -0.35, 0.35);
+      seekX = (-toTargetZ * strafeSign) * 0.9 + toTargetX * radialBias;
+      seekZ = ( toTargetX * strafeSign) * 0.9 + toTargetZ * radialBias;
+      speedMult = 0.8;
+    }
   } else if (behavior === 'teleport') {
     enemy.teleportCooldown = Math.max(0, enemy.teleportCooldown - delta);
     if (enemy.teleportCooldown <= 0 && dist < 5.5) {
@@ -2104,6 +2121,15 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
   // Smooth
   const smoothed = smoothSteer(enemy, { x: moveX, z: moveZ });
   moveX = smoothed.x; moveZ = smoothed.z;
+
+  // If an NPC has an active opposing target and steering collapsed to nearly
+  // zero, add a small strafe fallback so attack state never immobilizes it.
+  if (targetNpc && Math.hypot(moveX, moveZ) < 0.001 && behavior !== 'guard') {
+    const strafeSign = enemy.__combatStrafeSign || (enemy.__combatStrafeSign = Math.random() < 0.5 ? -1 : 1);
+    moveX = -toTargetZ * strafeSign;
+    moveZ =  toTargetX * strafeSign;
+    speedMult = Math.max(speedMult, 0.6);
+  }
 
   // Apply movement
   const baseSpeed = getNpcMoveSpeed(enemy);

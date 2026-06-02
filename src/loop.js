@@ -295,11 +295,11 @@ export function tick() {
   if (editorActive) {
     state.isAiming = false;
 
-    // Landscape Editor is a live test-editing mode. The sidebar intentionally
-    // keeps the general game paused while it is open, but team combat still has
-    // to run here so placed allies/enemies can be tested immediately inside the
-    // editor. Plain Editor Mode remains a paused placement camera.
-    if (state.params.landscapeEditorModeEnabled === true) {
+    // Landscape Editor can live-preview NPC combat only when the game is not
+    // paused. When the pause/sidebar state is active, allies and enemies must
+    // stop just like the player and camera. Plain Editor Mode remains a paused
+    // placement camera.
+    if (!state.paused && state.params.landscapeEditorModeEnabled === true) {
       const worldDelta = delta * (Number(state.worldScale) || 1);
       updateNpcTeamCombat(worldDelta, _elapsed);
       [...getEnemies(), ...getAllies()].forEach(npc => {
@@ -345,15 +345,9 @@ export function tick() {
   }
 
   if (state.paused) {
-    // Sidebar-open player mode is paused for the player/camera, but ally-vs-enemy
-    // combat should still be testable from the panel. Run team combat only here
-    // so NPC factions engage each other without enemies damaging or chasing the
-    // paused player.
-    const worldDelta = delta * (Number(state.worldScale) || 1);
-    updateNpcTeamCombat(worldDelta, _elapsed);
-    [...getEnemies(), ...getAllies()].forEach(npc => {
-      if (npc?.group?.position) clampPositionToBuildArea(npc.group.position, npc.radius || 0.4);
-    });
+    // Pause means all actors pause. Do not advance ally/enemy movement, burst
+    // timers, projectiles, shockwaves, or corpse/destruction effects while the
+    // game is paused.
     state.primaryFire = false;
     state.secondaryFire = false;
     updateCameraShake(delta);
