@@ -356,6 +356,16 @@ window.addEventListener('keydown', e => {
 
   if (editorActive && (k === 'q' || k === 'e') && !e.repeat) {
     e.preventDefault();
+    if (state.params.editorPlacementTarget === 'playerSpawn') {
+      const current = Number.isFinite(Number(state.params.editorPlayerSpawnYaw))
+        ? Number(state.params.editorPlayerSpawnYaw)
+        : (Number.isFinite(Number(state.params.playerSpawnYaw)) ? Number(state.params.playerSpawnYaw) : Number(state.params.editorYaw) || 0);
+      const step = k === 'q' ? -Math.PI / 2 : Math.PI / 2;
+      const next = normalizeYaw(current + step);
+      state.params.editorPlayerSpawnYaw = next;
+      if (state.params.playerSpawnEnabled === true) state.params.playerSpawnYaw = next;
+      return;
+    }
     const current = Number(state.params.placerRotationDeg) || 0;
     const step = k === 'q' ? -90 : 90;
     state.params.placerRotationDeg = ((Math.round((current + step) / 90) * 90) % 360 + 360) % 360;

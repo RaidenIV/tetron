@@ -25,6 +25,7 @@ const _lookTarget = new THREE.Vector3();
 let _hudEl = null;
 let _npcGhost = null;
 let _npcGhostKey = '';
+let _playerSpawnMarker = null;
 let _editorWasEnabled = false;
 let _primaryPrev = false;
 let _secondaryPrev = false;
@@ -44,7 +45,7 @@ function numberOr(value, fallback) {
 }
 
 function validTarget(value) {
-  return value === 'enemy' || value === 'ally' || value === 'asset' ? value : 'asset';
+  return value === 'enemy' || value === 'ally' || value === 'asset' || value === 'playerSpawn' ? value : 'asset';
 }
 
 function ensureEditorHud() {
@@ -86,13 +87,14 @@ function editorPlacementLabel() {
   const target = validTarget(state.params.editorPlacementTarget);
   if (target === 'enemy') return `Enemy · ${state.params.enemyType || 'rusher'}`;
   if (target === 'ally') return `Ally · ${state.params.allyType || 'rusher'}`;
+  if (target === 'playerSpawn') return 'Player Spawn';
   return `Asset · ${state.params.placerSelectedAsset || 'box'}`;
 }
 
 function updateHudText() {
   const hud = ensureEditorHud();
   const fly = state.params.editorFlyMode === true ? 'Fly' : 'Grounded';
-  hud.textContent = `EDITOR MODE · ${editorPlacementLabel()} · ${fly} · WASD move · Mouse look · Left place · Right delete · F asset picker · R transform · Q/E rotate · Wheel cycles assets`;
+  hud.textContent = `EDITOR MODE · ${editorPlacementLabel()} · ${fly} · WASD move · Mouse look · Left place · Right delete/clear · F asset picker · R transform · Q/E rotate · Wheel cycles assets`;
 }
 
 function sanitizeEditorParams() {
@@ -111,6 +113,12 @@ function sanitizeEditorParams() {
   p.editorCameraX = numberOr(p.editorCameraX, playerGroup.position.x);
   p.editorCameraY = clamp(numberOr(p.editorCameraY, p.editorEyeHeight), 0.1, 200);
   p.editorCameraZ = numberOr(p.editorCameraZ, playerGroup.position.z + 6);
+  p.editorPlayerSpawnYaw = normalizeYaw(numberOr(p.editorPlayerSpawnYaw, p.playerSpawnYaw ?? p.editorYaw));
+  p.playerSpawnEnabled = p.playerSpawnEnabled === true;
+  p.playerSpawnX = numberOr(p.playerSpawnX, playerGroup.position.x);
+  p.playerSpawnY = Math.max(0, numberOr(p.playerSpawnY, 0));
+  p.playerSpawnZ = numberOr(p.playerSpawnZ, playerGroup.position.z);
+  p.playerSpawnYaw = normalizeYaw(numberOr(p.playerSpawnYaw, p.editorPlayerSpawnYaw));
   if (!Array.isArray(p.editorPlacedNpcs)) p.editorPlacedNpcs = [];
 }
 
@@ -152,6 +160,8 @@ export function setEditorModeEnabled(enabled, options = {}) {
   } else {
     hideNpcGhost();
     setHudVisible(false);
+    setPlayerSpawnMarkerVisible(false);
+    teleportPlayerToSpawn();
     state.primaryFire = false;
     state.secondaryFire = false;
     if (document.pointerLockElement === renderer.domElement) document.exitPointerLock?.();
@@ -241,6 +251,138 @@ export function updateEditorCamera(delta = 1 / 60) {
   updateHudText();
   setHudVisible(!state.paused);
   return true;
+}
+
+
+function createPlayerSpawnMarker() {
+  const group = new THREE.Group();
+  group.name = 'EditorPlayerSpawnMarker';
+  group.renderOrder = 24;
+
+  const cyan = new THREE.Color('#00d9ff');
+  const bodyMat = new THREE.MeshBasicMaterial({
+    color: cyan,
+    transparent: true,
+    opacity: 0.42,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.38, 1.2, 8, 16), bodyMat);
+  body.name = 'PlayerSpawnMarkerBody';
+  body.position.y = 1.0;
+  body.renderOrder = 26;
+  group.add(body);
+
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: cyan,
+    transparent: true,
+    opacity: 0.5,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+  });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.46, 0.55, 72), ringMat);
+  ring.name = 'PlayerSpawnMarkerFootprint';
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.035;
+  ring.renderOrder = 24;
+  group.add(ring);
+
+  const arrowMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.9,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.85, 3), arrowMat);
+  arrow.name = 'PlayerSpawnMarkerFacingArrow';
+  arrow.position.set(0, 0.06, -0.95);
+  arrow.rotation.x = -Math.PI / 2;
+  arrow.renderOrder = 27;
+  group.add(arrow);
+
+  const stemGeo = new THREE.BoxGeometry(0.08, 0.035, 0.95);
+  const stem = new THREE.Mesh(stemGeo, arrowMat.clone());
+  stem.name = 'PlayerSpawnMarkerFacingStem';
+  stem.position.set(0, 0.055, -0.42);
+  stem.renderOrder = 25;
+  group.add(stem);
+
+  scene.add(group);
+  return group;
+}
+
+function ensurePlayerSpawnMarker() {
+  if (!_playerSpawnMarker) _playerSpawnMarker = createPlayerSpawnMarker();
+  return _playerSpawnMarker;
+}
+
+function setPlayerSpawnMarkerVisible(visible) {
+  if (_playerSpawnMarker) _playerSpawnMarker.visible = visible;
+}
+
+function updatePlayerSpawnMarker(position = null, yaw = null, { preview = false } = {}) {
+  const p = state.params;
+  const marker = ensurePlayerSpawnMarker();
+  const x = position ? position.x : p.playerSpawnX;
+  const y = position ? position.y : p.playerSpawnY;
+  const z = position ? position.z : p.playerSpawnZ;
+  marker.position.set(numberOr(x, 0), numberOr(y, 0), numberOr(z, 0));
+  marker.rotation.y = normalizeYaw(numberOr(yaw, p.playerSpawnYaw));
+  marker.visible = true;
+
+  const body = marker.getObjectByName('PlayerSpawnMarkerBody');
+  const ring = marker.getObjectByName('PlayerSpawnMarkerFootprint');
+  const arrow = marker.getObjectByName('PlayerSpawnMarkerFacingArrow');
+  const stem = marker.getObjectByName('PlayerSpawnMarkerFacingStem');
+  const markerOpacity = preview ? 0.28 : 0.5;
+  if (body?.material) body.material.opacity = preview ? 0.3 : 0.42;
+  if (ring?.material) ring.material.opacity = markerOpacity;
+  if (arrow?.material) arrow.material.opacity = preview ? 0.7 : 0.95;
+  if (stem?.material) stem.material.opacity = preview ? 0.45 : 0.78;
+}
+
+export function clearPlayerSpawn() {
+  sanitizeEditorParams();
+  state.params.playerSpawnEnabled = false;
+  setPlayerSpawnMarkerVisible(false);
+  return true;
+}
+
+export function teleportPlayerToSpawn() {
+  sanitizeEditorParams();
+  const p = state.params;
+  if (p.playerSpawnEnabled !== true) return false;
+  const x = numberOr(p.playerSpawnX, playerGroup.position.x);
+  const y = Math.max(0, numberOr(p.playerSpawnY, 0));
+  const z = numberOr(p.playerSpawnZ, playerGroup.position.z);
+  const yaw = normalizeYaw(numberOr(p.playerSpawnYaw, p.thirdAzimuth || 0));
+
+  playerGroup.position.set(x, y, z);
+  p.thirdAzimuth = yaw;
+  p.editorYaw = yaw;
+  p.editorPlayerSpawnYaw = yaw;
+  state.jumpVelocity = 0;
+  state.jumpQueued = false;
+  state.jumpGrounded = true;
+  state.jumpAirJumpsUsed = 0;
+  state.dashTimer = 0;
+  state.dashCooldown = 0;
+  state.dashVX = 0;
+  state.dashVZ = 0;
+  state.lastMoveX = -Math.sin(yaw);
+  state.lastMoveZ = -Math.cos(yaw);
+  return true;
+}
+
+export function refreshPlayerSpawnMarker() {
+  sanitizeEditorParams();
+  if (state.params.playerSpawnEnabled === true) {
+    updatePlayerSpawnMarker(null, state.params.playerSpawnYaw, { preview: false });
+  } else {
+    setPlayerSpawnMarkerVisible(false);
+  }
 }
 
 function snapNpcAxis(v) {
@@ -384,29 +526,90 @@ function currentNpcPlacementData(target, x, z) {
 }
 
 export function updateEditorPlacement() {
-  if (!isEditorModeEnabled() || state.paused) {
+  const editorOn = isEditorModeEnabled();
+  if (!editorOn) {
     hideNpcGhost();
+    setPlayerSpawnMarkerVisible(false);
     _primaryPrev = !!state.primaryFire;
     _secondaryPrev = !!state.secondaryFire;
     return;
   }
 
+  sanitizeEditorParams();
   const target = validTarget(state.params.editorPlacementTarget);
+
+  if (state.paused) {
+    hideNpcGhost();
+    if (state.params.playerSpawnEnabled === true) {
+      updatePlayerSpawnMarker(null, state.params.playerSpawnYaw, { preview: false });
+    } else if (target !== 'playerSpawn') {
+      setPlayerSpawnMarkerVisible(false);
+    }
+    _primaryPrev = !!state.primaryFire;
+    _secondaryPrev = !!state.secondaryFire;
+    return;
+  }
+
   if (target === 'asset') {
     hideNpcGhost();
-    _primaryPrev = !!state.primaryFire;
-    _secondaryPrev = !!state.secondaryFire;
-    return;
-  }
-
-  const removePressed = !!state.secondaryFire && !_secondaryPrev;
-  if (removePressed && removeNpcByAim()) {
+    refreshPlayerSpawnMarker();
     _primaryPrev = !!state.primaryFire;
     _secondaryPrev = !!state.secondaryFire;
     return;
   }
 
   const hit = raycastFloor();
+  const removePressed = !!state.secondaryFire && !_secondaryPrev;
+
+  if (target === 'playerSpawn') {
+    hideNpcGhost();
+
+    if (removePressed) {
+      clearPlayerSpawn();
+      _primaryPrev = !!state.primaryFire;
+      _secondaryPrev = !!state.secondaryFire;
+      return;
+    }
+
+    if (!hit) {
+      if (state.params.playerSpawnEnabled === true) {
+        updatePlayerSpawnMarker(null, state.params.playerSpawnYaw, { preview: false });
+      } else {
+        setPlayerSpawnMarkerVisible(false);
+      }
+      _primaryPrev = !!state.primaryFire;
+      _secondaryPrev = !!state.secondaryFire;
+      return;
+    }
+
+    const sx = snapNpcAxis(_hitPoint.x);
+    const sz = snapNpcAxis(_hitPoint.z);
+    const yaw = normalizeYaw(numberOr(state.params.editorPlayerSpawnYaw, state.params.editorYaw));
+    updatePlayerSpawnMarker({ x: sx, y: 0, z: sz }, yaw, { preview: state.params.playerSpawnEnabled !== true });
+
+    if (state.primaryFire && !_primaryPrev) {
+      state.params.playerSpawnEnabled = true;
+      state.params.playerSpawnX = sx;
+      state.params.playerSpawnY = 0;
+      state.params.playerSpawnZ = sz;
+      state.params.playerSpawnYaw = yaw;
+      state.params.editorPlayerSpawnYaw = yaw;
+      updatePlayerSpawnMarker(null, yaw, { preview: false });
+    }
+
+    _primaryPrev = !!state.primaryFire;
+    _secondaryPrev = !!state.secondaryFire;
+    return;
+  }
+
+  refreshPlayerSpawnMarker();
+
+  if (removePressed && removeNpcByAim()) {
+    _primaryPrev = !!state.primaryFire;
+    _secondaryPrev = !!state.secondaryFire;
+    return;
+  }
+
   if (!hit) {
     hideNpcGhost();
     _primaryPrev = !!state.primaryFire;
