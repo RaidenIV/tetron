@@ -26,6 +26,7 @@ let _hudEl = null;
 let _npcGhost = null;
 let _npcGhostKey = '';
 let _playerSpawnMarker = null;
+const SPAWN_ARROW_TEXTURE_URL = new URL('../assets/spawn_arrow.svg', import.meta.url).href;
 let _editorWasEnabled = false;
 let _primaryPrev = false;
 let _secondaryPrev = false;
@@ -283,9 +284,11 @@ function createPlayerSpawnMarker() {
   const footprint = new THREE.Group();
   footprint.name = 'PlayerSpawnMarkerFootprint';
   footprint.renderOrder = 24;
-  const footprintSize = 1.1;
-  const footprintThickness = 0.04;
-  const footprintY = 0.035;
+  // One grid cell wide: the marker origin is snapped to cell centre (.5),
+  // so +/-0.5 lands exactly on the surrounding grid lines.
+  const footprintSize = 1.0;
+  const footprintThickness = 0.035;
+  const footprintY = 0.045;
   const makeFootprintEdge = (name, width, depth, x, z) => {
     const edge = new THREE.Mesh(
       new THREE.BoxGeometry(width, 0.025, depth),
@@ -302,26 +305,23 @@ function createPlayerSpawnMarker() {
   makeFootprintEdge('PlayerSpawnMarkerFootprintRight', footprintThickness, footprintSize, footprintSize / 2, 0);
   group.add(footprint);
 
+  const arrowTexture = new THREE.TextureLoader().load(SPAWN_ARROW_TEXTURE_URL);
+  if ('colorSpace' in arrowTexture && THREE.SRGBColorSpace) arrowTexture.colorSpace = THREE.SRGBColorSpace;
   const arrowMat = new THREE.MeshBasicMaterial({
+    map: arrowTexture,
     color: 0xffffff,
     transparent: true,
-    opacity: 0.9,
+    opacity: 0.92,
     depthWrite: false,
+    side: THREE.DoubleSide,
     toneMapped: false,
   });
-  const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.85, 3), arrowMat);
+  const arrow = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.95), arrowMat);
   arrow.name = 'PlayerSpawnMarkerFacingArrow';
-  arrow.position.set(0, 0.06, -0.95);
+  arrow.position.set(0, 0.07, -0.88);
   arrow.rotation.x = -Math.PI / 2;
   arrow.renderOrder = 27;
   group.add(arrow);
-
-  const stemGeo = new THREE.BoxGeometry(0.08, 0.035, 0.95);
-  const stem = new THREE.Mesh(stemGeo, arrowMat.clone());
-  stem.name = 'PlayerSpawnMarkerFacingStem';
-  stem.position.set(0, 0.055, -0.42);
-  stem.renderOrder = 25;
-  group.add(stem);
 
   scene.add(group);
   return group;
@@ -362,12 +362,10 @@ function updatePlayerSpawnMarker(position = null, yaw = null, { preview = false 
   const body = marker.getObjectByName('PlayerSpawnMarkerBody');
   const ring = marker.getObjectByName('PlayerSpawnMarkerFootprint');
   const arrow = marker.getObjectByName('PlayerSpawnMarkerFacingArrow');
-  const stem = marker.getObjectByName('PlayerSpawnMarkerFacingStem');
   const markerOpacity = preview ? 0.45 : 0.9;
   if (body?.material) body.material.opacity = preview ? 0.3 : 0.42;
   setMarkerOpacity(ring, markerOpacity);
   if (arrow?.material) arrow.material.opacity = preview ? 0.7 : 0.95;
-  if (stem?.material) stem.material.opacity = preview ? 0.45 : 0.78;
 }
 
 export function clearPlayerSpawn() {
