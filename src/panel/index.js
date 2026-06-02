@@ -17,6 +17,9 @@ import {
   clearPlacedObjects, rebuildPlacedObjects,
   getSelectedPlacedObjectCount, deleteSelectedPlacedObjects,
   clearPlacedObjectSelection, selectAllPlacedObjects,
+  getAvailablePlaceableAssets, selectConnectedPlacedStructureByAim,
+  selectConnectedPlacedStructureFromSelection, duplicateSelectedPlacedObjects,
+  saveSelectedPlacedObjectsAsPrefab, applySelectedPlacedObjectEdits,
 } from '../placer.js';
 import { registerManagedAudio, applyBulletTimeAudioPitch, pauseManagedAudio, resumeManagedAudio } from '../audio.js';
 import { resetWeaponAmmo, resetAllWeaponAmmo, syncWeaponAmmoHud } from '../weapons.js';
@@ -11003,6 +11006,269 @@ function buildAllies(body) {
 }
 
 
+
+function smallInfo(text) {
+  const el = document.createElement('div');
+  el.style.cssText = 'font-size:10px;color:var(--sb-muted);padding:2px 0 8px;line-height:1.5;';
+  el.textContent = text;
+  return el;
+}
+
+function textInputRow(label, key, onChange) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'sb-text-input';
+  input.dataset.paramKey = key;
+  input.value = state.params[key] ?? '';
+  input.spellcheck = false;
+  input.addEventListener('input', () => {
+    state.params[key] = input.value;
+    onChange?.(input.value);
+  });
+  return row(label, input);
+}
+
+function landscapeEditorEnabledChanged(value) {
+  state.params.landscapeEditorModeEnabled = value === true;
+  state.activePreset = 'custom';
+  if (value) {
+    state.params.editorModeEnabled = true;
+    state.params.editorPlacementTarget = 'asset';
+    state.activeSlot = 1;
+    setEditorModeEnabled(true);
+  } else if (state.params.editorModeEnabled === true && state.params.editorPlacementTarget === 'asset') {
+    state.params.editorModeEnabled = false;
+    setEditorModeEnabled(false);
+  }
+  applyAllParams();
+}
+
+function selectedSceneOptions() {
+  const scenes = Array.isArray(state.params.savedScenes) ? state.params.savedScenes : [];
+  if (!scenes.length) return [['', 'No saved scenes']];
+  return scenes.map((scene, index) => [scene.id || String(index), scene.name || `Scene ${index + 1}`]);
+}
+
+const SCENE_KEYS = [
+  'placedObjects', 'editorPlacedNpcs',
+  'playerSpawnEnabled', 'playerSpawnX', 'playerSpawnY', 'playerSpawnZ', 'playerSpawnYaw', 'editorPlayerSpawnYaw',
+  'floorMode', 'buildAreaEnabled', 'buildAreaCenterX', 'buildAreaCenterZ', 'buildAreaWidth', 'buildAreaDepth',
+  'buildAreaAutoExpand', 'buildAreaAutoExpandMargin', 'buildAreaBoundaryVisible', 'buildAreaBoundaryColor',
+  'buildAreaBoundaryWalls', 'buildAreaBoundaryHeight', 'buildAreaBoundaryOpacity', 'buildAreaBoundaryCollision',
+];
+
+function cloneData(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function makeSceneSnapshot(name) {
+  const data = {};
+  for (const key of SCENE_KEYS) data[key] = cloneData(state.params[key]);
+  return {
+    id: `scene_${Date.now().toString(36)}`,
+    name: String(name || '').trim() || `Scene ${(state.params.savedScenes || []).length + 1}`,
+    savedAt: new Date().toISOString(),
+    data,
+  };
+}
+
+function saveCurrentLandscapeScene() {
+  if (!Array.isArray(state.params.savedScenes)) state.params.savedScenes = [];
+  const snapshot = makeSceneSnapshot(state.params.landscapeEditorSceneName);
+  state.params.savedScenes.push(snapshot);
+  state.params.landscapeEditorSelectedSceneId = snapshot.id;
+  state.activePreset = 'custom';
+  return snapshot;
+}
+
+function loadLandscapeSceneById(sceneId) {
+  const scenes = Array.isArray(state.params.savedScenes) ? state.params.savedScenes : [];
+  const sceneData = scenes.find(scene => scene.id === sceneId) || scenes[Number(sceneId)] || null;
+  if (!sceneData?.data) return false;
+  for (const key of SCENE_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(sceneData.data, key)) state.params[key] = cloneData(sceneData.data[key]);
+  }
+  state.activePreset = 'custom';
+  applyAllParams();
+  return true;
+}
+
+function deleteLandscapeSceneById(sceneId) {
+  const scenes = Array.isArray(state.params.savedScenes) ? state.params.savedScenes : [];
+  const before = scenes.length;
+  state.params.savedScenes = scenes.filter((scene, index) => (scene.id || String(index)) !== sceneId);
+  if (state.params.landscapeEditorSelectedSceneId === sceneId) state.params.landscapeEditorSelectedSceneId = '';
+  return before - state.params.savedScenes.length;
+}
+
+function buildSceneSaveLoadControls(body) {
+  body.appendChild(textInputRow('Scene Name', 'landscapeEditorSceneName'));
+  body.appendChild(btn('💾 Save Current Scene', 'sb-btn-accent', () => {
+    const sceneData = saveCurrentLandscapeScene();
+    rebuildPanel();
+    notify(`Saved ${sceneData.name} ✓`);
+  }));
+  body.appendChild(select('Saved Scene', 'landscapeEditorSelectedSceneId', selectedSceneOptions(), () => {}));
+  const sceneButtons = document.createElement('div');
+  sceneButtons.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 10px;';
+  sceneButtons.appendChild(btn('Load Scene', 'sb-btn-accent', () => {
+    if (loadLandscapeSceneById(state.params.landscapeEditorSelectedSceneId)) {
+      rebuildPanel();
+      notify('Scene loaded ✓');
+    } else notify('No saved scene selected');
+  }));
+  sceneButtons.appendChild(btn('Delete Scene', 'sb-btn-muted', () => {
+    const removed = deleteLandscapeSceneById(state.params.landscapeEditorSelectedSceneId);
+    rebuildPanel();
+    notify(removed ? 'Scene deleted ✓' : 'No saved scene selected');
+  }));
+  body.appendChild(sceneButtons);
+}
+
+function buildLandscapeEditor(body) {
+  body.appendChild(subhdr('Landscape Editor Mode'));
+  body.appendChild(smallInfo('A dedicated first-person build mode for level/stronghold layout. It uses the same grid placement workflow, plus structure selection, cloning, saved prefabs, selected-object editing, spawn tools, and saved scenes.'));
+  body.appendChild(toggle('Landscape Editor Mode', 'landscapeEditorModeEnabled', landscapeEditorEnabledChanged));
+  body.appendChild(select('Placement Target', 'editorPlacementTarget', [
+    ['asset', 'Asset / Prefab'],
+    ['enemy', 'Enemy NPC'],
+    ['ally', 'Ally NPC'],
+    ['playerSpawn', 'Player Spawn'],
+  ], value => {
+    state.params.editorPlacementTarget = value;
+    if (state.params.landscapeEditorModeEnabled) {
+      state.params.editorModeEnabled = true;
+      state.activeSlot = 1;
+      setEditorModeEnabled(true);
+    }
+    applyAllParams();
+  }));
+  body.appendChild(toggle('Fly Mode', 'editorFlyMode', applyAllParams));
+  body.appendChild(slider({ key: 'editorMoveSpeed', label: 'Move Speed', min: 0.1, max: 40, step: 0.1, dec: 1, onChange: applyAllParams }));
+  body.appendChild(slider({ key: 'editorFov', label: 'Editor FOV', min: 30, max: 110, step: 1, dec: 0, onChange: applyAllParams }));
+
+  body.appendChild(subhdr('Place Assets'));
+  body.appendChild(assetSelectRow());
+  body.appendChild(colorPicker('New Asset Color', 'placerObjectColor', () => rebuildPlacedObjects()));
+  body.appendChild(slider({ key: 'placerScaleX', label: 'New Width X', min: 0.5, max: 6, step: 0.5, dec: 1, onChange: applyAllParams }));
+  body.appendChild(slider({ key: 'placerScaleY', label: 'New Height Y', min: 0.5, max: 6, step: 0.5, dec: 1, onChange: applyAllParams }));
+  body.appendChild(slider({ key: 'placerScaleZ', label: 'New Depth Z', min: 0.5, max: 6, step: 0.5, dec: 1, onChange: applyAllParams }));
+  body.appendChild(slider({ key: 'placerRotationDeg', label: 'New Rotation', min: 0, max: 270, step: 90, dec: 0, onChange: applyAllParams }));
+
+  body.appendChild(subhdr('Selection / Structures'));
+  const selectedRow = document.createElement('div');
+  selectedRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;font-size:11px;color:var(--sb-muted);letter-spacing:0.06em;';
+  const selectedLabel = document.createElement('span');
+  selectedLabel.textContent = 'Selected Assets';
+  const selectedValue = document.createElement('span');
+  selectedValue.className = 'landscape-selection-count';
+  selectedValue.style.cssText = 'color:var(--sb-text);font-weight:700;';
+  selectedValue.textContent = String(getSelectedPlacedObjectCount());
+  selectedRow.appendChild(selectedLabel);
+  selectedRow.appendChild(selectedValue);
+  body.appendChild(selectedRow);
+
+  const selectButtons = document.createElement('div');
+  selectButtons.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0;';
+  selectButtons.appendChild(btn('Select Structure', 'sb-btn-accent', () => {
+    const count = selectConnectedPlacedStructureByAim() || selectConnectedPlacedStructureFromSelection();
+    selectedValue.textContent = String(getSelectedPlacedObjectCount());
+    notify(count ? `Selected ${count} connected asset${count === 1 ? '' : 's'} ✓` : 'Aim at a placed asset first');
+  }));
+  selectButtons.appendChild(btn('Select All', 'sb-btn-muted', () => {
+    selectAllPlacedObjects();
+    selectedValue.textContent = String(getSelectedPlacedObjectCount());
+    notify('Selected all placed assets ✓');
+  }));
+  selectButtons.appendChild(btn('Clear Selection', 'sb-btn-muted', () => {
+    clearPlacedObjectSelection();
+    selectedValue.textContent = '0';
+    notify('Selection cleared ✓');
+  }));
+  selectButtons.appendChild(btn('Delete Selected', 'sb-btn-muted', () => {
+    const removed = deleteSelectedPlacedObjects();
+    selectedValue.textContent = String(getSelectedPlacedObjectCount());
+    notify(removed ? `Deleted ${removed} selected asset${removed === 1 ? '' : 's'} ✓` : 'No selected assets');
+  }));
+  body.appendChild(selectButtons);
+
+  body.appendChild(subhdr('Clone / Prefab'));
+  body.appendChild(slider({ key: 'landscapeEditorCloneOffsetX', label: 'Clone Offset X', min: -20, max: 20, step: 0.5, dec: 1 }));
+  body.appendChild(slider({ key: 'landscapeEditorCloneOffsetZ', label: 'Clone Offset Z', min: -20, max: 20, step: 0.5, dec: 1 }));
+  const cloneButtons = document.createElement('div');
+  cloneButtons.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0;';
+  cloneButtons.appendChild(btn('Clone Selected', 'sb-btn-accent', () => {
+    const count = duplicateSelectedPlacedObjects(state.params.landscapeEditorCloneOffsetX, state.params.landscapeEditorCloneOffsetZ);
+    selectedValue.textContent = String(getSelectedPlacedObjectCount());
+    notify(count ? `Cloned ${count} asset${count === 1 ? '' : 's'} ✓` : 'No selected assets');
+  }));
+  cloneButtons.appendChild(btn('Clear All Placed', 'sb-btn-muted', () => {
+    clearPlacedObjects();
+    selectedValue.textContent = '0';
+    notify('Placed assets cleared ✓');
+  }));
+  body.appendChild(cloneButtons);
+  body.appendChild(textInputRow('Prefab Name', 'landscapeEditorPrefabName'));
+  body.appendChild(btn('Save Selected As Prefab', 'sb-btn-accent', () => {
+    const prefab = saveSelectedPlacedObjectsAsPrefab(state.params.landscapeEditorPrefabName);
+    if (prefab) {
+      state.activePreset = 'custom';
+      rebuildPanel();
+      notify(`Saved prefab: ${prefab.label} ✓`);
+    } else notify('Select a structure first');
+  }));
+
+  body.appendChild(subhdr('Edit Selected Assets'));
+  body.appendChild(colorPicker('Selected Color', 'landscapeEditorSelectionColor', value => {
+    const count = applySelectedPlacedObjectEdits({ color: value });
+    if (count) notify(`Updated ${count} selected asset${count === 1 ? '' : 's'} ✓`);
+  }));
+  body.appendChild(slider({ key: 'landscapeEditorSelectionScaleX', label: 'Selected Width X', min: 0.5, max: 6, step: 0.5, dec: 1 }));
+  body.appendChild(slider({ key: 'landscapeEditorSelectionScaleY', label: 'Selected Height Y', min: 0.5, max: 6, step: 0.5, dec: 1 }));
+  body.appendChild(slider({ key: 'landscapeEditorSelectionScaleZ', label: 'Selected Depth Z', min: 0.5, max: 6, step: 0.5, dec: 1 }));
+  body.appendChild(slider({ key: 'landscapeEditorSelectionRotationDeg', label: 'Selected Rotation', min: 0, max: 270, step: 90, dec: 0 }));
+  body.appendChild(btn('Apply Transform To Selected', 'sb-btn-accent', () => {
+    const count = applySelectedPlacedObjectEdits({
+      scaleX: state.params.landscapeEditorSelectionScaleX,
+      scaleY: state.params.landscapeEditorSelectionScaleY,
+      scaleZ: state.params.landscapeEditorSelectionScaleZ,
+      rotationDeg: state.params.landscapeEditorSelectionRotationDeg,
+      color: state.params.landscapeEditorSelectionColor,
+    });
+    selectedValue.textContent = String(getSelectedPlacedObjectCount());
+    notify(count ? `Updated ${count} selected asset${count === 1 ? '' : 's'} ✓` : 'No selected assets');
+  }));
+
+  body.appendChild(subhdr('Player Spawn'));
+  body.appendChild(smallInfo('Choose Player Spawn as the placement target, aim at the grid, left-click to place/move it, and use Q/E to rotate the facing arrow.'));
+  body.appendChild(toggle('Use Player Spawn', 'playerSpawnEnabled', value => {
+    state.activePreset = 'custom';
+    if (!value) clearPlayerSpawn();
+    applyAllParams();
+  }));
+  const spawnButtons = document.createElement('div');
+  spawnButtons.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 10px;';
+  spawnButtons.appendChild(btn('Move Player To Spawn', 'sb-btn-accent', () => {
+    if (teleportPlayerToSpawn()) notify('Player moved to spawn ✓');
+    else notify('No player spawn set');
+  }));
+  spawnButtons.appendChild(btn('Clear Spawn', 'sb-btn-muted', () => {
+    clearPlayerSpawn();
+    applyAllParams();
+    rebuildPanel();
+    notify('Player spawn cleared ✓');
+  }));
+  body.appendChild(spawnButtons);
+
+  body.appendChild(subhdr('Saved Scenes'));
+  buildSceneSaveLoadControls(body);
+
+  window.addEventListener('placed-selection-changed', event => {
+    if (!selectedValue.isConnected) return;
+    selectedValue.textContent = String(event.detail?.count ?? getSelectedPlacedObjectCount());
+  });
+}
+
 function buildLandscape(body) {
   body.appendChild(subhdr('Sky & Fog'));
   body.appendChild(colorPicker('Background', 'bgColor', v => {
@@ -11028,7 +11294,7 @@ function buildLandscape(body) {
 
 function assetGroups() {
   const grouped = new Map();
-  ASSET_CATALOGUE.forEach(asset => {
+  getAvailablePlaceableAssets().forEach(asset => {
     const key = asset.category || 'default';
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key).push(asset);
@@ -11167,10 +11433,9 @@ function buildAssets(body) {
 
 
 function buildScenes(body) {
-  const note = document.createElement('div');
-  note.style.cssText = 'padding:8px 4px;font-size:11px;color:var(--sb-muted);line-height:1.5;';
-  note.textContent = 'Scenario configurations will appear here.';
-  body.appendChild(note);
+  body.appendChild(subhdr('Saved Player Scenes'));
+  body.appendChild(smallInfo('Save the current playable layout, then load it later from player mode or Landscape Editor. Scene data includes placed assets, editor-placed NPCs, player spawn point, and build-area settings.'));
+  buildSceneSaveLoadControls(body);
 }
 
 
@@ -11276,6 +11541,8 @@ function applyParamObject(params) {
     const spec = weaponSpecForType(state.params.playerWeaponType);
     state.params[weaponReticleOpacityKey(spec)] = incoming.reticleOpacity;
   }
+  if (!Array.isArray(state.params.savedPrefabs)) state.params.savedPrefabs = [];
+  if (!Array.isArray(state.params.savedScenes)) state.params.savedScenes = [];
   resetAllWeaponAmmo();
 }
 
@@ -11585,6 +11852,20 @@ function applyAllParams() {
   p.playerSpawnZ = Number.isFinite(Number(p.playerSpawnZ)) ? Number(p.playerSpawnZ) : 0;
   p.playerSpawnYaw = snapSpawnYaw(Number.isFinite(Number(p.playerSpawnYaw)) ? Number(p.playerSpawnYaw) : p.editorPlayerSpawnYaw);
   if (!Array.isArray(p.editorPlacedNpcs)) p.editorPlacedNpcs = [];
+  p.landscapeEditorModeEnabled = p.landscapeEditorModeEnabled === true;
+  p.landscapeEditorCloneOffsetX = Math.min(20, Math.max(-20, Number(p.landscapeEditorCloneOffsetX) || 1));
+  p.landscapeEditorCloneOffsetZ = Math.min(20, Math.max(-20, Number(p.landscapeEditorCloneOffsetZ) || 1));
+  p.landscapeEditorSelectionColor = /^#[0-9a-fA-F]{6}$/.test(String(p.landscapeEditorSelectionColor || '')) ? p.landscapeEditorSelectionColor : '#445566';
+  const landscapeScale = value => Math.min(6, Math.max(0.5, Math.round((Number(value) || 1) * 2) / 2));
+  p.landscapeEditorSelectionScaleX = landscapeScale(p.landscapeEditorSelectionScaleX);
+  p.landscapeEditorSelectionScaleY = landscapeScale(p.landscapeEditorSelectionScaleY);
+  p.landscapeEditorSelectionScaleZ = landscapeScale(p.landscapeEditorSelectionScaleZ);
+  p.landscapeEditorSelectionRotationDeg = ((Math.round((Number(p.landscapeEditorSelectionRotationDeg) || 0) / 90) * 90) % 360 + 360) % 360;
+  p.landscapeEditorPrefabName = typeof p.landscapeEditorPrefabName === 'string' ? p.landscapeEditorPrefabName : 'Saved Structure';
+  p.landscapeEditorSceneName = typeof p.landscapeEditorSceneName === 'string' ? p.landscapeEditorSceneName : 'Scene 1';
+  p.landscapeEditorSelectedSceneId = typeof p.landscapeEditorSelectedSceneId === 'string' ? p.landscapeEditorSelectedSceneId : '';
+  if (!Array.isArray(p.savedPrefabs)) p.savedPrefabs = [];
+  if (!Array.isArray(p.savedScenes)) p.savedScenes = [];
   if (!('soundSfx_jump' in p)) p.soundSfx_jump = 1;
   if (!('soundSfx_reload' in p)) p.soundSfx_reload = 1;
   if (!('soundSfx_pistol_reload' in p)) p.soundSfx_pistol_reload = 1;
@@ -11801,6 +12082,7 @@ function rebuildPanel() {
     [ICON_WEAPONS, 'Weapons', buildWeapons],
     [ICON_SOUND, 'Sound', buildSound],
     [ICON_CONTROLLER, 'Controller', buildController],
+    [ICON_LANDSCAPE, 'Landscape Editor', buildLandscapeEditor],
     [ICON_LANDSCAPE, 'Landscape', buildLandscape],
     [ICON_ASSETS, 'Assets', buildAssets],
     [ICON_SCENARIOS, 'Scenes', buildScenes],

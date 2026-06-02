@@ -9400,5 +9400,18 @@
   "playerSpawnY": 0,
   "playerSpawnZ": 0,
   "playerSpawnYaw": 3.141592653589793,
-  "editorPlayerSpawnYaw": 3.141592653589793
+  "editorPlayerSpawnYaw": 3.141592653589793,
+  "landscapeEditorModeEnabled": false,
+  "landscapeEditorCloneOffsetX": 1,
+  "landscapeEditorCloneOffsetZ": 1,
+  "landscapeEditorSelectionColor": "#445566",
+  "landscapeEditorSelectionScaleX": 1,
+  "landscapeEditorSelectionScaleY": 1,
+  "landscapeEditorSelectionScaleZ": 1,
+  "landscapeEditorSelectionRotationDeg": 0,
+  "landscapeEditorPrefabName": "Saved Structure",
+  "landscapeEditorSceneName": "Scene 1",
+  "landscapeEditorSelectedSceneId": "",
+  "savedPrefabs": [],
+  "savedScenes": []
 }

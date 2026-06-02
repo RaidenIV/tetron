@@ -280,6 +280,17 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
 }
 .sb-select:focus { outline: none; border-color: var(--sb-accent); }
 
+.sb-text-input {
+  width: 100%;
+  background: #161b22;
+  border: 1px solid #30363d;
+  color: var(--sb-text);
+  font-size: 11px;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+.sb-text-input:focus { outline: none; border-color: var(--sb-accent); }
+
 #fps-overlay {
   position: fixed; top: 12px; left: 12px;
   color: #ffffff; background: #000000;

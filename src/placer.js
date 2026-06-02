@@ -68,8 +68,75 @@ function playObjectExplosionSound(sourcePosition = null) {
 }
 
 
+function sanitizeRuntimePrefab(prefab, index = 0) {
+  if (!prefab || typeof prefab !== 'object') return null;
+  const rawItems = Array.isArray(prefab.prefabItems) ? prefab.prefabItems : [];
+  const items = rawItems
+    .map(item => ({
+      assetId: typeof item?.assetId === 'string' ? item.assetId : 'box',
+      x: Number(item?.x) || 0,
+      y: Number.isFinite(Number(item?.y)) ? Number(item.y) : undefined,
+      z: Number(item?.z) || 0,
+      ry: Number(item?.ry) || 0,
+      scaleX: normalizeScaleValue(item?.scaleX ?? 1),
+      scaleY: normalizeScaleValue(item?.scaleY ?? 1),
+      scaleZ: normalizeScaleValue(item?.scaleZ ?? 1),
+      color: normalizeHexColor(item?.color) || undefined,
+    }))
+    .filter(item => item.assetId);
+  if (!items.length) return null;
+
+  const id = typeof prefab.id === 'string' && prefab.id.trim()
+    ? prefab.id.trim()
+    : `landscape_prefab_${index + 1}`;
+  const label = typeof prefab.label === 'string' && prefab.label.trim()
+    ? prefab.label.trim()
+    : `Saved Structure ${index + 1}`;
+
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const item of items) {
+    const itemAsset = ASSET_CATALOGUE.find(a => a.id === item.assetId) || ASSET_CATALOGUE[0];
+    const scaleX = normalizeScaleValue(item.scaleX ?? 1);
+    const scaleZ = normalizeScaleValue(item.scaleZ ?? 1);
+    const baseFw = Math.max(0.25, Number(itemAsset?.footprintW ?? 1) * scaleX);
+    const baseFh = Math.max(0.25, Number(itemAsset?.footprintH ?? 1) * scaleZ);
+    const rotSteps = Math.round((((Number(item.ry) || 0) % (Math.PI * 2)) + Math.PI * 2) / (Math.PI / 2)) % 4;
+    const fp = rotSteps === 1 || rotSteps === 3
+      ? { fw: baseFh, fh: baseFw }
+      : { fw: baseFw, fh: baseFh };
+    minX = Math.min(minX, item.x - fp.fw / 2);
+    maxX = Math.max(maxX, item.x + fp.fw / 2);
+    minZ = Math.min(minZ, item.z - fp.fh / 2);
+    maxZ = Math.max(maxZ, item.z + fp.fh / 2);
+    if (!Number.isFinite(Number(item.y))) item.y = Number(itemAsset?.yOffset ?? 0.5) * normalizeScaleValue(item.scaleY);
+  }
+
+  return {
+    id,
+    label,
+    category: 'prefab',
+    color: 0x445566,
+    yOffset: 0,
+    footprintW: Math.max(1, Math.ceil(maxX - minX)),
+    footprintH: Math.max(1, Math.ceil(maxZ - minZ)),
+    prefab: true,
+    prefabItems: items,
+  };
+}
+
+function getRuntimeLandscapePrefabs() {
+  if (!Array.isArray(state.params.savedPrefabs)) state.params.savedPrefabs = [];
+  return state.params.savedPrefabs
+    .map((prefab, index) => sanitizeRuntimePrefab(prefab, index))
+    .filter(Boolean);
+}
+
+export function getAvailablePlaceableAssets() {
+  return [...ASSET_CATALOGUE, ...getRuntimeLandscapePrefabs()];
+}
+
 function getAsset(id) {
-  return ASSET_CATALOGUE.find(a => a.id === id) || ASSET_CATALOGUE[0];
+  return getAvailablePlaceableAssets().find(a => a.id === id) || ASSET_CATALOGUE[0];
 }
 
 function isPrefabAsset(asset) {
@@ -788,9 +855,167 @@ export function deleteSelectedPlacedObjects() {
   return before - state.params.placedObjects.length;
 }
 
+function selectedPlacedObjects() {
+  ensurePlacedObjectMetadata();
+  const selected = new Set(state.selectedPlacedObjectIds || []);
+  return (state.params.placedObjects || []).filter(obj => obj?.objectId && selected.has(obj.objectId));
+}
+
+function rangesTouchOrOverlap(minA, maxA, minB, maxB, tolerance = 0.035) {
+  return minA <= maxB + tolerance && maxA >= minB - tolerance;
+}
+
+function objectsAreConnected(a, b) {
+  if (!a || !b || a === b) return false;
+  if (a.groupId && b.groupId && a.groupId === b.groupId) return true;
+  const ab = placedObjectBounds(a);
+  const bb = placedObjectBounds(b);
+  const t = 0.035;
+  const xOverlap = rangesTouchOrOverlap(ab.minX, ab.maxX, bb.minX, bb.maxX, t);
+  const yOverlap = rangesTouchOrOverlap(ab.minY, ab.maxY, bb.minY, bb.maxY, t);
+  const zOverlap = rangesTouchOrOverlap(ab.minZ, ab.maxZ, bb.minZ, bb.maxZ, t);
+  const xTouch = Math.abs(ab.maxX - bb.minX) <= t || Math.abs(bb.maxX - ab.minX) <= t;
+  const yTouch = Math.abs(ab.maxY - bb.minY) <= t || Math.abs(bb.maxY - ab.minY) <= t;
+  const zTouch = Math.abs(ab.maxZ - bb.minZ) <= t || Math.abs(bb.maxZ - ab.minZ) <= t;
+  return (xTouch && yOverlap && zOverlap)
+    || (zTouch && xOverlap && yOverlap)
+    || (yTouch && xOverlap && zOverlap)
+    || (xOverlap && yOverlap && zOverlap);
+}
+
+function connectedStructureFromSeed(seed) {
+  const list = state.params.placedObjects || [];
+  if (!seed) return [];
+  const result = [];
+  const queue = [seed];
+  const seen = new Set();
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current?.objectId || seen.has(current.objectId)) continue;
+    seen.add(current.objectId);
+    result.push(current);
+    for (const other of list) {
+      if (!other?.objectId || seen.has(other.objectId)) continue;
+      if (objectsAreConnected(current, other)) queue.push(other);
+    }
+  }
+  return result;
+}
+
+export function selectConnectedPlacedStructureByAim() {
+  camera.updateMatrixWorld(true);
+  _raycaster.setFromCamera(_ndc, camera);
+  const hits = _raycaster.intersectObjects(_placedMeshes, false);
+  if (!hits.length) return 0;
+  ensurePlacedObjectMetadata();
+  const seed = hits[0].object.userData?.placedObject;
+  const connected = connectedStructureFromSeed(seed);
+  state.selectedPlacedObjectIds = connected.map(obj => obj.objectId).filter(Boolean);
+  rebuildSelectionHelpers();
+  notifySelectionChanged();
+  return state.selectedPlacedObjectIds.length;
+}
+
+export function selectConnectedPlacedStructureFromSelection() {
+  ensurePlacedObjectMetadata();
+  const first = selectedPlacedObjects()[0];
+  if (!first) return 0;
+  const connected = connectedStructureFromSeed(first);
+  state.selectedPlacedObjectIds = connected.map(obj => obj.objectId).filter(Boolean);
+  rebuildSelectionHelpers();
+  notifySelectionChanged();
+  return state.selectedPlacedObjectIds.length;
+}
+
+export function duplicateSelectedPlacedObjects(offsetX = 1, offsetZ = 1) {
+  const selected = selectedPlacedObjects();
+  if (!selected.length) return 0;
+  const dx = Number.isFinite(Number(offsetX)) ? Number(offsetX) : 1;
+  const dz = Number.isFinite(Number(offsetZ)) ? Number(offsetZ) : 1;
+  const groupMap = new Map();
+  const clones = selected.map(obj => {
+    const clone = JSON.parse(JSON.stringify(obj));
+    clone.objectId = nextPlacedObjectId('placed_clone');
+    clone.x = (Number(clone.x) || 0) + dx;
+    clone.z = (Number(clone.z) || 0) + dz;
+    if (clone.groupId) {
+      if (!groupMap.has(clone.groupId)) groupMap.set(clone.groupId, nextPrefabGroupId());
+      clone.groupId = groupMap.get(clone.groupId);
+    }
+    return clone;
+  });
+  state.params.placedObjects = [...(state.params.placedObjects || []), ...clones];
+  state.selectedPlacedObjectIds = clones.map(obj => obj.objectId);
+  rebuildPlacedObjects();
+  notifySelectionChanged();
+  return clones.length;
+}
+
+export function applySelectedPlacedObjectEdits(edits = {}) {
+  const selected = selectedPlacedObjects();
+  if (!selected.length) return 0;
+  const nextColor = normalizeHexColor(edits.color);
+  const hasScaleX = Number.isFinite(Number(edits.scaleX));
+  const hasScaleY = Number.isFinite(Number(edits.scaleY));
+  const hasScaleZ = Number.isFinite(Number(edits.scaleZ));
+  const hasRot = Number.isFinite(Number(edits.rotationDeg));
+  for (const obj of selected) {
+    const asset = getAsset(obj.assetId);
+    const oldScale = getPlacedScale(obj);
+    const baseY = (Number(obj.y) || 0) - Number(asset?.yOffset ?? 0.5) * oldScale.y;
+    if (nextColor) obj.color = nextColor;
+    if (hasScaleX) obj.scaleX = normalizeScaleValue(edits.scaleX);
+    if (hasScaleY) obj.scaleY = normalizeScaleValue(edits.scaleY);
+    if (hasScaleZ) obj.scaleZ = normalizeScaleValue(edits.scaleZ);
+    if (hasRot) obj.ry = THREE.MathUtils.degToRad(normalizeRotationDegrees(edits.rotationDeg));
+    const nextScale = getPlacedScale(obj);
+    if (hasScaleY) obj.y = baseY + Number(asset?.yOffset ?? 0.5) * nextScale.y;
+  }
+  rebuildPlacedObjects();
+  return selected.length;
+}
+
+export function saveSelectedPlacedObjectsAsPrefab(label = '') {
+  const selected = selectedPlacedObjects();
+  if (!selected.length) return null;
+  const bounds = selected.map(obj => placedObjectBounds(obj));
+  const minX = Math.min(...bounds.map(b => b.minX));
+  const maxX = Math.max(...bounds.map(b => b.maxX));
+  const minZ = Math.min(...bounds.map(b => b.minZ));
+  const maxZ = Math.max(...bounds.map(b => b.maxZ));
+  const centerX = Math.round(((minX + maxX) / 2) * 2) / 2;
+  const centerZ = Math.round(((minZ + maxZ) / 2) * 2) / 2;
+  const id = `landscape_prefab_${Date.now().toString(36)}`;
+  const cleanLabel = String(label || '').trim() || `Saved Structure ${(state.params.savedPrefabs || []).length + 1}`;
+  const prefab = {
+    id,
+    label: cleanLabel,
+    footprintW: Math.max(1, Math.ceil(maxX - minX)),
+    footprintH: Math.max(1, Math.ceil(maxZ - minZ)),
+    prefabItems: selected.map(obj => ({
+      assetId: obj.assetId,
+      x: Math.round(((Number(obj.x) || 0) - centerX) * 1000) / 1000,
+      y: Number.isFinite(Number(obj.y)) ? Number(obj.y) : undefined,
+      z: Math.round(((Number(obj.z) || 0) - centerZ) * 1000) / 1000,
+      ry: Number(obj.ry) || 0,
+      scaleX: normalizeScaleValue(obj.scaleX ?? 1),
+      scaleY: normalizeScaleValue(obj.scaleY ?? 1),
+      scaleZ: normalizeScaleValue(obj.scaleZ ?? 1),
+      color: normalizeHexColor(obj.color) || undefined,
+    })),
+  };
+  if (!Array.isArray(state.params.savedPrefabs)) state.params.savedPrefabs = [];
+  state.params.savedPrefabs.push(prefab);
+  state.params.placerSelectedAsset = id;
+  return prefab;
+}
+
 window.__deleteSelectedPlacedObjects = deleteSelectedPlacedObjects;
 window.__clearPlacedObjectSelection = clearPlacedObjectSelection;
 window.__selectAllPlacedObjects = selectAllPlacedObjects;
+window.__selectConnectedPlacedStructureByAim = selectConnectedPlacedStructureByAim;
+window.__duplicateSelectedPlacedObjects = duplicateSelectedPlacedObjects;
+window.__saveSelectedPlacedObjectsAsPrefab = saveSelectedPlacedObjectsAsPrefab;
 
 function removePlacedObjectAtFootprint(sx, sz, assetId, ry, scaleSource = null) {
   const asset = getAsset(assetId);
