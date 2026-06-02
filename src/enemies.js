@@ -96,6 +96,98 @@ const _npcRifleMat = new THREE.MeshStandardMaterial({
   metalness: 0.55,
   roughness: 0.38,
 });
+const _awarenessCircleGeo = new THREE.CircleGeometry(1, 128);
+const AWARENESS_RING_Y = 0.035;
+
+function normalizeHexSetting(value, fallback) {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim() : fallback;
+}
+
+function getNpcBodyHeight(npc) {
+  const size = Math.max(0.1, Number(npc?.sizeMult) || 1);
+  return (BASE_LENGTH + BASE_RADIUS * 2) * size;
+}
+
+function distanceToVerticalBody(point, centerX, centerZ, minY, maxY, radius) {
+  const px = Number(point?.x) || 0;
+  const py = Number(point?.y) || 0;
+  const pz = Number(point?.z) || 0;
+  const horizontal = Math.max(0, Math.hypot(px - centerX, pz - centerZ) - Math.max(0.001, radius));
+  const clampedY = clamp(py, minY, maxY);
+  return Math.hypot(horizontal, py - clampedY);
+}
+
+function distanceToNpcBody(point, npc) {
+  if (!npc?.group) return Infinity;
+  const radius = Math.max(0.1, Number(npc.radius) || BASE_RADIUS);
+  const minY = Number(npc.group.position.y) || 0;
+  const maxY = minY + getNpcBodyHeight(npc);
+  return distanceToVerticalBody(point, npc.group.position.x, npc.group.position.z, minY, maxY, radius);
+}
+
+function pointHitsNpcBody(point, hitRadius, npc) {
+  return distanceToNpcBody(point, npc) <= Math.max(0.001, Number(hitRadius) || 0);
+}
+
+function distanceToPlayerBody(point) {
+  const radius = Math.max(0.25, Number(state.params.playerRadius) || 0.4);
+  const length = Math.max(0.1, Number(state.params.playerLength) || 1.2);
+  const minY = Number(playerGroup.position.y) || 0;
+  const maxY = minY + length + radius * 2;
+  return distanceToVerticalBody(point, playerGroup.position.x, playerGroup.position.z, minY, maxY, radius);
+}
+
+function pointHitsPlayerBody(point, hitRadius) {
+  return distanceToPlayerBody(point) <= Math.max(0.001, Number(hitRadius) || 0);
+}
+
+function getAwarenessSettings(npc) {
+  const ally = npc?.isAlly === true;
+  return {
+    visible: state.params[ally ? 'allyAwarenessVisible' : 'enemyAwarenessVisible'] === true,
+    range: Math.max(1, Number(state.params[ally ? 'allyAwarenessRange' : 'enemyAwarenessRange']) || 40),
+    color: normalizeHexSetting(state.params[ally ? 'allyAwarenessColor' : 'enemyAwarenessColor'], ally ? '#00cc44' : '#ff3030'),
+    opacity: clamp(Number(state.params[ally ? 'allyAwarenessOpacity' : 'enemyAwarenessOpacity']) || 0, 0, 1),
+  };
+}
+
+function ensureAwarenessRing(npc) {
+  if (!npc?.group) return null;
+  if (!npc._awarenessRing) {
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      depthTest: true,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+    });
+    const ring = new THREE.Mesh(_awarenessCircleGeo, material);
+    ring.name = npc.isAlly ? 'AllyAwarenessRangeFloorCircle' : 'EnemyAwarenessRangeFloorCircle';
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(npc.group.position.x, AWARENESS_RING_Y, npc.group.position.z);
+    ring.renderOrder = 1;
+    ring.visible = false;
+    scene.add(ring);
+    npc._awarenessRing = ring;
+  }
+  return npc._awarenessRing;
+}
+
+function updateNpcAwarenessRing(npc) {
+  const ring = ensureAwarenessRing(npc);
+  if (!ring) return;
+  const cfg = getAwarenessSettings(npc);
+  ring.visible = cfg.visible && cfg.opacity > 0;
+  ring.position.set(npc.group.position.x, AWARENESS_RING_Y, npc.group.position.z);
+  ring.rotation.set(-Math.PI / 2, 0, 0);
+  ring.scale.set(cfg.range, cfg.range, 1);
+  if (!ring.visible) return;
+  ring.material.color.set(cfg.color);
+  ring.material.opacity = cfg.opacity;
+  ring.material.needsUpdate = true;
+}
 
 function playEnemyGruntSound(sourcePosition = null) {
   const fallback = Number(state.params.soundSfx_standard_hit ?? 1);
@@ -871,6 +963,7 @@ function makeEnemy(type, position, index = 0, options = {}) {
   if (!enemy.isAlly) makeTagMarker(enemy);
   makeNpcHealthBar(enemy);
   makeNpcRifleVisual(enemy);
+  updateNpcAwarenessRing(enemy);
   return enemy;
 }
 
@@ -884,8 +977,10 @@ function disposeEnemy(enemy) {
     enemy._healthBarEl.style.opacity = '0';
     enemy._healthBarEl.style.display = 'none';
   }
+  if (enemy._awarenessRing) scene.remove(enemy._awarenessRing);
   scene.remove(enemy.group);
   enemy.material?.dispose?.();
+  if (enemy._awarenessRing?.material) enemy._awarenessRing.material.dispose?.();
 }
 
 function disposeEnemyBullet(bullet) {
@@ -1577,10 +1672,7 @@ export function damageEnemiesAt(position, radius = 0.45, amount = 34) {
   const targets = getDamageableNpcs({ includeAllies: isAllyFriendlyFireEnabled() });
   for (let i = targets.length - 1; i >= 0; i--) {
     const enemy = targets[i];
-    const hitRadius = Math.max(0.45, enemy.radius + radius);
-    _tmpVec.copy(enemy.group.position);
-    _tmpVec.y = enemy.mesh.position.y;
-    if (_tmpVec.distanceTo(position) <= hitRadius) {
+    if (pointHitsNpcBody(position, radius, enemy)) {
       const willDamage = Math.max(0, Number(amount) || 0) > 0;
       const killed = willDamage ? damageEnemy(enemy, amount) === true : false;
       return { hit: true, killed, target: enemy };
@@ -1598,11 +1690,8 @@ export function damageEnemiesInRadius(position, radius = 1, amount = 34, falloff
   const targets = getDamageableNpcs({ includeAllies: isAllyFriendlyFireEnabled() });
   for (let i = targets.length - 1; i >= 0; i--) {
     const enemy = targets[i];
-    const enemyRadius = Math.max(0.35, enemy.radius || 0.4);
-    _tmpVec.copy(enemy.group.position);
-    _tmpVec.y = enemy.mesh.position.y;
-    const distance = _tmpVec.distanceTo(position);
-    if (distance > maxRadius + enemyRadius) continue;
+    const distance = distanceToNpcBody(position, enemy);
+    if (distance > maxRadius) continue;
     const normalized = clamp(distance / maxRadius, 0, 1);
     const damage = baseDamage * (1 - Math.pow(normalized, falloffPower));
     killed = damageEnemy(enemy, Math.max(1, damage)) === true || killed;
@@ -1645,9 +1734,8 @@ function applyExplosionSplashDamage() {
     const hitSet = new Set(hitNpcIds);
 
     if (!event.hitPlayer) {
-      const playerRadius = Math.max(0.25, Number(state.params.playerRadius) || 0.4);
-      const playerDistance = getExplosionSplashDistance(event, playerGroup.position);
-      if (playerDistance <= radius + playerRadius) {
+      const playerDistance = distanceToPlayerBody(event);
+      if (playerDistance <= radius) {
         event.hitPlayer = true;
         applyPlayerDamage(getExplosionSplashDamage(event, playerDistance));
       }
@@ -1659,8 +1747,8 @@ function applyExplosionSplashDamage() {
       const id = enemy.group?.uuid;
       if (!id || hitSet.has(id)) continue;
 
-      const enemyDistance = getExplosionSplashDistance(event, enemy.group.position);
-      if (enemyDistance <= radius + Math.max(0.45, enemy.radius || 0)) {
+      const enemyDistance = distanceToNpcBody(event, enemy);
+      if (enemyDistance <= radius) {
         hitSet.add(id);
         hitNpcIds.push(id);
         const killed = damageEnemy(enemy, getExplosionSplashDamage(event, enemyDistance)) === true;
@@ -1821,10 +1909,7 @@ function removeNpcProjectileAt(index) {
 }
 
 function damagePlayerAt(position, radius, amount) {
-  const playerRadius = Math.max(0.35, Number(state.params.playerRadius) || 0.4);
-  _tmpVec.copy(playerGroup.position);
-  _tmpVec.y += Math.max(0.55, playerRadius + 0.35);
-  if (_tmpVec.distanceTo(position) <= radius + playerRadius) applyPlayerDamage(amount);
+  if (distanceToPlayerBody(position) <= Math.max(0.001, Number(radius) || 0)) applyPlayerDamage(amount);
 }
 
 function explodeNpcProjectile(bullet) {
@@ -1835,32 +1920,24 @@ function explodeNpcProjectile(bullet) {
   const falloff = clamp(Number(shockwave.splashFalloff) || 1, 0.1, 4);
   const minFactor = clamp(Number(shockwave.splashMinFactor) || 0, 0, 1);
 
-  const applyFalloffDamage = (targetPosition, targetRadius = 0.4) => {
-    const distance = position.distanceTo(targetPosition);
-    if (distance > radius + targetRadius) return 0;
+  const falloffDamageFromDistance = (distance) => {
+    if (distance > radius) return 0;
     const normalized = clamp(distance / Math.max(0.001, radius), 0, 1);
     return damage * Math.max(minFactor, 1 - Math.pow(normalized, falloff));
   };
 
   if (bullet.ownerTeam === 'enemy') {
-    const playerRadius = Math.max(0.35, Number(state.params.playerRadius) || 0.4);
-    _tmpVec.copy(playerGroup.position);
-    _tmpVec.y += Math.max(0.55, playerRadius + 0.35);
-    const playerDamage = applyFalloffDamage(_tmpVec, playerRadius);
+    const playerDamage = falloffDamageFromDistance(distanceToPlayerBody(position));
     if (playerDamage > 0) applyPlayerDamage(playerDamage);
     allies.forEach(target => {
       if (!target?.group) return;
-      _tmpVec.copy(target.group.position);
-      _tmpVec.y = target.mesh.position.y;
-      const amount = applyFalloffDamage(_tmpVec, Math.max(0.35, target.radius || 0.4));
+      const amount = falloffDamageFromDistance(distanceToNpcBody(position, target));
       if (amount > 0) damageEnemy(target, amount);
     });
   } else {
     enemies.forEach(target => {
       if (!target?.group) return;
-      _tmpVec.copy(target.group.position);
-      _tmpVec.y = target.mesh.position.y;
-      const amount = applyFalloffDamage(_tmpVec, Math.max(0.35, target.radius || 0.4));
+      const amount = falloffDamageFromDistance(distanceToNpcBody(position, target));
       if (amount > 0) damageEnemy(target, amount);
     });
   }
@@ -1947,8 +2024,6 @@ function updateEnemyShooting(enemy, delta, targetNpc = null) {
 }
 
 function updateEnemyBullets(delta) {
-  const playerRadius = Math.max(0.35, Number(state.params.playerRadius) || 0.4);
-  const playerHitRadius = playerRadius + 0.18;
   for (let i = enemyBullets.length - 1; i >= 0; i--) {
     const bullet = enemyBullets[i];
     bullet.life -= delta;
@@ -1982,9 +2057,7 @@ function updateEnemyBullets(delta) {
     }
 
     if ((bullet.targetTeam || 'player') === 'player') {
-      _tmpVec.copy(playerGroup.position);
-      _tmpVec.y += Math.max(0.55, playerRadius + 0.35);
-      if (bullet.mesh.position.distanceTo(_tmpVec) <= playerHitRadius + Math.max(0, bullet.radius || 0)) {
+      if (pointHitsPlayerBody(bullet.mesh.position, Math.max(0.08, Number(bullet.radius) || 0.08))) {
         if (bullet.explosive) explodeNpcProjectile(bullet);
         else applyPlayerDamage(bullet.damage);
         removeNpcProjectileAt(i);
@@ -1996,10 +2069,7 @@ function updateEnemyBullets(delta) {
       for (let t = targets.length - 1; t >= 0; t--) {
         const target = targets[t];
         if (!target?.group) continue;
-        _tmpVec.copy(target.group.position);
-        _tmpVec.y = target.mesh.position.y;
-        const hitRadius = Math.max(0.22, target.radius || 0.4) + 0.18 + Math.max(0, bullet.radius || 0);
-        if (bullet.mesh.position.distanceTo(_tmpVec) <= hitRadius) {
+        if (pointHitsNpcBody(bullet.mesh.position, Math.max(0.08, Number(bullet.radius) || 0.08), target)) {
           if (bullet.explosive) explodeNpcProjectile(bullet);
           else damageEnemy(target, bullet.damage);
           removeNpcProjectileAt(i);
@@ -2119,6 +2189,7 @@ function updateAllies(delta, elapsedTime = 0) {
     const ally = allies[i];
     const target = findNearestOpponent(ally);
     updateAllyMovement(ally, delta, elapsedTime, i, target);
+    updateNpcAwarenessRing(ally);
     updateEnemyShooting(ally, delta, target);
     updateContactDamage(ally, delta, target);
   }
@@ -2138,6 +2209,7 @@ export function updateEnemies(delta, elapsedTime = 0) {
     enemy.spawnFlashTimer = Math.max(0, enemy.spawnFlashTimer - delta);
     const target = findNearestOpponent(enemy);
     updateEnemyMovement(enemy, delta, target);
+    updateNpcAwarenessRing(enemy);
 
     const lookPos = target?.group?.position || playerGroup.position;
     const dx = lookPos.x - enemy.group.position.x;
