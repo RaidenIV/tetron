@@ -601,7 +601,7 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
 }
 .hit-marker.hit-marker-armor { color: #59d7ff; }
 .hit-marker.hit-marker-critical { color: #ffb23c; }
-.hit-marker.is-active { animation: hit-marker-flash var(--hit-marker-duration) ease-out both; }
+.hit-marker.is-active { display: block; animation: hit-marker-flash var(--hit-marker-duration) ease-out both; }
 .kill-confirmation {
   --kill-confirm-color: #ffffff;
   --kill-confirm-size: 64px;
