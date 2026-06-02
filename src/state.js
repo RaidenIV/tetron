@@ -8,7 +8,7 @@ export const state = {
   slowTimer: 0,
   slowScale: 0.35,
   slowRequested: false,
-  activePreset: 'g34',
+  activePreset: 'g35',
   mouseLookActive: false,
   isAiming: false,          // true while right-mouse / L2 held
   activeSlot: 0,            // 0 = laser, 1 = object placer
@@ -60,7 +60,7 @@ export const state = {
       "third2BodyFrameHeight": 1.35,
       "third2BodyScreenY": 0.45,
       "third2MinEyeHeight": 0.15,
-      "thirdAzimuth": 3.977926535896671,
+      "thirdAzimuth": 0.4025559215376209,
       "thirdLookAhead": 3.8,
       "thirdSmoothPos": 10,
       "thirdSmoothLook": 12,
@@ -72,7 +72,7 @@ export const state = {
       "aimSmooth": 10,
       "thirdMouseSensitivityX": 0.003,
       "thirdMouseSensitivityY": 0.0024,
-      "thirdPitch": -0.25400000000000017,
+      "thirdPitch": -0.26839999999999997,
       "thirdOffsetMode": "parallel",
       "thirdOffsetX": 1.25,
       "thirdOffsetY": -0.25,
@@ -720,11 +720,15 @@ export const state = {
       "enemyAwarenessColor": "#ff3030",
       "enemyAwarenessOpacity": 0.18,
       "allyAwarenessVisible": true,
-      "allyAwarenessColor": "#b3b3b3",
-      "allyAwarenessOpacity": 0.07,
+      "allyAwarenessColor": "#000000",
+      "allyAwarenessOpacity": 0.48,
       "reticleHitMarkerEnabled": true,
       "enemyAwarenessOutlineColor": "#000000",
-      "allyAwarenessOutlineColor": "#000000"
+      "allyAwarenessOutlineColor": "#050505",
+      "enemyAccuracy": 100,
+      "allyAccuracy": 100,
+      "enemyAwarenessFillTransparent": false,
+      "allyAwarenessFillTransparent": false
 }
 };
 

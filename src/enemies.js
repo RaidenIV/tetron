@@ -97,7 +97,7 @@ const _npcRifleMat = new THREE.MeshStandardMaterial({
   roughness: 0.38,
 });
 const _awarenessCircleGeo = new THREE.CircleGeometry(1, 128);
-const _awarenessOutlineGeo = new THREE.RingGeometry(0.985, 1.015, 128);
+const _awarenessOutlineGeo = new THREE.RingGeometry(0.998, 1.002, 128);
 const AWARENESS_RING_Y = 0.035;
 const AWARENESS_OUTLINE_Y_OFFSET = 0.004;
 
@@ -150,6 +150,7 @@ function getAwarenessSettings(npc) {
     range: Math.max(1, Number(state.params[ally ? 'allyAwarenessRange' : 'enemyAwarenessRange']) || 40),
     color: normalizeHexSetting(state.params[ally ? 'allyAwarenessColor' : 'enemyAwarenessColor'], ally ? '#00cc44' : '#ff3030'),
     outlineColor: normalizeHexSetting(state.params[ally ? 'allyAwarenessOutlineColor' : 'enemyAwarenessOutlineColor'], '#000000'),
+    fillTransparent: state.params[ally ? 'allyAwarenessFillTransparent' : 'enemyAwarenessFillTransparent'] === true,
     opacity: clamp(Number(state.params[ally ? 'allyAwarenessOpacity' : 'enemyAwarenessOpacity']) || 0, 0, 1),
   };
 }
@@ -161,8 +162,9 @@ function ensureAwarenessRing(npc) {
       color: 0xffffff,
       transparent: true,
       opacity: 0,
-      depthWrite: false,
+      depthWrite: true,
       depthTest: true,
+      depthFunc: THREE.LessDepth,
       side: THREE.DoubleSide,
       toneMapped: false,
     });
@@ -180,8 +182,9 @@ function ensureAwarenessRing(npc) {
       color: 0x000000,
       transparent: true,
       opacity: 0,
-      depthWrite: false,
+      depthWrite: true,
       depthTest: true,
+      depthFunc: THREE.LessDepth,
       side: THREE.DoubleSide,
       toneMapped: false,
     });
@@ -202,9 +205,9 @@ function updateNpcAwarenessRing(npc) {
   if (!ring) return;
   const outline = npc._awarenessOutlineRing || null;
   const cfg = getAwarenessSettings(npc);
-  const visible = cfg.visible && cfg.opacity > 0;
-  ring.visible = visible;
-  if (outline) outline.visible = visible;
+  const visible = cfg.visible && (cfg.opacity > 0 || cfg.fillTransparent);
+  ring.visible = visible && !cfg.fillTransparent && cfg.opacity > 0;
+  if (outline) outline.visible = cfg.visible;
   ring.position.set(npc.group.position.x, AWARENESS_RING_Y, npc.group.position.z);
   ring.rotation.set(-Math.PI / 2, 0, 0);
   ring.scale.set(cfg.range, cfg.range, 1);
@@ -219,7 +222,7 @@ function updateNpcAwarenessRing(npc) {
   ring.material.needsUpdate = true;
   if (outline) {
     outline.material.color.set(cfg.outlineColor);
-    outline.material.opacity = Math.min(1, Math.max(0, cfg.opacity * 1.35));
+    outline.material.opacity = 1;
     outline.material.needsUpdate = true;
   }
 }
@@ -1620,6 +1623,8 @@ function getNpcWeaponConfig(npc) {
     fuse: spec.fuse || 4,
     pellets: weapon === 'shotgun' ? Math.max(1, Math.min(24, Math.round(Number(state.params.weaponShotgunPellets) || spec.pellets || 8))) : 1,
   };
+  const accuracy = getNpcAccuracy(npc);
+  cfg.spread = clamp(cfg.spread + (1 - accuracy) * 0.3, 0, 1);
   if (cfg.explosive) cfg.shockwave = getNpcWeaponShockwaveConfig(spec, cfg);
   return cfg;
 }
@@ -1640,6 +1645,12 @@ function getNpcMoveSpeed(npc) {
 function getNpcAwarenessRange(npc) {
   const key = npc?.isAlly ? 'allyAwarenessRange' : 'enemyAwarenessRange';
   return Math.max(1, Number(state.params[key]) || 40);
+}
+
+function getNpcAccuracy(npc) {
+  const key = npc?.isAlly ? 'allyAccuracy' : 'enemyAccuracy';
+  const value = Number(state.params[key]);
+  return clamp(Number.isFinite(value) ? value : 100, 0, 100) / 100;
 }
 
 function applyPlayerDamage(amount) {
