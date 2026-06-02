@@ -8,6 +8,8 @@ import { getMoveForward, getMoveRight, isThirdPersonCameraMode, renderer } from 
 import { playDashSound } from './audio.js';
 import { reloadCurrentWeapon, syncWeaponAmmoHud } from './weapons.js';
 import { applyPlayerWeaponSettings } from './player.js';
+import { ASSET_CATALOGUE } from './assets-catalogue.js';
+import { isEditorModeEnabled, applyEditorMouseLookDelta } from './editor.js';
 
 let _togglePanel = null;
 
@@ -64,6 +66,9 @@ export function clearGameplayInput() {
   state.keys.s = false;
   state.keys.d = false;
   state.keys.space = false;
+  state.keys.shift = false;
+  state.keys.ctrl = false;
+  state.keys.alt = false;
   state.primaryFire = false;
   state.secondaryFire = false;
   state.jumpQueued = false;
@@ -84,12 +89,15 @@ function updatePointerAimFromClient(clientX, clientY) {
 }
 
 function canUseMouseLook(target) {
-  return isThirdPersonCameraMode(state.params.cameraMode)
-    && isMouseLookEnabled()
-    && isViewportTarget(target);
+  return isViewportTarget(target)
+    && (
+      isEditorModeEnabled()
+      || (isThirdPersonCameraMode(state.params.cameraMode) && isMouseLookEnabled())
+    );
 }
 
 function applyMouseLookDelta(dx, dy) {
+  if (applyEditorMouseLookDelta(dx, dy)) return;
   if (!isThirdPersonCameraMode(state.params.cameraMode) || !isMouseLookEnabled()) return;
 
   const sx = Number(state.params.thirdMouseSensitivityX) || 0.003;
@@ -119,7 +127,7 @@ function trySetPointerCapture(element, pointerId) {
 renderer.domElement.addEventListener('contextmenu', event => event.preventDefault());
 
 renderer.domElement.addEventListener('pointerdown', event => {
-  if (state.paused) {
+  if (state.paused && !isEditorModeEnabled()) {
     state.primaryFire = false;
     state.secondaryFire = false;
     return;
@@ -129,7 +137,7 @@ renderer.domElement.addEventListener('pointerdown', event => {
     updatePointerAimFromClient(event.clientX, event.clientY);
   }
 
-  const placerActive = (state.activeSlot ?? 0) === 1;
+  const placerActive = isEditorModeEnabled() || (state.activeSlot ?? 0) === 1;
 
   if (event.button === 0 && isViewportTarget(event.target)) {
     if (placerActive && (event.ctrlKey || event.metaKey)) {
@@ -224,17 +232,17 @@ document.addEventListener('pointerlockchange', () => {
 });
 
 document.addEventListener('mousemove', event => {
-  if (state.paused) return;
+  if (state.paused && !isEditorModeEnabled()) return;
   if (document.pointerLockElement !== renderer.domElement) return;
   setPointerAimCenter();
   applyMouseLookDelta(event.movementX || 0, event.movementY || 0);
 });
 
 document.addEventListener('mousedown', event => {
-  if (state.paused) return;
+  if (state.paused && !isEditorModeEnabled()) return;
   if (document.pointerLockElement !== renderer.domElement) return;
   if (event.button === 0) {
-    if ((state.activeSlot ?? 0) === 1 && (event.ctrlKey || event.metaKey)) {
+    if ((isEditorModeEnabled() || (state.activeSlot ?? 0) === 1) && (event.ctrlKey || event.metaKey)) {
       state.primaryFire = false;
       state.placerSelectionRequest = { toggle: true, additive: true };
       event.preventDefault();
@@ -243,7 +251,7 @@ document.addEventListener('mousedown', event => {
     state.primaryFire = true;
   }
   if (event.button === 2) {
-    if ((state.activeSlot ?? 0) === 1) {
+    if (isEditorModeEnabled() || (state.activeSlot ?? 0) === 1) {
       state.secondaryFire = true;
       state.isAiming = false;
     } else if (state.params.aimEnabled !== false) {
@@ -314,11 +322,16 @@ window.addEventListener('keydown', e => {
   if (e.key === 'Escape') { e.preventDefault(); _togglePanel?.(); return; }
   if (isTypingTarget(e.target)) return;
 
-  if (state.paused) return;
+  if (state.paused && !isEditorModeEnabled()) return;
 
   const k = e.key.toLowerCase();
+  const editorActive = isEditorModeEnabled();
 
-  if ((state.activeSlot ?? 0) === 1) {
+  if (e.key === 'Shift') state.keys.shift = true;
+  if (e.key === 'Control') state.keys.ctrl = true;
+  if (e.key === 'Alt') state.keys.alt = true;
+
+  if (editorActive || (state.activeSlot ?? 0) === 1) {
     if ((e.ctrlKey || e.metaKey) && k === 'a' && !e.repeat) {
       e.preventDefault();
       window.__selectAllPlacedObjects?.();
@@ -341,7 +354,16 @@ window.addEventListener('keydown', e => {
   if (k === 'a' || k === 'arrowleft')  state.keys.a = true;
   if (k === 'd' || k === 'arrowright') state.keys.d = true;
 
-  if (k === 'q' && state.params.bulletTimeEnabled !== false) {
+  if (editorActive && (k === 'q' || k === 'e') && !e.repeat) {
+    e.preventDefault();
+    const current = Number(state.params.placerRotationDeg) || 0;
+    const step = k === 'q' ? -90 : 90;
+    state.params.placerRotationDeg = ((Math.round((current + step) / 90) * 90) % 360 + 360) % 360;
+    state.placerRotation = THREE.MathUtils.degToRad(state.params.placerRotationDeg);
+    return;
+  }
+
+  if (!editorActive && k === 'q' && state.params.bulletTimeEnabled !== false) {
     e.preventDefault();
     if (!e.repeat) state.slowRequested = true;
   }
@@ -349,14 +371,14 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Space') {
     e.preventDefault();
     state.keys.space = true;
-    if (!e.repeat && state.params.jumpEnabled) {
+    if (!editorActive && !e.repeat && state.params.jumpEnabled) {
       state.jumpQueued = true;
     }
   }
 
 
   // F key → open asset picker modal (only when placer slot is active)
-  if (k === 'f' && !e.repeat && (state.activeSlot ?? 0) === 1) {
+  if (k === 'f' && !e.repeat && (editorActive || (state.activeSlot ?? 0) === 1)) {
     e.preventDefault();
     togglePlacerAssetModal();
     return;
@@ -366,7 +388,7 @@ window.addEventListener('keydown', e => {
   // R key → open transform modal for the current placer shape, or reload while using weapons.
   if (k === 'r' && !e.repeat) {
     e.preventDefault();
-    if ((state.activeSlot ?? 0) === 1) {
+    if (editorActive || (state.activeSlot ?? 0) === 1) {
       togglePlacerTransformModal();
     } else {
       reloadCurrentWeapon();
@@ -381,6 +403,8 @@ window.addEventListener('keydown', e => {
 
   if (e.key === 'Shift') {
     e.preventDefault();
+    state.keys.shift = true;
+    if (editorActive) return;
     if (state.params.dashEnabled && !state.isAiming && state.dashCooldown <= 0 && state.dashTimer <= 0) {
       // Build direction from currently held keys + camera-relative vectors
       _dv.set(0, 0, 0);
@@ -413,6 +437,9 @@ window.addEventListener('keyup', e => {
   if (k === 'a' || k === 'arrowleft')  state.keys.a = false;
   if (k === 'd' || k === 'arrowright') state.keys.d = false;
   if (e.code === 'Space') state.keys.space = false;
+  if (e.key === 'Shift') state.keys.shift = false;
+  if (e.key === 'Control') state.keys.ctrl = false;
+  if (e.key === 'Alt') state.keys.alt = false;
 });
 
 function getCurrentWheelItem() {
@@ -455,15 +482,38 @@ function cycleWheelItem(direction) {
   }
 }
 
+function syncPlacerAssetSelect() {
+  const select = document.querySelector('[data-param-key="placerSelectedAsset"]');
+  if (select) select.value = state.params.placerSelectedAsset;
+}
+
+function cyclePlacerAsset(direction) {
+  const ids = ASSET_CATALOGUE.map(asset => asset.id);
+  if (!ids.length) return;
+  const current = ids.includes(state.params.placerSelectedAsset) ? state.params.placerSelectedAsset : ids[0];
+  const currentIndex = ids.indexOf(current);
+  const nextIndex = (currentIndex + direction + ids.length) % ids.length;
+  state.params.placerSelectedAsset = ids[nextIndex];
+  syncPlacerAssetSelect();
+}
+
 // ── Scroll wheel → cycle all weapons and object placer ───────────────────────
 window.addEventListener('wheel', e => {
-  if (state.paused) return;
+  if (state.paused && !isEditorModeEnabled()) return;
   if (!isViewportTarget(e.target)) return;
 
   const placerModal = document.getElementById('placer-modal');
   if (placerModal && placerModal.style.display !== 'none') return;
   const transformModal = document.getElementById('placer-transform-modal');
   if (transformModal && transformModal.style.display !== 'none') return;
+
+  if (isEditorModeEnabled()) {
+    if (state.params.editorPlacementTarget === 'asset') {
+      cyclePlacerAsset(e.deltaY > 0 ? 1 : -1);
+    }
+    e.preventDefault();
+    return;
+  }
 
   cycleWheelItem(e.deltaY > 0 ? 1 : -1);
   e.preventDefault();

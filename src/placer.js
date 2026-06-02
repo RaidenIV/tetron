@@ -1392,6 +1392,8 @@ export function updatePlacer(delta = 1 / 60) {
   updateDestructibleParticles(delta);
   const slot     = state.activeSlot ?? 0;
   const placerOn = slot === 1;
+  const editorNpcPlacement = state.params.editorModeEnabled === true
+    && state.params.editorPlacementTarget !== 'asset';
   const assetId  = state.params.placerSelectedAsset || 'box';
   const asset    = getAsset(assetId);
   const prefabOn = isPrefabAsset(asset);
@@ -1410,8 +1412,9 @@ export function updatePlacer(delta = 1 / 60) {
       : `laser  [ PLACER ]  ·  R transform  ·  F pick  ·  Ctrl-click select  ·  Del remove selected${selectedCount ? ` (${selectedCount})` : ''}`;
   }
 
-  // Hide ghost when not in placer mode
-  if (!placerOn || state.paused) {
+  // Hide ghost when not in placer mode, when paused, or when Editor Mode is
+  // currently using the reticle for NPC placement instead of asset placement.
+  if (!placerOn || state.paused || editorNpcPlacement) {
     if (_ghostMesh) _ghostMesh.visible = false;
     if (_ghostWire) _ghostWire.visible = false;
     _firePrev = state.primaryFire;

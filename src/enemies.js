@@ -147,7 +147,7 @@ function getAwarenessSettings(npc) {
   const ally = npc?.isAlly === true;
   return {
     visible: state.params[ally ? 'allyAwarenessVisible' : 'enemyAwarenessVisible'] === true,
-    range: Math.max(1, Number(state.params[ally ? 'allyAwarenessRange' : 'enemyAwarenessRange']) || 40),
+    range: Math.max(1, Number(npc?.awarenessRange ?? state.params[ally ? 'allyAwarenessRange' : 'enemyAwarenessRange']) || 40),
     color: normalizeHexSetting(state.params[ally ? 'allyAwarenessColor' : 'enemyAwarenessColor'], ally ? '#00cc44' : '#ff3030'),
     outlineColor: normalizeHexSetting(state.params[ally ? 'allyAwarenessOutlineColor' : 'enemyAwarenessOutlineColor'], '#000000'),
     fillTransparent: state.params[ally ? 'allyAwarenessFillTransparent' : 'enemyAwarenessFillTransparent'] === true,
@@ -993,11 +993,22 @@ function makeEnemy(type, position, index = 0, options = {}) {
     bobOffset: index * 0.81,
     phase: 1,
     tagged: false,
+    editorPlaced: options.editorPlaced === true,
+    editorNpcId: options.editorNpcId || null,
+    behavior: options.behavior || null,
+    weaponType: options.weaponType || null,
+    awarenessRange: Number.isFinite(Number(options.awarenessRange)) ? Number(options.awarenessRange) : null,
+    accuracy: Number.isFinite(Number(options.accuracy)) ? Number(options.accuracy) : null,
+    moveSpeed: Number.isFinite(Number(options.moveSpeed)) ? Number(options.moveSpeed) : null,
+    damage: Number.isFinite(Number(options.damage)) ? Number(options.damage) : null,
     // Grouping fields
     groupSlot: undefined,
     slotTimer: randomRange(0, 0.5), // stagger initial slot assignment
     lastSteer: null,
   };
+  mesh.userData.npc = enemy;
+  group.userData.npc = enemy;
+  if (Number.isFinite(Number(options.ry))) group.rotation.y = Number(options.ry);
   if (!enemy.isAlly) makeTagMarker(enemy);
   makeNpcHealthBar(enemy);
   makeNpcRifleVisual(enemy);
@@ -1070,6 +1081,10 @@ export function getEnemyMeshes() {
   return enemies.map(e => e.mesh);
 }
 
+export function getAllNpcMeshes() {
+  return [...enemies, ...allies].map(e => e.mesh).filter(Boolean);
+}
+
 // Returns the full active enemy list for aim volume testing.
 export function getEnemies() {
   return enemies;
@@ -1079,15 +1094,22 @@ export function getAllies() {
   return allies;
 }
 
+function removeEditorNpcDataForTeam(team) {
+  if (!Array.isArray(state.params.editorPlacedNpcs)) return;
+  state.params.editorPlacedNpcs = state.params.editorPlacedNpcs.filter(item => item?.team !== team);
+}
+
 export function clearEnemies() {
   while (enemies.length) disposeEnemy(enemies.pop());
   while (enemyBullets.length) disposeEnemyBullet(enemyBullets.pop());
   while (destructionParticles.length) releaseParticle(destructionParticles.pop());
   while (enemyCorpses.length) disposeEnemyCorpse(enemyCorpses.pop());
+  removeEditorNpcDataForTeam('enemy');
 }
 
 export function clearAllies() {
   while (allies.length) disposeEnemy(allies.pop());
+  removeEditorNpcDataForTeam('ally');
 }
 
 const ENEMY_DESTRUCTION_PREFIX = Object.freeze({
@@ -1410,7 +1432,104 @@ export function spawnAlliesFromSettings() {
   return allies.length;
 }
 
+
+function nextEditorNpcId() {
+  return `editor_npc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function normalizeEditorNpcData(data = {}) {
+  const team = data.team === 'ally' ? 'ally' : 'enemy';
+  const type = data.type || (team === 'ally' ? state.params.allyType : state.params.enemyType) || ENEMY_TYPE.RUSHER;
+  return {
+    id: data.id || nextEditorNpcId(),
+    team,
+    type,
+    x: Number.isFinite(Number(data.x)) ? Number(data.x) : 0.5,
+    z: Number.isFinite(Number(data.z)) ? Number(data.z) : 0.5,
+    ry: Number.isFinite(Number(data.ry)) ? Number(data.ry) : 0,
+    health: Number.isFinite(Number(data.health)) ? Number(data.health) : (team === 'ally' ? state.params.allyHealth : state.params.enemyHealth),
+    behavior: data.behavior || (team === 'ally' ? state.params.allyBehavior : state.params.enemyBehavior),
+    moveSpeed: Number.isFinite(Number(data.moveSpeed)) ? Number(data.moveSpeed) : (team === 'ally' ? state.params.allyMoveSpeed : state.params.enemyMoveSpeed),
+    damage: Number.isFinite(Number(data.damage)) ? Number(data.damage) : (team === 'ally' ? state.params.allyDamage : state.params.enemyDamage),
+    weaponType: data.weaponType || (team === 'ally' ? state.params.allyWeaponType : state.params.enemyWeaponType),
+    awarenessRange: Number.isFinite(Number(data.awarenessRange)) ? Number(data.awarenessRange) : (team === 'ally' ? state.params.allyAwarenessRange : state.params.enemyAwarenessRange),
+    accuracy: Number.isFinite(Number(data.accuracy)) ? Number(data.accuracy) : (team === 'ally' ? state.params.allyAccuracy : state.params.enemyAccuracy),
+  };
+}
+
+function spawnEditorNpcFromData(data, { persist = true } = {}) {
+  const clean = normalizeEditorNpcData(data);
+  const list = clean.team === 'ally' ? allies : enemies;
+  const npc = makeEnemy(clean.type, { x: clean.x, z: clean.z }, list.length, {
+    team: clean.team,
+    health: clean.health,
+    ry: clean.ry,
+    editorPlaced: true,
+    editorNpcId: clean.id,
+    behavior: clean.behavior,
+    moveSpeed: clean.moveSpeed,
+    damage: clean.damage,
+    weaponType: clean.weaponType,
+    awarenessRange: clean.awarenessRange,
+    accuracy: clean.accuracy,
+  });
+  list.push(npc);
+
+  if (persist !== false) {
+    const stored = Array.isArray(state.params.editorPlacedNpcs) ? state.params.editorPlacedNpcs : [];
+    stored.push(clean);
+    state.params.editorPlacedNpcs = stored;
+  }
+  return npc;
+}
+
+export function spawnEditorNpcAt(data = {}) {
+  return spawnEditorNpcFromData(data, { persist: true });
+}
+
+function removeEditorNpcInstance(npc) {
+  if (!npc?.editorPlaced) return false;
+  const list = npc.isAlly ? allies : enemies;
+  const idx = list.indexOf(npc);
+  if (idx !== -1) list.splice(idx, 1);
+  if (npc.editorNpcId && Array.isArray(state.params.editorPlacedNpcs)) {
+    state.params.editorPlacedNpcs = state.params.editorPlacedNpcs.filter(item => item?.id !== npc.editorNpcId);
+  }
+  disposeEnemy(npc);
+  return true;
+}
+
+export function removeEditorNpcByMesh(mesh) {
+  const npc = mesh?.userData?.npc || mesh?.parent?.userData?.npc;
+  return removeEditorNpcInstance(npc);
+}
+
+function removeLiveEditorNpcs() {
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    if (enemies[i]?.editorPlaced) {
+      const npc = enemies.splice(i, 1)[0];
+      disposeEnemy(npc);
+    }
+  }
+  for (let i = allies.length - 1; i >= 0; i--) {
+    if (allies[i]?.editorPlaced) {
+      const npc = allies.splice(i, 1)[0];
+      disposeEnemy(npc);
+    }
+  }
+}
+
+export function rebuildEditorPlacedNpcs() {
+  removeLiveEditorNpcs();
+  const list = Array.isArray(state.params.editorPlacedNpcs) ? state.params.editorPlacedNpcs : [];
+  state.params.editorPlacedNpcs = list.map(item => normalizeEditorNpcData(item));
+  for (const item of state.params.editorPlacedNpcs) {
+    spawnEditorNpcFromData(item, { persist: false });
+  }
+}
+
 function getEffectiveBehavior(npc) {
+  if (npc?.behavior) return npc.behavior;
   const key = npc?.isAlly ? 'allyBehavior' : 'enemyBehavior';
   const behavior = state.params[key];
   return behavior || npc?.def?.defaultBehavior || 'rush';
@@ -1427,6 +1546,8 @@ function normalizeNpcWeapon(value, fallback = 'rifle') {
 }
 
 function getEffectiveWeapon(npc) {
+  const ownWeapon = normalizeNpcWeapon(npc?.weaponType, null);
+  if (ownWeapon) return ownWeapon;
   const key = npc?.isAlly ? 'allyWeaponType' : 'enemyWeaponType';
   const configured = normalizeNpcWeapon(state.params[key], null);
   if (configured) return configured;
@@ -1632,22 +1753,26 @@ function getNpcWeaponConfig(npc) {
 function getNpcDamage(npc) {
   const weaponConfig = getNpcWeaponConfig(npc);
   if (weaponConfig) return weaponConfig.damage;
+  if (Number.isFinite(Number(npc?.damage))) return Math.max(0, Number(npc.damage));
   const key = npc?.isAlly ? 'allyDamage' : 'enemyDamage';
   return Math.max(0, Number(state.params[key]) || 0);
 }
 
 function getNpcMoveSpeed(npc) {
+  if (Number.isFinite(Number(npc?.moveSpeed))) return Math.max(0, Number(npc.moveSpeed));
   const key = npc?.isAlly ? 'allyMoveSpeed' : 'enemyMoveSpeed';
   const configuredSpeed = Number(state.params[key]);
   return Math.max(0, Number.isFinite(configuredSpeed) ? configuredSpeed : BASE_SPEED);
 }
 
 function getNpcAwarenessRange(npc) {
+  if (Number.isFinite(Number(npc?.awarenessRange))) return Math.max(1, Number(npc.awarenessRange));
   const key = npc?.isAlly ? 'allyAwarenessRange' : 'enemyAwarenessRange';
   return Math.max(1, Number(state.params[key]) || 40);
 }
 
 function getNpcAccuracy(npc) {
+  if (Number.isFinite(Number(npc?.accuracy))) return clamp(Number(npc.accuracy), 0, 100) / 100;
   const key = npc?.isAlly ? 'allyAccuracy' : 'enemyAccuracy';
   const value = Number(state.params[key]);
   return clamp(Number.isFinite(value) ? value : 100, 0, 100) / 100;

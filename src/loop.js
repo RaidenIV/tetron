@@ -12,6 +12,7 @@ import { playerGroup, updatePlayer, updateDashStreaks } from './player.js';
 import { updateLaserProjectiles, resolveAimTarget, aimResult, syncWeaponAmmoHud } from './weapons.js';
 import { updateEnemies, getEnemyMeshes, tagEnemy, getEnemies, getAllies } from './enemies.js';
 import { updatePlacer } from './placer.js';
+import { isEditorModeEnabled, updateEditorCamera, updateEditorPlacement } from './editor.js';
 import { updateController } from './input.js';
 import { updateBulletTimeAudioPitch, playBulletTimeActivationSounds } from './audio.js';
 
@@ -265,14 +266,18 @@ export function tick() {
 
   setActiveCamera(state.params.cameraMode);
 
-  if (isThirdPersonCameraMode(state.params.cameraMode)) {
+  const editorActive = isEditorModeEnabled();
+  if (editorActive) {
+    updateEditorCamera(delta);
+  } else if (isThirdPersonCameraMode(state.params.cameraMode)) {
     updateThirdCamera(playerGroup.position, delta);
   } else {
     updateIsoCamera(playerGroup.position);
   }
 
-  updateChunks(playerGroup.position);
-  updateSunPosition(playerGroup.position);
+  const worldFocus = editorActive ? camera.position : playerGroup.position;
+  updateChunks(worldFocus);
+  updateSunPosition(worldFocus);
 
   // Poll controller every frame (including paused — Options button must work).
   updateController(delta);
@@ -281,6 +286,15 @@ export function tick() {
   updateBulletTimeAudioPitch();
   updateBulletTimeIndicator();
   updatePlacer(delta);
+  updateEditorPlacement(delta);
+
+  if (editorActive) {
+    state.isAiming = false;
+    updateCameraShake(delta);
+    renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
+    return;
+  }
 
   // Stage 1 aim resolve — runs every frame so reticle hover and firing share
   // the exact same result. Resolves camera ray → enemy volume or fallback point.

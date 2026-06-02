@@ -10,7 +10,7 @@ import {
   playerMat, playerBaseColor, rebuildPlayerGeo, applyPlayerMaterial, applyShieldSettings, applyPlayerWeaponSettings,
 } from '../player.js';
 import { setFloorVisible, setGridVisible, setFloorColor, setGridColor } from '../terrain.js';
-import { spawnEnemiesFromSettings, clearEnemies, applyTagSettings, spawnAlliesFromSettings, clearAllies } from '../enemies.js';
+import { spawnEnemiesFromSettings, clearEnemies, applyTagSettings, spawnAlliesFromSettings, clearAllies, rebuildEditorPlacedNpcs } from '../enemies.js';
 import { clearGameplayInput } from '../input.js';
 import { ASSET_CATALOGUE, ASSET_CATEGORY_LABELS } from '../assets-catalogue.js';
 import {
@@ -20,6 +20,7 @@ import {
 } from '../placer.js';
 import { registerManagedAudio, applyBulletTimeAudioPitch, pauseManagedAudio, resumeManagedAudio } from '../audio.js';
 import { resetWeaponAmmo, resetAllWeaponAmmo, syncWeaponAmmoHud } from '../weapons.js';
+import { setEditorModeEnabled, applyEditorSettings } from '../editor.js';
 
 const sidebar = document.getElementById('sidebar');
 
@@ -2308,6 +2309,31 @@ function assetSelectRow() {
 }
 
 function buildAssets(body) {
+  body.appendChild(subhdr('Editor Mode'));
+
+  const editorInfo = document.createElement('div');
+  editorInfo.style.cssText = 'font-size:10px;color:var(--sb-muted);padding:2px 0 8px;line-height:1.5;';
+  editorInfo.textContent = 'First-person placement mode for building on the grid floor. Minimize the sidebar after enabling it, then use WASD + mouse to move and aim.';
+  body.appendChild(editorInfo);
+  body.appendChild(toggle('Editor Mode', 'editorModeEnabled', value => {
+    state.activePreset = 'custom';
+    setEditorModeEnabled(value);
+    applyAllParams();
+  }));
+  body.appendChild(select('Placement Target', 'editorPlacementTarget', [
+    ['asset', 'Asset / Prefab'],
+    ['enemy', 'Enemy NPC'],
+    ['ally', 'Ally NPC'],
+  ], applyAllParams));
+  body.appendChild(toggle('Fly Mode', 'editorFlyMode', applyAllParams));
+  body.appendChild(slider({ key: 'editorMoveSpeed', label: 'Move Speed', min: 0.1, max: 40, step: 0.1, dec: 1, onChange: applyAllParams }));
+  body.appendChild(slider({ key: 'editorSprintMultiplier', label: 'Sprint Mult', min: 1, max: 6, step: 0.05, dec: 2, onChange: applyAllParams }));
+  body.appendChild(slider({ key: 'editorPrecisionMultiplier', label: 'Precision Mult', min: 0.05, max: 1, step: 0.01, dec: 2, onChange: applyAllParams }));
+  body.appendChild(slider({ key: 'editorEyeHeight', label: 'Eye Height', min: 0.5, max: 5, step: 0.05, dec: 2, onChange: applyAllParams }));
+  body.appendChild(slider({ key: 'editorFov', label: 'Editor FOV', min: 30, max: 110, step: 1, dec: 0, onChange: applyAllParams }));
+  body.appendChild(slider({ key: 'editorMouseSensitivityX', label: 'Look X Sens', min: 0.0002, max: 0.012, step: 0.0001, dec: 4, onChange: applyAllParams }));
+  body.appendChild(slider({ key: 'editorMouseSensitivityY', label: 'Look Y Sens', min: 0.0002, max: 0.012, step: 0.0001, dec: 4, onChange: applyAllParams }));
+
   body.appendChild(subhdr('Object Placer'));
 
   // Current slot indicator
@@ -2759,6 +2785,21 @@ function applyAllParams() {
   const modalCoord = value => Math.max(22, Math.round(Number(value) || 22));
   p.placerTransformModalX = modalCoord(p.placerTransformModalX);
   p.placerTransformModalY = modalCoord(p.placerTransformModalY);
+  p.editorModeEnabled = p.editorModeEnabled === true;
+  p.editorPlacementTarget = ['asset', 'enemy', 'ally'].includes(p.editorPlacementTarget) ? p.editorPlacementTarget : 'asset';
+  p.editorMoveSpeed = Math.min(80, Math.max(0.1, Number(p.editorMoveSpeed) || 7));
+  p.editorSprintMultiplier = Math.min(8, Math.max(1, Number(p.editorSprintMultiplier) || 2.25));
+  p.editorPrecisionMultiplier = Math.min(1, Math.max(0.05, Number(p.editorPrecisionMultiplier) || 0.28));
+  p.editorEyeHeight = Math.min(12, Math.max(0.25, Number(p.editorEyeHeight) || 1.7));
+  p.editorFov = Math.min(110, Math.max(30, Number(p.editorFov) || 70));
+  p.editorMouseSensitivityX = Math.min(0.03, Math.max(0.0002, Number(p.editorMouseSensitivityX) || 0.003));
+  p.editorMouseSensitivityY = Math.min(0.03, Math.max(0.0002, Number(p.editorMouseSensitivityY) || 0.0024));
+  p.editorCameraX = Number.isFinite(Number(p.editorCameraX)) ? Number(p.editorCameraX) : 0;
+  p.editorCameraY = Number.isFinite(Number(p.editorCameraY)) ? Number(p.editorCameraY) : p.editorEyeHeight;
+  p.editorCameraZ = Number.isFinite(Number(p.editorCameraZ)) ? Number(p.editorCameraZ) : 8;
+  p.editorYaw = Number.isFinite(Number(p.editorYaw)) ? Number(p.editorYaw) : 0;
+  p.editorPitch = Math.min(1.45, Math.max(-1.45, Number.isFinite(Number(p.editorPitch)) ? Number(p.editorPitch) : -0.12));
+  if (!Array.isArray(p.editorPlacedNpcs)) p.editorPlacedNpcs = [];
   if (!('soundSfx_jump' in p)) p.soundSfx_jump = 1;
   if (!('soundSfx_reload' in p)) p.soundSfx_reload = 1;
   if (!('soundSfx_pistol_reload' in p)) p.soundSfx_pistol_reload = 1;
@@ -2949,6 +2990,8 @@ function applyAllParams() {
   applyHudSettings();
   applyTagSettings();
   rebuildPlacedObjects();
+  applyEditorSettings();
+  rebuildEditorPlacedNpcs();
 }
 
 // ── Build / rebuild panel DOM ──────────────────────────────────────────────────

@@ -67,6 +67,9 @@ isoCamera.lookAt(0, 0, 0);
 export const thirdCamera = new THREE.PerspectiveCamera(65, aspect, 0.1, 500);
 thirdCamera.position.set(0, 10, 20);
 
+export const editorCamera = new THREE.PerspectiveCamera(70, aspect, 0.1, 500);
+editorCamera.position.set(0, 1.7, 8);
+
 // Mutable export — all modules importing `camera` see the current value
 export let camera = isoCamera;
 
@@ -75,6 +78,10 @@ export function isThirdPersonCameraMode(mode) {
 }
 
 export function setActiveCamera(mode) {
+  if (state.params.editorModeEnabled === true) {
+    camera = editorCamera;
+    return;
+  }
   camera = isThirdPersonCameraMode(mode) ? thirdCamera : isoCamera;
 }
 
@@ -347,6 +354,8 @@ export function onResize() {
   applyIsoCamD(state.params.isoCamD);
   thirdCamera.aspect = aspect;
   thirdCamera.updateProjectionMatrix();
+  editorCamera.aspect = aspect;
+  editorCamera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   labelRenderer.setSize(window.innerWidth, window.innerHeight);
 }
