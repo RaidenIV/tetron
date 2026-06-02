@@ -295,13 +295,12 @@ export function tick() {
   if (editorActive) {
     state.isAiming = false;
 
-    // Landscape Editor is a live test-editing mode: keep NPC team combat
-    // running so allies/enemies placed inside their awareness ranges can
-    // immediately acquire, move toward, and attack each other while the
-    // first-person editor camera is active. Plain Editor Mode remains a
-    // paused placement camera.
-    if (!state.paused && state.params.landscapeEditorModeEnabled === true) {
-      const worldDelta = delta * state.worldScale;
+    // Landscape Editor is a live test-editing mode. The sidebar intentionally
+    // keeps the general game paused while it is open, but team combat still has
+    // to run here so placed allies/enemies can be tested immediately inside the
+    // editor. Plain Editor Mode remains a paused placement camera.
+    if (state.params.landscapeEditorModeEnabled === true) {
+      const worldDelta = delta * (Number(state.worldScale) || 1);
       updateEnemies(worldDelta, _elapsed);
       [...getEnemies(), ...getAllies()].forEach(npc => {
         if (npc?.group?.position) clampPositionToBuildArea(npc.group.position, npc.radius || 0.4);

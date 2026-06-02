@@ -2513,30 +2513,19 @@ function isLiveNpc(npc) {
   return !!npc?.group && Number(npc.hp) > 0;
 }
 
-function findNearestEnemy(position, maxRange = Infinity) {
-  let nearest = null;
-  let best = Math.max(0, maxRange) ** 2;
-  for (const enemy of enemies) {
-    if (!isLiveNpc(enemy)) continue;
-    const dx = enemy.group.position.x - position.x;
-    const dz = enemy.group.position.z - position.z;
-    const d2 = dx * dx + dz * dz;
-    if (d2 <= best) { best = d2; nearest = enemy; }
-  }
-  return nearest;
+function getNpcHorizontalDelta(a, b) {
+  if (!a?.group || !b?.group) return { dx: 0, dz: 0, d2: Infinity, distance: Infinity };
+  const dx = b.group.position.x - a.group.position.x;
+  const dz = b.group.position.z - a.group.position.z;
+  const d2 = dx * dx + dz * dz;
+  return { dx, dz, d2, distance: Math.sqrt(d2) };
 }
 
-function findNearestAlly(position, maxRange = Infinity) {
-  let nearest = null;
-  let best = Math.max(0, maxRange) ** 2;
-  for (const ally of allies) {
-    if (!isLiveNpc(ally)) continue;
-    const dx = ally.group.position.x - position.x;
-    const dz = ally.group.position.z - position.z;
-    const d2 = dx * dx + dz * dz;
-    if (d2 <= best) { best = d2; nearest = ally; }
-  }
-  return nearest;
+function getNpcAwarenessClearance(npc, targetNpc) {
+  const delta = getNpcHorizontalDelta(npc, targetNpc);
+  if (!Number.isFinite(delta.distance)) return Infinity;
+  const targetRadius = Math.max(0, Number(targetNpc?.radius) || BASE_RADIUS);
+  return Math.max(0, delta.distance - targetRadius);
 }
 
 function getNpcAttackRange(npc) {
@@ -2546,9 +2535,7 @@ function getNpcAttackRange(npc) {
 function isTargetWithinNpcAwareness(npc, targetNpc) {
   if (!isLiveNpc(npc) || !isLiveNpc(targetNpc)) return false;
   const range = getNpcAttackRange(npc);
-  const dx = targetNpc.group.position.x - npc.group.position.x;
-  const dz = targetNpc.group.position.z - npc.group.position.z;
-  return dx * dx + dz * dz <= range * range;
+  return getNpcAwarenessClearance(npc, targetNpc) <= range;
 }
 
 function isPlayerWithinNpcAwareness(npc) {
@@ -2556,16 +2543,24 @@ function isPlayerWithinNpcAwareness(npc) {
   const range = getNpcAttackRange(npc);
   const dx = playerGroup.position.x - npc.group.position.x;
   const dz = playerGroup.position.z - npc.group.position.z;
-  return dx * dx + dz * dz <= range * range;
+  const playerRadius = Math.max(0.25, Number(state.params.playerRadius) || 0.4);
+  return Math.max(0, Math.hypot(dx, dz) - playerRadius) <= range;
 }
 
 function findNearestOpponent(npc) {
   if (!isLiveNpc(npc)) return null;
-  const range = getNpcAwarenessRange(npc);
-  const target = npc.isAlly
-    ? findNearestEnemy(npc.group.position, range)
-    : findNearestAlly(npc.group.position, range);
-  return target && isTargetWithinNpcAwareness(npc, target) ? target : null;
+  const candidates = npc.isAlly ? enemies : allies;
+  let nearest = null;
+  let best = Infinity;
+  for (const target of candidates) {
+    if (!isTargetWithinNpcAwareness(npc, target)) continue;
+    const d2 = getNpcHorizontalDelta(npc, target).d2;
+    if (d2 < best) {
+      best = d2;
+      nearest = target;
+    }
+  }
+  return nearest;
 }
 
 function updateAllyMovement(ally, delta, elapsedTime, index, target = null) {
