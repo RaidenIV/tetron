@@ -666,5 +666,13 @@
   "reticleHitMarkerOpacity": 1,
   "reticleHitMarkerColor": "#ffffff",
   "reticleHitMarkerDuration": 190,
-  "reticleKillConfirmDuration": 200
+  "reticleKillConfirmDuration": 200,
+  "soundSfx_pistol_reload": 1,
+  "enemyAwarenessVisible": false,
+  "enemyAwarenessColor": "#ff3030",
+  "enemyAwarenessOpacity": 0.18,
+  "allyAwarenessVisible": false,
+  "allyAwarenessColor": "#00cc44",
+  "allyAwarenessOpacity": 0.18,
+  "reticleHitMarkerEnabled": true
 }
