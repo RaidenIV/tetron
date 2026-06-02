@@ -6702,7 +6702,7 @@ function buildAssets(body) {
   // Current slot indicator
   const slotInfo = document.createElement('div');
   slotInfo.style.cssText = 'font-size:10px;color:var(--sb-muted);padding:2px 0 8px;line-height:1.5;';
-  slotInfo.textContent = 'Scroll wheel switches between Laser and Placer. F opens asset picker. Ctrl-click selects objects. Ctrl+A selects all. C clears selection. Delete removes selected.';
+  slotInfo.textContent = 'Object placement is handled through Editor Mode. F opens the asset picker while editing. Ctrl-click selects objects. Ctrl+A selects all. C clears selection. Delete removes selected.';
   body.appendChild(slotInfo);
 
   body.appendChild(assetSelectRow());

@@ -24,8 +24,7 @@ let _lastMouseY = 0;
 let _adsHeldAtLockRequest = false; // tracks if right-click was held when pointer lock was requested
 
 const WEAPON_WHEEL_ORDER = ['pistol', 'rifle', 'shotgun', 'sniperRifle', 'grenades', 'rocketLauncher'];
-const WHEEL_OBJECT_PLACER = 'objectPlacer';
-const WHEEL_CYCLE_ORDER = [...WEAPON_WHEEL_ORDER, WHEEL_OBJECT_PLACER];
+const WHEEL_CYCLE_ORDER = [...WEAPON_WHEEL_ORDER];
 
 function clamp(v, min, max) {
   return Math.min(max, Math.max(min, v));
@@ -453,7 +452,6 @@ window.addEventListener('keyup', e => {
 });
 
 function getCurrentWheelItem() {
-  if ((state.activeSlot ?? 0) === 1) return WHEEL_OBJECT_PLACER;
   return WEAPON_WHEEL_ORDER.includes(state.params.playerWeaponType)
     ? state.params.playerWeaponType
     : 'rifle';
@@ -478,12 +476,6 @@ function cycleWheelItem(direction) {
   state.isAiming = false;
   state.secondaryFire = false;
 
-  if (next === WHEEL_OBJECT_PLACER) {
-    state.activeSlot = 1;
-    syncWeaponAmmoHud();
-    return;
-  }
-
   state.activeSlot = 0;
   state.params.playerWeaponType = next;
   if (!syncPlayerWeaponSelect()) {
@@ -507,7 +499,7 @@ function cyclePlacerAsset(direction) {
   syncPlacerAssetSelect();
 }
 
-// ── Scroll wheel → cycle all weapons and object placer ───────────────────────
+// ── Scroll wheel → cycle player weapons only ─────────────────────────────────
 window.addEventListener('wheel', e => {
   if (state.paused && !isEditorModeEnabled()) return;
   if (!isViewportTarget(e.target)) return;

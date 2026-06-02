@@ -160,8 +160,8 @@ export function setEditorModeEnabled(enabled, options = {}) {
   } else {
     hideNpcGhost();
     setHudVisible(false);
-    setPlayerSpawnMarkerVisible(false);
     teleportPlayerToSpawn();
+    refreshPlayerSpawnMarker();
     state.primaryFire = false;
     state.secondaryFire = false;
     if (document.pointerLockElement === renderer.domElement) document.exitPointerLock?.();
@@ -273,20 +273,34 @@ function createPlayerSpawnMarker() {
   body.renderOrder = 26;
   group.add(body);
 
-  const ringMat = new THREE.MeshBasicMaterial({
-    color: cyan,
+  const footprintMat = new THREE.MeshBasicMaterial({
+    color: '#35ff00',
     transparent: true,
-    opacity: 0.5,
+    opacity: 0.9,
     depthWrite: false,
-    side: THREE.DoubleSide,
     toneMapped: false,
   });
-  const ring = new THREE.Mesh(new THREE.RingGeometry(0.46, 0.55, 72), ringMat);
-  ring.name = 'PlayerSpawnMarkerFootprint';
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.035;
-  ring.renderOrder = 24;
-  group.add(ring);
+  const footprint = new THREE.Group();
+  footprint.name = 'PlayerSpawnMarkerFootprint';
+  footprint.renderOrder = 24;
+  const footprintSize = 1.1;
+  const footprintThickness = 0.04;
+  const footprintY = 0.035;
+  const makeFootprintEdge = (name, width, depth, x, z) => {
+    const edge = new THREE.Mesh(
+      new THREE.BoxGeometry(width, 0.025, depth),
+      footprintMat.clone(),
+    );
+    edge.name = name;
+    edge.position.set(x, footprintY, z);
+    edge.renderOrder = 24;
+    footprint.add(edge);
+  };
+  makeFootprintEdge('PlayerSpawnMarkerFootprintFront', footprintSize, footprintThickness, 0, -footprintSize / 2);
+  makeFootprintEdge('PlayerSpawnMarkerFootprintBack', footprintSize, footprintThickness, 0, footprintSize / 2);
+  makeFootprintEdge('PlayerSpawnMarkerFootprintLeft', footprintThickness, footprintSize, -footprintSize / 2, 0);
+  makeFootprintEdge('PlayerSpawnMarkerFootprintRight', footprintThickness, footprintSize, footprintSize / 2, 0);
+  group.add(footprint);
 
   const arrowMat = new THREE.MeshBasicMaterial({
     color: 0xffffff,
@@ -322,6 +336,19 @@ function setPlayerSpawnMarkerVisible(visible) {
   if (_playerSpawnMarker) _playerSpawnMarker.visible = visible;
 }
 
+function setMarkerOpacity(object, opacity) {
+  object?.traverse?.(child => {
+    if (child.material && typeof child.material.opacity === 'number') {
+      child.material.transparent = true;
+      child.material.opacity = opacity;
+    }
+  });
+  if (object?.material && typeof object.material.opacity === 'number') {
+    object.material.transparent = true;
+    object.material.opacity = opacity;
+  }
+}
+
 function updatePlayerSpawnMarker(position = null, yaw = null, { preview = false } = {}) {
   const p = state.params;
   const marker = ensurePlayerSpawnMarker();
@@ -336,9 +363,9 @@ function updatePlayerSpawnMarker(position = null, yaw = null, { preview = false 
   const ring = marker.getObjectByName('PlayerSpawnMarkerFootprint');
   const arrow = marker.getObjectByName('PlayerSpawnMarkerFacingArrow');
   const stem = marker.getObjectByName('PlayerSpawnMarkerFacingStem');
-  const markerOpacity = preview ? 0.28 : 0.5;
+  const markerOpacity = preview ? 0.45 : 0.9;
   if (body?.material) body.material.opacity = preview ? 0.3 : 0.42;
-  if (ring?.material) ring.material.opacity = markerOpacity;
+  setMarkerOpacity(ring, markerOpacity);
   if (arrow?.material) arrow.material.opacity = preview ? 0.7 : 0.95;
   if (stem?.material) stem.material.opacity = preview ? 0.45 : 0.78;
 }
@@ -529,7 +556,7 @@ export function updateEditorPlacement() {
   const editorOn = isEditorModeEnabled();
   if (!editorOn) {
     hideNpcGhost();
-    setPlayerSpawnMarkerVisible(false);
+    refreshPlayerSpawnMarker();
     _primaryPrev = !!state.primaryFire;
     _secondaryPrev = !!state.secondaryFire;
     return;
