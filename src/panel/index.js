@@ -12086,7 +12086,6 @@ function rebuildPanel() {
     [ICON_SOUND, 'Sound', buildSound],
     [ICON_CONTROLLER, 'Controller', buildController],
     [ICON_LANDSCAPE, 'Landscape Editor', buildLandscapeEditor],
-    [ICON_LANDSCAPE, 'Landscape', buildLandscape],
     [ICON_ASSETS, 'Assets', buildAssets],
     [ICON_SCENARIOS, 'Scenes', buildScenes],
   ];

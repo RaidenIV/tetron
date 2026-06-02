@@ -1795,6 +1795,37 @@ function getNpcAccuracy(npc) {
   return clamp(Number.isFinite(value) ? value : 100, 0, 100) / 100;
 }
 
+function respawnPlayerAfterDeath() {
+  const p = state.params;
+  const maxHealth = Math.max(1, Number(p.playerMaxHealth) || 100);
+  const maxArmor = Math.max(0, Number(p.playerMaxArmor) || 0);
+  const hasSpawn = p.playerSpawnEnabled === true;
+  const spawnX = hasSpawn && Number.isFinite(Number(p.playerSpawnX)) ? Number(p.playerSpawnX) : 0;
+  const spawnY = hasSpawn && Number.isFinite(Number(p.playerSpawnY)) ? Math.max(0, Number(p.playerSpawnY)) : 0;
+  const spawnZ = hasSpawn && Number.isFinite(Number(p.playerSpawnZ)) ? Number(p.playerSpawnZ) : 0;
+  const rawYaw = hasSpawn && Number.isFinite(Number(p.playerSpawnYaw)) ? Number(p.playerSpawnYaw) : Number(p.thirdAzimuth) || 0;
+  const yawStep = Math.PI / 2;
+  const spawnYaw = Math.round(rawYaw / yawStep) * yawStep;
+
+  p.playerHealth = maxHealth;
+  p.playerArmor = maxArmor;
+  p.thirdAzimuth = spawnYaw;
+  p.editorYaw = spawnYaw;
+  p.editorPlayerSpawnYaw = spawnYaw;
+
+  playerGroup.position.set(spawnX, spawnY, spawnZ);
+  state.jumpVelocity = 0;
+  state.jumpQueued = false;
+  state.jumpGrounded = true;
+  state.jumpAirJumpsUsed = 0;
+  state.dashTimer = 0;
+  state.dashCooldown = 0;
+  state.dashVX = 0;
+  state.dashVZ = 0;
+  state.lastMoveX = -Math.sin(spawnYaw);
+  state.lastMoveZ = -Math.cos(spawnYaw);
+}
+
 function applyPlayerDamage(amount) {
   const p = state.params;
   if (p.playerInvincible) return;
@@ -1805,6 +1836,7 @@ function applyPlayerDamage(amount) {
   p.playerArmor = armor - armorHit;
   damage -= armorHit;
   if (damage > 0) p.playerHealth = Math.max(0, (Number(p.playerHealth) || 0) - damage);
+  if ((Number(p.playerHealth) || 0) <= 0) respawnPlayerAfterDeath();
   syncPlayerHud();
 }
 
