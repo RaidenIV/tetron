@@ -79,6 +79,10 @@ const FIRE_RATE_SECONDS = {
   grenades: 2.6,
   rocketLauncher: 2.4,
 };
+const NPC_BURST_MIN_SHOTS = 2;
+const NPC_BURST_MAX_SHOTS = 5;
+const NPC_BURST_MIN_PAUSE = 2.0;
+const NPC_BURST_MAX_PAUSE = 3.0;
 
 let _enemyGruntEl = null;
 const _corpseBox = new THREE.Box3();
@@ -992,6 +996,7 @@ function makeEnemy(type, position, index = 0, options = {}) {
     spawnFlashTimer: 0.65,
     contactCooldown: randomRange(0.1, 0.8),
     shootTimer: randomRange(0.25, 1.4),
+    _burstState: null,
     teleportCooldown: randomRange(1.0, 2.5),
     bobOffset: index * 0.81,
     phase: 1,
@@ -1700,6 +1705,43 @@ function consumeNpcAmmoForShot(npc, config, delta) {
   return true;
 }
 
+function getNpcBurstState(npc, config) {
+  const weaponKey = config?.type || getEffectiveWeapon(npc);
+  if (!npc._burstState || npc._burstState.weaponKey !== weaponKey) {
+    npc._burstState = {
+      weaponKey,
+      shotsRemaining: randomNpcBurstShotCount(config),
+      pauseRemaining: 0,
+    };
+  }
+  return npc._burstState;
+}
+
+function randomNpcBurstShotCount(config) {
+  let maxShots = NPC_BURST_MAX_SHOTS;
+  if (config?.type && NPC_MAGAZINE_WEAPON_TYPES.has(config.type)) {
+    maxShots = Math.min(maxShots, getNpcConfiguredMagazineSize(config.type));
+  }
+  maxShots = Math.max(1, Math.floor(maxShots));
+  const minShots = Math.min(maxShots, NPC_BURST_MIN_SHOTS);
+  return randomInt(minShots, maxShots);
+}
+
+function startNpcBurstPause(npc, config) {
+  const burst = getNpcBurstState(npc, config);
+  burst.pauseRemaining = randomRange(NPC_BURST_MIN_PAUSE, NPC_BURST_MAX_PAUSE);
+  burst.shotsRemaining = randomNpcBurstShotCount(config);
+  npc.shootTimer = 0;
+}
+
+function updateNpcBurstPause(npc, config, delta) {
+  const burst = getNpcBurstState(npc, config);
+  if (burst.pauseRemaining <= 0) return false;
+  burst.pauseRemaining = Math.max(0, burst.pauseRemaining - Math.max(0, delta));
+  if (burst.pauseRemaining <= 0) npc.shootTimer = 0;
+  return true;
+}
+
 function shouldShowNpcRifleTracer(config) {
   if (!config || config.type !== 'rifle' || state.params.weaponRifleTracers === false) return true;
   _npcRifleTracerShotCounter = (_npcRifleTracerShotCounter + 1) % 5;
@@ -2368,15 +2410,35 @@ function fireEnemyBullet(enemy, targetNpc = null, config = getNpcWeaponConfig(en
 function updateEnemyShooting(enemy, delta, targetNpc = null) {
   const config = getNpcWeaponConfig(enemy);
   if (!config || enemy.spawnFlashTimer > 0) return;
+
   if (targetNpc) {
     if (!isTargetWithinNpcAwareness(enemy, targetNpc)) return;
   } else if (enemy.isAlly || !isPlayerWithinNpcAwareness(enemy)) {
     return;
   }
+
   updateNpcReload(enemy, config.type, delta);
+  if (updateNpcBurstPause(enemy, config, delta)) return;
+
   enemy.shootTimer -= delta;
   if (enemy.shootTimer <= 0) {
-    if (consumeNpcAmmoForShot(enemy, config, delta)) fireEnemyBullet(enemy, targetNpc, config);
+    const burst = getNpcBurstState(enemy, config);
+    const fired = consumeNpcAmmoForShot(enemy, config, delta);
+    if (fired) {
+      fireEnemyBullet(enemy, targetNpc, config);
+      burst.shotsRemaining = Math.max(0, (Number(burst.shotsRemaining) || 0) - 1);
+    }
+
+    if (!fired) {
+      enemy.shootTimer = 0.12;
+      return;
+    }
+
+    if (burst.shotsRemaining <= 0) {
+      startNpcBurstPause(enemy, config);
+      return;
+    }
+
     const interval = 1 / Math.max(0.1, Number(config.fireRate) || 1);
     enemy.shootTimer = interval * randomRange(0.82, 1.18);
   }
@@ -2499,10 +2561,11 @@ function isPlayerWithinNpcAwareness(npc) {
 
 function findNearestOpponent(npc) {
   if (!isLiveNpc(npc)) return null;
-  const range = getNpcAttackRange(npc);
-  return npc.isAlly
+  const range = getNpcAwarenessRange(npc);
+  const target = npc.isAlly
     ? findNearestEnemy(npc.group.position, range)
     : findNearestAlly(npc.group.position, range);
+  return target && isTargetWithinNpcAwareness(npc, target) ? target : null;
 }
 
 function updateAllyMovement(ally, delta, elapsedTime, index, target = null) {
