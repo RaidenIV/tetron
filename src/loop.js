@@ -10,7 +10,7 @@ import { updateSunPosition } from './lighting.js';
 import { updateChunks, clampPositionToBuildArea } from './terrain.js';
 import { playerGroup, updatePlayer, updateDashStreaks } from './player.js';
 import { updateLaserProjectiles, resolveAimTarget, aimResult, syncWeaponAmmoHud } from './weapons.js';
-import { updateEnemies, getEnemyMeshes, tagEnemy, getEnemies, getAllies } from './enemies.js';
+import { updateEnemies, updateNpcTeamCombat, getEnemyMeshes, tagEnemy, getEnemies, getAllies } from './enemies.js';
 import { updatePlacer } from './placer.js';
 import { isEditorModeEnabled, updateEditorCamera, updateEditorPlacement } from './editor.js';
 import { updateController } from './input.js';
@@ -301,7 +301,7 @@ export function tick() {
     // editor. Plain Editor Mode remains a paused placement camera.
     if (state.params.landscapeEditorModeEnabled === true) {
       const worldDelta = delta * (Number(state.worldScale) || 1);
-      updateEnemies(worldDelta, _elapsed);
+      updateNpcTeamCombat(worldDelta, _elapsed);
       [...getEnemies(), ...getAllies()].forEach(npc => {
         if (npc?.group?.position) clampPositionToBuildArea(npc.group.position, npc.radius || 0.4);
       });
@@ -345,6 +345,15 @@ export function tick() {
   }
 
   if (state.paused) {
+    // Sidebar-open player mode is paused for the player/camera, but ally-vs-enemy
+    // combat should still be testable from the panel. Run team combat only here
+    // so NPC factions engage each other without enemies damaging or chasing the
+    // paused player.
+    const worldDelta = delta * (Number(state.worldScale) || 1);
+    updateNpcTeamCombat(worldDelta, _elapsed);
+    [...getEnemies(), ...getAllies()].forEach(npc => {
+      if (npc?.group?.position) clampPositionToBuildArea(npc.group.position, npc.radius || 0.4);
+    });
     state.primaryFire = false;
     state.secondaryFire = false;
     updateCameraShake(delta);

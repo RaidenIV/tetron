@@ -893,20 +893,6 @@ function getNpcAimPoint(targetNpc = null, out = _npcAimPoint) {
   if (targetNpc?.group) {
     out.copy(targetNpc.group.position);
     out.y += targetNpc.mesh?.position?.y ?? Math.max(0.6, (targetNpc.radius || BASE_RADIUS) + 0.35);
-
-    // Lead the target: predict where it will be when the bullet arrives.
-    // Uses the target's last-known velocity stored on its group (set in updateEnemyMovement).
-    const vel = targetNpc.group._npcVel;
-    if (vel) {
-      // Rough time-of-flight: distance to aim point / conservative bullet speed (70).
-      const dx = out.x - targetNpc.group.position.x;
-      const dz = out.z - targetNpc.group.position.z;
-      const dist = Math.max(1, Math.sqrt(dx * dx + dz * dz));
-      const tof = dist / 70;
-      out.x += vel.x * tof;
-      out.z += vel.z * tof;
-    }
-
     return out;
   }
 
@@ -1839,9 +1825,14 @@ function getNpcMoveSpeed(npc) {
 }
 
 function getNpcAwarenessRange(npc) {
-  if (Number.isFinite(Number(npc?.awarenessRange))) return Math.max(1, Number(npc.awarenessRange));
   const key = npc?.isAlly ? 'allyAwarenessRange' : 'enemyAwarenessRange';
-  return Math.max(1, Number(state.params[key]) || 40);
+  const globalRange = Math.max(1, Number(state.params[key]) || 40);
+  const storedRange = Number(npc?.awarenessRange);
+  // Editor-placed NPCs may carry a saved awareness value from the moment they
+  // were placed. Use the larger of the saved value and the current team setting
+  // so raising the Ally/Enemy awareness controls immediately allows existing
+  // NPCs to reacquire targets instead of staying stuck with stale short ranges.
+  return Number.isFinite(storedRange) ? Math.max(1, storedRange, globalRange) : globalRange;
 }
 
 function getNpcAccuracy(npc) {
@@ -2064,12 +2055,9 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
     seekZ = tangZ * 0.9 + toTargetZ * radialBias;
     speedMult = 1.05;
   } else if (behavior === 'keepDistance') {
-    // When engaging another NPC, keep a tighter distance so both teams
-    // stay within reliable weapon range of each other.
-    const desired = targetNpc ? 7 : 14;
-    const deadband = targetNpc ? 1.5 : 2;
+    const desired = 14;
     if (dist < desired) { seekX = -toTargetX; seekZ = -toTargetZ; speedMult = 1.05; }
-    else if (dist > desired + deadband) { seekX = toTargetX; seekZ = toTargetZ; speedMult = 0.85; }
+    else if (dist > desired + 2) { seekX = toTargetX; seekZ = toTargetZ; speedMult = 0.85; }
   } else if (behavior === 'teleport') {
     enemy.teleportCooldown = Math.max(0, enemy.teleportCooldown - delta);
     if (enemy.teleportCooldown <= 0 && dist < 5.5) {
@@ -2119,16 +2107,9 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
 
   // Apply movement
   const baseSpeed = getNpcMoveSpeed(enemy);
-  const vx = moveX * baseSpeed * speedMult;
-  const vz = moveZ * baseSpeed * speedMult;
-  enemy.group.position.x += vx * delta;
-  enemy.group.position.z += vz * delta;
+  enemy.group.position.x += moveX * baseSpeed * speedMult * delta;
+  enemy.group.position.z += moveZ * baseSpeed * speedMult * delta;
   resolveCircleAgainstPlacedObjects(enemy.group.position, enemy.radius);
-
-  // Store velocity for aim-lead in getNpcAimPoint.
-  if (!enemy.group._npcVel) enemy.group._npcVel = { x: 0, z: 0 };
-  enemy.group._npcVel.x = vx;
-  enemy.group._npcVel.z = vz;
 }
 
 function updateContactDamage(enemy, delta, targetNpc = null) {
@@ -2537,30 +2518,20 @@ function isLiveNpc(npc) {
   return !!npc?.group && Number(npc.hp) > 0;
 }
 
-function findNearestEnemy(position, maxRange = Infinity) {
-  let nearest = null;
-  let best = Math.max(0, maxRange) ** 2;
-  for (const enemy of enemies) {
-    if (!isLiveNpc(enemy)) continue;
-    const dx = enemy.group.position.x - position.x;
-    const dz = enemy.group.position.z - position.z;
-    const d2 = dx * dx + dz * dz;
-    if (d2 <= best) { best = d2; nearest = enemy; }
-  }
-  return nearest;
+function getNpcHorizontalDelta(a, b) {
+  if (!a?.group || !b?.group) return { dx: 0, dz: 0, d2: Infinity, distance: Infinity };
+  const dx = b.group.position.x - a.group.position.x;
+  const dz = b.group.position.z - a.group.position.z;
+  const d2 = dx * dx + dz * dz;
+  return { dx, dz, d2, distance: Math.sqrt(d2) };
 }
 
-function findNearestAlly(position, maxRange = Infinity) {
-  let nearest = null;
-  let best = Math.max(0, maxRange) ** 2;
-  for (const ally of allies) {
-    if (!isLiveNpc(ally)) continue;
-    const dx = ally.group.position.x - position.x;
-    const dz = ally.group.position.z - position.z;
-    const d2 = dx * dx + dz * dz;
-    if (d2 <= best) { best = d2; nearest = ally; }
-  }
-  return nearest;
+function getNpcAwarenessClearance(npc, targetNpc) {
+  const delta = getNpcHorizontalDelta(npc, targetNpc);
+  if (!Number.isFinite(delta.distance)) return Infinity;
+  const targetRadius = Math.max(0, Number(targetNpc?.radius) || BASE_RADIUS);
+  const selfRadius = Math.max(0, Number(npc?.radius) || BASE_RADIUS);
+  return Math.max(0, delta.distance - targetRadius - selfRadius);
 }
 
 function getNpcAttackRange(npc) {
@@ -2570,9 +2541,7 @@ function getNpcAttackRange(npc) {
 function isTargetWithinNpcAwareness(npc, targetNpc) {
   if (!isLiveNpc(npc) || !isLiveNpc(targetNpc)) return false;
   const range = getNpcAttackRange(npc);
-  const dx = targetNpc.group.position.x - npc.group.position.x;
-  const dz = targetNpc.group.position.z - npc.group.position.z;
-  return dx * dx + dz * dz <= range * range;
+  return getNpcAwarenessClearance(npc, targetNpc) <= range;
 }
 
 function isPlayerWithinNpcAwareness(npc) {
@@ -2580,16 +2549,26 @@ function isPlayerWithinNpcAwareness(npc) {
   const range = getNpcAttackRange(npc);
   const dx = playerGroup.position.x - npc.group.position.x;
   const dz = playerGroup.position.z - npc.group.position.z;
-  return dx * dx + dz * dz <= range * range;
+  const playerRadius = Math.max(0.25, Number(state.params.playerRadius) || 0.4);
+  return Math.max(0, Math.hypot(dx, dz) - playerRadius) <= range;
 }
 
 function findNearestOpponent(npc) {
   if (!isLiveNpc(npc)) return null;
-  const range = getNpcAwarenessRange(npc);
-  const target = npc.isAlly
-    ? findNearestEnemy(npc.group.position, range)
-    : findNearestAlly(npc.group.position, range);
-  return target && isTargetWithinNpcAwareness(npc, target) ? target : null;
+  const candidates = npc.isAlly ? enemies : allies;
+  let nearest = null;
+  let best = Infinity;
+  for (const target of candidates) {
+    if (!isLiveNpc(target)) continue;
+    if (target.isAlly === npc.isAlly) continue;
+    if (!isTargetWithinNpcAwareness(npc, target)) continue;
+    const d2 = getNpcHorizontalDelta(npc, target).d2;
+    if (d2 < best) {
+      best = d2;
+      nearest = target;
+    }
+  }
+  return nearest;
 }
 
 function updateAllyMovement(ally, delta, elapsedTime, index, target = null) {
@@ -2668,34 +2647,35 @@ function updateAllies(delta, elapsedTime = 0) {
   }
 }
 
-export function updateEnemies(delta, elapsedTime = 0) {
-  syncPlayerHud();
-  applyExplosionSplashDamage();
-
+function updateEnemyTeamCombat(delta, elapsedTime = 0, { includePlayer = true } = {}) {
   // Rebuild before allied movement so allies have a current NPC set for
   // targeting/separation after scene loads or editor-spawn changes.
   _spatialHash.rebuild(getActiveNpcs());
   updateAllies(delta, elapsedTime);
 
-  // Step 1: Rebuild spatial hash after allied movement and before enemy movement
-  // (for separation queries and ally/enemy engagement after loaded scenes).
+  // Rebuild after allied movement and before enemy movement so enemies see the
+  // current ally positions in the same frame.
   _spatialHash.rebuild(getActiveNpcs());
 
-  // Step 2: Move all enemies (includes separation steering + slot bias)
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemies[i];
     enemy.spawnFlashTimer = Math.max(0, enemy.spawnFlashTimer - delta);
-    const target = findNearestOpponent(enemy);
-    updateEnemyMovement(enemy, delta, target);
+    const opponentTarget = findNearestOpponent(enemy);
+    const target = opponentTarget || (includePlayer && isPlayerWithinNpcAwareness(enemy) ? null : null);
+    if (opponentTarget || includePlayer) updateEnemyMovement(enemy, delta, opponentTarget || null);
     updateNpcAwarenessRing(enemy);
 
-    const lookPos = target?.group?.position || playerGroup.position;
-    const dx = lookPos.x - enemy.group.position.x;
-    const dz = lookPos.z - enemy.group.position.z;
-    enemy.group.rotation.y = Math.atan2(dx, dz);
+    const lookPos = opponentTarget?.group?.position || (includePlayer ? playerGroup.position : null);
+    if (lookPos) {
+      const dx = lookPos.x - enemy.group.position.x;
+      const dz = lookPos.z - enemy.group.position.z;
+      enemy.group.rotation.y = Math.atan2(dx, dz);
+    }
 
-    updateEnemyShooting(enemy, delta, target);
-    updateContactDamage(enemy, delta, target);
+    if (opponentTarget || includePlayer) {
+      updateEnemyShooting(enemy, delta, target);
+      updateContactDamage(enemy, delta, target);
+    }
     enemy.mesh.position.y = (BASE_RADIUS + BASE_LENGTH / 2) * enemy.sizeMult;
 
     const flash = enemy.spawnFlashTimer > 0;
@@ -2705,16 +2685,29 @@ export function updateEnemies(delta, elapsedTime = 0) {
       enemy.material.emissive.set(enemy.def.color);
       enemy.material.emissiveIntensity = 0.06;
     }
-    updateNpcWeaponVisual(enemy, getNpcAimPoint(target, _npcAimPoint));
+    updateNpcWeaponVisual(enemy, getNpcAimPoint(opponentTarget, _npcAimPoint));
     updateNpcHealthBar(enemy);
   }
 
-  // Step 3: Rebuild hash after movement, apply hard decollision
   _spatialHash.rebuild(getActiveNpcs());
   applyHardEnemyDecollision();
-  // Step 4: Final rebuild for bullets / later systems
   _spatialHash.rebuild(getActiveNpcs());
+}
 
+export function updateNpcTeamCombat(delta, elapsedTime = 0) {
+  syncPlayerHud();
+  applyExplosionSplashDamage();
+  updateEnemyTeamCombat(delta, elapsedTime, { includePlayer: false });
+  updateEnemyBullets(delta);
+  updateNpcProjectileShockwaves(delta);
+  updateDestructionParticles(delta);
+  updateEnemyCorpses(delta);
+}
+
+export function updateEnemies(delta, elapsedTime = 0) {
+  syncPlayerHud();
+  applyExplosionSplashDamage();
+  updateEnemyTeamCombat(delta, elapsedTime, { includePlayer: true });
   updateEnemyBullets(delta);
   updateNpcProjectileShockwaves(delta);
   updateDestructionParticles(delta);
