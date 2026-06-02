@@ -2032,9 +2032,41 @@ function applyExplosionSplashDamage() {
 }
 
 // ── Grouped movement (GROUPING.md) ────────────────────────────────────────────
+function isNpcEngagedWithPlayer(enemy) {
+  return !enemy?.isAlly && isPlayerWithinNpcAwareness(enemy);
+}
+
+function getNpcCombatStrafeSign(enemy, delta) {
+  enemy.__combatStrafeTimer = Math.max(0, Number(enemy.__combatStrafeTimer) || 0);
+  if (!Number.isFinite(Number(enemy.__combatStrafeSign)) || enemy.__combatStrafeTimer <= 0) {
+    enemy.__combatStrafeSign = Math.random() < 0.5 ? -1 : 1;
+    enemy.__combatStrafeTimer = randomRange(1.15, 2.4);
+  } else {
+    enemy.__combatStrafeTimer = Math.max(0, enemy.__combatStrafeTimer - Math.max(0, delta));
+  }
+  return enemy.__combatStrafeSign;
+}
+
+function blendNpcCombatStrafe(enemy, delta, seek, toTargetX, toTargetZ, dist, engaged) {
+  if (!engaged || getEffectiveWeapon(enemy) === 'none') return seek;
+  const strafeSign = getNpcCombatStrafeSign(enemy, delta);
+  const tangX = -toTargetZ * strafeSign;
+  const tangZ =  toTargetX * strafeSign;
+  const weapon = getEffectiveWeapon(enemy);
+  const ranged = weapon !== 'contact';
+  const close = dist <= Math.max(2.2, (enemy.radius || BASE_RADIUS) * 4);
+  const weight = ranged ? (close ? 0.72 : 0.48) : (close ? 0.42 : 0.24);
+  const keepAway = ranged && close ? -0.28 : 0;
+  return {
+    x: seek.x * (1 - weight) + tangX * weight + toTargetX * keepAway,
+    z: seek.z * (1 - weight) + tangZ * weight + toTargetZ * keepAway,
+  };
+}
+
 function updateEnemyMovement(enemy, delta, targetNpc = null) {
   const baseBehavior = getEffectiveBehavior(enemy);
-  const behavior = targetNpc && baseBehavior === 'guard' ? 'rush' : baseBehavior;
+  const engaged = !!targetNpc || isNpcEngagedWithPlayer(enemy);
+  const behavior = engaged && baseBehavior === 'guard' ? 'rush' : baseBehavior;
   const targetPos = targetNpc?.group?.position || playerGroup.position;
 
   _tmpVec.set(targetPos.x - enemy.group.position.x, 0, targetPos.z - enemy.group.position.z);
@@ -2069,7 +2101,7 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
       // freeze once they reach their preferred range. Strafe around the target
       // while maintaining radius so allies/enemies visibly keep moving during
       // attacks instead of becoming stationary turrets.
-      const strafeSign = enemy.__combatStrafeSign || (enemy.__combatStrafeSign = Math.random() < 0.5 ? -1 : 1);
+      const strafeSign = getNpcCombatStrafeSign(enemy, delta);
       const radialBias = clamp((dist - desired) / 2.5, -0.35, 0.35);
       seekX = (-toTargetZ * strafeSign) * 0.9 + toTargetX * radialBias;
       seekZ = ( toTargetX * strafeSign) * 0.9 + toTargetZ * radialBias;
@@ -2094,6 +2126,11 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
   } else {
     seekX = toTargetX; seekZ = toTargetZ;
   }
+
+  const combatSeek = blendNpcCombatStrafe(enemy, delta, { x: seekX, z: seekZ }, toTargetX, toTargetZ, dist, engaged);
+  seekX = combatSeek.x;
+  seekZ = combatSeek.z;
+  if (engaged) speedMult = Math.max(speedMult, getEffectiveWeapon(enemy) === 'contact' ? 0.75 : 0.82);
 
   // Normalise seek
   const seekLen = Math.hypot(seekX, seekZ);
@@ -2122,13 +2159,13 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
   const smoothed = smoothSteer(enemy, { x: moveX, z: moveZ });
   moveX = smoothed.x; moveZ = smoothed.z;
 
-  // If an NPC has an active opposing target and steering collapsed to nearly
-  // zero, add a small strafe fallback so attack state never immobilizes it.
-  if (targetNpc && Math.hypot(moveX, moveZ) < 0.001 && behavior !== 'guard') {
-    const strafeSign = enemy.__combatStrafeSign || (enemy.__combatStrafeSign = Math.random() < 0.5 ? -1 : 1);
+  // If an NPC has an active combat target and steering collapsed to nearly
+  // zero, add a strafe fallback so attack state never immobilizes it.
+  if (engaged && Math.hypot(moveX, moveZ) < 0.001 && behavior !== 'guard') {
+    const strafeSign = getNpcCombatStrafeSign(enemy, delta);
     moveX = -toTargetZ * strafeSign;
     moveZ =  toTargetX * strafeSign;
-    speedMult = Math.max(speedMult, 0.6);
+    speedMult = Math.max(speedMult, getEffectiveWeapon(enemy) === 'contact' ? 0.75 : 0.82);
   }
 
   // Apply movement
