@@ -144,26 +144,37 @@ function updateRadar() {
   ctx.arc(radius, radius, 3.5, 0, Math.PI * 2);
   ctx.fill();
 
-  // Camera yaw for rotation (camera forward = up on radar)
-  const camAzimuth = state.params.thirdAzimuth || 0;
+  // Camera-relative radar transform. The third-person camera/player forward
+  // vector is (-sin(yaw), -cos(yaw)); projecting blips onto the matching
+  // forward/right basis keeps targets in front of the camera at the top of the
+  // radar instead of mirrored/upside-down.
+  const camAzimuth = Number(state.params.thirdAzimuth) || 0;
   const px = playerGroup.position.x;
   const pz = playerGroup.position.z;
+  const forwardX = -Math.sin(camAzimuth);
+  const forwardZ = -Math.cos(camAzimuth);
+  const rightX = Math.cos(camAzimuth);
+  const rightZ = -Math.sin(camAzimuth);
+
+  const projectRadarPoint = (worldX, worldZ) => {
+    const dx = worldX - px;
+    const dz = worldZ - pz;
+    const dist = Math.hypot(dx, dz);
+    if (dist > range) return null;
+    const localRight = dx * rightX + dz * rightZ;
+    const localForward = dx * forwardX + dz * forwardZ;
+    const scale = (radius - 6) / range;
+    return { x: radius + localRight * scale, y: radius - localForward * scale };
+  };
 
   for (const enemy of getEnemies()) {
     if (!enemy || !enemy.group) continue;
-    const dx = enemy.group.position.x - px;
-    const dz = enemy.group.position.z - pz;
-    const dist = Math.hypot(dx, dz);
-    if (dist > range) continue;
-
-    const angle = Math.atan2(dx, dz) - camAzimuth;
-    const sc = (dist / range) * (radius - 6);
-    const ex = radius + Math.sin(angle) * sc;
-    const ey = radius - Math.cos(angle) * sc;
+    const point = projectRadarPoint(enemy.group.position.x, enemy.group.position.z);
+    if (!point) continue;
 
     if (enemy.tagged) {
       // Tagged: draw the tag icon (upside-down triangle pointing at enemy)
-      drawTagIcon(ctx, ex, ey, 10, tagColor);
+      drawTagIcon(ctx, point.x, point.y, 10, tagColor);
     } else {
       // Untagged: simple red blip with shadow for legibility
       ctx.save();
@@ -171,7 +182,7 @@ function updateRadar() {
       ctx.shadowBlur = 4;
       ctx.fillStyle = enemyColor;
       ctx.beginPath();
-      ctx.arc(ex, ey, 2.5, 0, Math.PI * 2);
+      ctx.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -179,22 +190,15 @@ function updateRadar() {
 
   for (const ally of getAllies()) {
     if (!ally || !ally.group) continue;
-    const dx = ally.group.position.x - px;
-    const dz = ally.group.position.z - pz;
-    const dist = Math.hypot(dx, dz);
-    if (dist > range) continue;
-
-    const angle = Math.atan2(dx, dz) - camAzimuth;
-    const sc = (dist / range) * (radius - 6);
-    const ax = radius + Math.sin(angle) * sc;
-    const ay = radius - Math.cos(angle) * sc;
+    const point = projectRadarPoint(ally.group.position.x, ally.group.position.z);
+    if (!point) continue;
 
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.85)';
     ctx.shadowBlur = 4;
     ctx.fillStyle = allyColor;
     ctx.beginPath();
-    ctx.arc(ax, ay, 2.5, 0, Math.PI * 2);
+    ctx.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }

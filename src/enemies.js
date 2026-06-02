@@ -2261,10 +2261,15 @@ function updateEnemyBullets(delta) {
 }
 
 
+function isLiveNpc(npc) {
+  return !!npc?.group && Number(npc.hp) > 0;
+}
+
 function findNearestEnemy(position, maxRange = Infinity) {
   let nearest = null;
   let best = Math.max(0, maxRange) ** 2;
   for (const enemy of enemies) {
+    if (!isLiveNpc(enemy)) continue;
     const dx = enemy.group.position.x - position.x;
     const dz = enemy.group.position.z - position.z;
     const d2 = dx * dx + dz * dz;
@@ -2277,6 +2282,7 @@ function findNearestAlly(position, maxRange = Infinity) {
   let nearest = null;
   let best = Math.max(0, maxRange) ** 2;
   for (const ally of allies) {
+    if (!isLiveNpc(ally)) continue;
     const dx = ally.group.position.x - position.x;
     const dz = ally.group.position.z - position.z;
     const d2 = dx * dx + dz * dz;
@@ -2285,9 +2291,16 @@ function findNearestAlly(position, maxRange = Infinity) {
   return nearest;
 }
 
+function getNpcEngagementRange(npc) {
+  const awareness = getNpcAwarenessRange(npc);
+  const weaponRange = Number(getNpcWeaponConfig(npc)?.range);
+  return Math.max(awareness, Number.isFinite(weaponRange) ? weaponRange : 0);
+}
+
 function findNearestOpponent(npc) {
-  const range = getNpcAwarenessRange(npc);
-  return npc?.isAlly
+  if (!isLiveNpc(npc)) return null;
+  const range = getNpcEngagementRange(npc);
+  return npc.isAlly
     ? findNearestEnemy(npc.group.position, range)
     : findNearestAlly(npc.group.position, range);
 }
@@ -2371,9 +2384,14 @@ function updateAllies(delta, elapsedTime = 0) {
 export function updateEnemies(delta, elapsedTime = 0) {
   syncPlayerHud();
   applyExplosionSplashDamage();
+
+  // Rebuild before allied movement so allies have a current NPC set for
+  // targeting/separation after scene loads or editor-spawn changes.
+  _spatialHash.rebuild(getActiveNpcs());
   updateAllies(delta, elapsedTime);
 
-  // Step 1: Rebuild spatial hash before movement (for separation queries)
+  // Step 1: Rebuild spatial hash after allied movement and before enemy movement
+  // (for separation queries and ally/enemy engagement after loaded scenes).
   _spatialHash.rebuild(getActiveNpcs());
 
   // Step 2: Move all enemies (includes separation steering + slot bias)
