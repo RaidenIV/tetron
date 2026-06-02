@@ -97,7 +97,9 @@ const _npcRifleMat = new THREE.MeshStandardMaterial({
   roughness: 0.38,
 });
 const _awarenessCircleGeo = new THREE.CircleGeometry(1, 128);
+const _awarenessOutlineGeo = new THREE.RingGeometry(0.985, 1.015, 128);
 const AWARENESS_RING_Y = 0.035;
+const AWARENESS_OUTLINE_Y_OFFSET = 0.004;
 
 function normalizeHexSetting(value, fallback) {
   return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim() : fallback;
@@ -147,6 +149,7 @@ function getAwarenessSettings(npc) {
     visible: state.params[ally ? 'allyAwarenessVisible' : 'enemyAwarenessVisible'] === true,
     range: Math.max(1, Number(state.params[ally ? 'allyAwarenessRange' : 'enemyAwarenessRange']) || 40),
     color: normalizeHexSetting(state.params[ally ? 'allyAwarenessColor' : 'enemyAwarenessColor'], ally ? '#00cc44' : '#ff3030'),
+    outlineColor: normalizeHexSetting(state.params[ally ? 'allyAwarenessOutlineColor' : 'enemyAwarenessOutlineColor'], '#000000'),
     opacity: clamp(Number(state.params[ally ? 'allyAwarenessOpacity' : 'enemyAwarenessOpacity']) || 0, 0, 1),
   };
 }
@@ -172,21 +175,53 @@ function ensureAwarenessRing(npc) {
     scene.add(ring);
     npc._awarenessRing = ring;
   }
+  if (!npc._awarenessOutlineRing) {
+    const outlineMaterial = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      depthTest: true,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+    });
+    const outline = new THREE.Mesh(_awarenessOutlineGeo, outlineMaterial);
+    outline.name = npc.isAlly ? 'AllyAwarenessRangeFloorOutline' : 'EnemyAwarenessRangeFloorOutline';
+    outline.rotation.x = -Math.PI / 2;
+    outline.position.set(npc.group.position.x, AWARENESS_RING_Y + AWARENESS_OUTLINE_Y_OFFSET, npc.group.position.z);
+    outline.renderOrder = 2;
+    outline.visible = false;
+    scene.add(outline);
+    npc._awarenessOutlineRing = outline;
+  }
   return npc._awarenessRing;
 }
 
 function updateNpcAwarenessRing(npc) {
   const ring = ensureAwarenessRing(npc);
   if (!ring) return;
+  const outline = npc._awarenessOutlineRing || null;
   const cfg = getAwarenessSettings(npc);
-  ring.visible = cfg.visible && cfg.opacity > 0;
+  const visible = cfg.visible && cfg.opacity > 0;
+  ring.visible = visible;
+  if (outline) outline.visible = visible;
   ring.position.set(npc.group.position.x, AWARENESS_RING_Y, npc.group.position.z);
   ring.rotation.set(-Math.PI / 2, 0, 0);
   ring.scale.set(cfg.range, cfg.range, 1);
-  if (!ring.visible) return;
+  if (outline) {
+    outline.position.set(npc.group.position.x, AWARENESS_RING_Y + AWARENESS_OUTLINE_Y_OFFSET, npc.group.position.z);
+    outline.rotation.set(-Math.PI / 2, 0, 0);
+    outline.scale.set(cfg.range, cfg.range, 1);
+  }
+  if (!visible) return;
   ring.material.color.set(cfg.color);
   ring.material.opacity = cfg.opacity;
   ring.material.needsUpdate = true;
+  if (outline) {
+    outline.material.color.set(cfg.outlineColor);
+    outline.material.opacity = Math.min(1, Math.max(0, cfg.opacity * 1.35));
+    outline.material.needsUpdate = true;
+  }
 }
 
 function playEnemyGruntSound(sourcePosition = null) {
@@ -978,9 +1013,11 @@ function disposeEnemy(enemy) {
     enemy._healthBarEl.style.display = 'none';
   }
   if (enemy._awarenessRing) scene.remove(enemy._awarenessRing);
+  if (enemy._awarenessOutlineRing) scene.remove(enemy._awarenessOutlineRing);
   scene.remove(enemy.group);
   enemy.material?.dispose?.();
   if (enemy._awarenessRing?.material) enemy._awarenessRing.material.dispose?.();
+  if (enemy._awarenessOutlineRing?.material) enemy._awarenessOutlineRing.material.dispose?.();
 }
 
 function disposeEnemyBullet(bullet) {
