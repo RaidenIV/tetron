@@ -274,35 +274,28 @@ function createPlayerSpawnMarker() {
   body.renderOrder = 26;
   group.add(body);
 
-  const footprintMat = new THREE.MeshBasicMaterial({
+  const footprintMat = new THREE.LineBasicMaterial({
     color: '#35ff00',
     transparent: true,
-    opacity: 0.9,
+    opacity: 0.95,
     depthWrite: false,
     toneMapped: false,
   });
-  const footprint = new THREE.Group();
+  const footprintHalf = 0.5;
+  const footprintY = 0.055;
+  const footprintPoints = [
+    new THREE.Vector3(-footprintHalf, footprintY, -footprintHalf),
+    new THREE.Vector3(footprintHalf, footprintY, -footprintHalf),
+    new THREE.Vector3(footprintHalf, footprintY, footprintHalf),
+    new THREE.Vector3(-footprintHalf, footprintY, footprintHalf),
+    new THREE.Vector3(-footprintHalf, footprintY, -footprintHalf),
+  ];
+  const footprint = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(footprintPoints),
+    footprintMat,
+  );
   footprint.name = 'PlayerSpawnMarkerFootprint';
   footprint.renderOrder = 24;
-  // One grid cell wide: the marker origin is snapped to cell centre (.5),
-  // so +/-0.5 lands exactly on the surrounding grid lines.
-  const footprintSize = 1.0;
-  const footprintThickness = 0.035;
-  const footprintY = 0.045;
-  const makeFootprintEdge = (name, width, depth, x, z) => {
-    const edge = new THREE.Mesh(
-      new THREE.BoxGeometry(width, 0.025, depth),
-      footprintMat.clone(),
-    );
-    edge.name = name;
-    edge.position.set(x, footprintY, z);
-    edge.renderOrder = 24;
-    footprint.add(edge);
-  };
-  makeFootprintEdge('PlayerSpawnMarkerFootprintFront', footprintSize, footprintThickness, 0, -footprintSize / 2);
-  makeFootprintEdge('PlayerSpawnMarkerFootprintBack', footprintSize, footprintThickness, 0, footprintSize / 2);
-  makeFootprintEdge('PlayerSpawnMarkerFootprintLeft', footprintThickness, footprintSize, -footprintSize / 2, 0);
-  makeFootprintEdge('PlayerSpawnMarkerFootprintRight', footprintThickness, footprintSize, footprintSize / 2, 0);
   group.add(footprint);
 
   const arrowTexture = new THREE.TextureLoader().load(SPAWN_ARROW_TEXTURE_URL);
@@ -316,12 +309,16 @@ function createPlayerSpawnMarker() {
     side: THREE.DoubleSide,
     toneMapped: false,
   });
+  const arrowPivot = new THREE.Group();
+  arrowPivot.name = 'PlayerSpawnMarkerFacingArrowPivot';
+  arrowPivot.renderOrder = 27;
   const arrow = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.95), arrowMat);
   arrow.name = 'PlayerSpawnMarkerFacingArrow';
   arrow.position.set(0, 0.07, -0.88);
   arrow.rotation.x = -Math.PI / 2;
   arrow.renderOrder = 27;
-  group.add(arrow);
+  arrowPivot.add(arrow);
+  group.add(arrowPivot);
 
   scene.add(group);
   return group;
@@ -356,15 +353,20 @@ function updatePlayerSpawnMarker(position = null, yaw = null, { preview = false 
   const y = position ? position.y : p.playerSpawnY;
   const z = position ? position.z : p.playerSpawnZ;
   marker.position.set(numberOr(x, 0), numberOr(y, 0), numberOr(z, 0));
-  marker.rotation.y = normalizeYaw(numberOr(yaw, p.playerSpawnYaw));
+  marker.rotation.y = 0;
   marker.visible = true;
 
   const body = marker.getObjectByName('PlayerSpawnMarkerBody');
-  const ring = marker.getObjectByName('PlayerSpawnMarkerFootprint');
+  const footprint = marker.getObjectByName('PlayerSpawnMarkerFootprint');
+  const arrowPivot = marker.getObjectByName('PlayerSpawnMarkerFacingArrowPivot');
   const arrow = marker.getObjectByName('PlayerSpawnMarkerFacingArrow');
   const markerOpacity = preview ? 0.45 : 0.9;
   if (body?.material) body.material.opacity = preview ? 0.3 : 0.42;
-  setMarkerOpacity(ring, markerOpacity);
+  if (footprint) {
+    footprint.rotation.y = 0;
+    setMarkerOpacity(footprint, markerOpacity);
+  }
+  if (arrowPivot) arrowPivot.rotation.y = normalizeYaw(numberOr(yaw, p.playerSpawnYaw));
   if (arrow?.material) arrow.material.opacity = preview ? 0.7 : 0.95;
 }
 
