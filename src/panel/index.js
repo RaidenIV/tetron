@@ -9190,6 +9190,7 @@ const PRESET_SETTINGS = [
     "destructionDestructibleColor": "#ffffff",
     "destructionDestructiblePhysics": "gravity",
     "placerObjectColor": "#445566",
+    "placedAssetShadows": false,
     "placerScaleX": 2,
     "placerScaleY": 1.5,
     "placerScaleZ": 1,
@@ -11150,6 +11151,7 @@ function buildLandscapeEditor(body) {
   body.appendChild(subhdr('Place Assets'));
   body.appendChild(assetSelectRow());
   body.appendChild(colorPicker('New Asset Color', 'placerObjectColor', () => rebuildPlacedObjects()));
+  body.appendChild(toggle('Placed Asset Shadows', 'placedAssetShadows', () => rebuildPlacedObjects()));
   body.appendChild(slider({ key: 'placerScaleX', label: 'New Width X', min: 0.5, max: 6, step: 0.5, dec: 1, onChange: applyAllParams }));
   body.appendChild(slider({ key: 'placerScaleY', label: 'New Height Y', min: 0.5, max: 6, step: 0.5, dec: 1, onChange: applyAllParams }));
   body.appendChild(slider({ key: 'placerScaleZ', label: 'New Depth Z', min: 0.5, max: 6, step: 0.5, dec: 1, onChange: applyAllParams }));
@@ -11852,6 +11854,7 @@ function applyAllParams() {
   p.playerSpawnZ = Number.isFinite(Number(p.playerSpawnZ)) ? Number(p.playerSpawnZ) : 0;
   p.playerSpawnYaw = snapSpawnYaw(Number.isFinite(Number(p.playerSpawnYaw)) ? Number(p.playerSpawnYaw) : p.editorPlayerSpawnYaw);
   if (!Array.isArray(p.editorPlacedNpcs)) p.editorPlacedNpcs = [];
+  p.placedAssetShadows = p.placedAssetShadows === true;
   p.landscapeEditorModeEnabled = p.landscapeEditorModeEnabled === true;
   p.landscapeEditorCloneOffsetX = Math.min(20, Math.max(-20, Number(p.landscapeEditorCloneOffsetX) || 1));
   p.landscapeEditorCloneOffsetZ = Math.min(20, Math.max(-20, Number(p.landscapeEditorCloneOffsetZ) || 1));

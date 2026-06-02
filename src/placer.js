@@ -476,8 +476,7 @@ function canStandOnObjectTop(footY, topY, stepUp = 0.35, stepDown = 0.45) {
 }
 
 export function getWalkablePlacedObjectHeight(position, radius = 0.35, options = {}) {
-  const list = state.params.placedObjects || [];
-  if (!list.length || !position) return 0;
+  if (!_placedSpatialEntries.length || !position) return 0;
 
   const r = Math.max(0, Number(radius) || 0);
   const currentY = Number.isFinite(Number(options.currentY)) ? Number(options.currentY) : Number(position.y) || 0;
@@ -485,8 +484,9 @@ export function getWalkablePlacedObjectHeight(position, radius = 0.35, options =
   const stepDown = Math.max(0, Number(options.stepDown) || 0.45);
   let height = 0;
 
-  for (const obj of list) {
-    const asset = getAsset(obj.assetId);
+  for (const entry of queryPlacedSpatial(position.x, position.z, Math.max(r, 0.75))) {
+    const obj = entry.obj;
+    const asset = entry.bounds.asset;
     if (asset.clip === false) continue;
 
     const rampY = rampSurfaceHeightAt(obj, asset, position.x, position.z, Math.max(r, 0.12), {
@@ -556,8 +556,7 @@ function resolveCircleAgainstBounds(position, radius, bounds) {
 }
 
 export function resolveCircleAgainstPlacedObjects(position, radius = 0.45, passes = 4, options = {}) {
-  const list = state.params.placedObjects || [];
-  if (!list.length || !position) return false;
+  if (!_placedSpatialEntries.length || !position) return false;
 
   const r = Math.max(0.01, Number(radius) || 0.45);
   let clipped = false;
@@ -565,8 +564,10 @@ export function resolveCircleAgainstPlacedObjects(position, radius = 0.45, passe
 
   for (let pass = 0; pass < maxPasses; pass++) {
     let changed = false;
-    for (const obj of list) {
-      const bounds = placedObjectBounds(obj);
+    const nearby = queryPlacedSpatial(position.x, position.z, r + 0.75);
+    for (const entry of nearby) {
+      const obj = entry.obj;
+      const bounds = entry.bounds;
       if (bounds.asset.clip === false) continue;
       if (options.walkableRamps === true && bounds.asset.walkable === true) {
         const footY = Number(options.footY);
@@ -610,13 +611,13 @@ export function resolveCircleAgainstPlacedObjects(position, radius = 0.45, passe
 }
 
 export function isPlacedObjectHit(position, radius = 0.1) {
-  const list = state.params.placedObjects || [];
-  if (!list.length || !position) return false;
+  if (!_placedSpatialEntries.length || !position) return false;
 
   const r = Math.max(0.001, Number(radius) || 0.1);
   const y = Number(position.y) || 0;
-  for (const obj of [...list]) {
-    const bounds = placedObjectBounds(obj);
+  for (const entry of queryPlacedSpatial(position.x, position.z, r + 0.25)) {
+    const obj = entry.obj;
+    const bounds = entry.bounds;
     if (bounds.asset.clip === false) continue;
     if (bounds.asset.walkable === true) {
       const surfaceY = rampSurfaceHeightAt(obj, bounds.asset, position.x, position.z, r);
@@ -727,6 +728,71 @@ const _placedMeshes = [];
 const _selectionHelpers = [];
 const _selectionHelperMatColor = 0x58a6ff;
 
+// Broadphase index for large player-built scenes. Without this, movement,
+// projectile checks, and NPC collision scanned every placed asset every frame,
+// which made multi-building scenes tank the FPS. The index is rebuilt only
+// when placed objects are rebuilt and is never exported to JSON.
+const PLACED_SPATIAL_CELL_SIZE = 4;
+let _placedSpatialEntries = [];
+let _placedSpatialGrid = new Map();
+
+function spatialCellKey(cx, cz) {
+  return `${cx},${cz}`;
+}
+
+function addSpatialEntry(entry) {
+  const minCX = Math.floor(entry.bounds.minX / PLACED_SPATIAL_CELL_SIZE);
+  const maxCX = Math.floor(entry.bounds.maxX / PLACED_SPATIAL_CELL_SIZE);
+  const minCZ = Math.floor(entry.bounds.minZ / PLACED_SPATIAL_CELL_SIZE);
+  const maxCZ = Math.floor(entry.bounds.maxZ / PLACED_SPATIAL_CELL_SIZE);
+  for (let cx = minCX; cx <= maxCX; cx++) {
+    for (let cz = minCZ; cz <= maxCZ; cz++) {
+      const key = spatialCellKey(cx, cz);
+      let bucket = _placedSpatialGrid.get(key);
+      if (!bucket) {
+        bucket = [];
+        _placedSpatialGrid.set(key, bucket);
+      }
+      bucket.push(entry);
+    }
+  }
+}
+
+function rebuildPlacedSpatialIndex() {
+  _placedSpatialEntries = [];
+  _placedSpatialGrid = new Map();
+  const list = state.params.placedObjects || [];
+  for (const obj of list) {
+    const bounds = placedObjectBounds(obj);
+    const entry = { obj, bounds };
+    _placedSpatialEntries.push(entry);
+    addSpatialEntry(entry);
+  }
+}
+
+function queryPlacedSpatial(x, z, radius = 0.5) {
+  if (!_placedSpatialEntries.length) return [];
+  const r = Math.max(0.001, Number(radius) || 0.001);
+  const minCX = Math.floor((x - r) / PLACED_SPATIAL_CELL_SIZE);
+  const maxCX = Math.floor((x + r) / PLACED_SPATIAL_CELL_SIZE);
+  const minCZ = Math.floor((z - r) / PLACED_SPATIAL_CELL_SIZE);
+  const maxCZ = Math.floor((z + r) / PLACED_SPATIAL_CELL_SIZE);
+  const seen = new Set();
+  const out = [];
+  for (let cx = minCX; cx <= maxCX; cx++) {
+    for (let cz = minCZ; cz <= maxCZ; cz++) {
+      const bucket = _placedSpatialGrid.get(spatialCellKey(cx, cz));
+      if (!bucket) continue;
+      for (const entry of bucket) {
+        if (!entry?.obj || seen.has(entry.obj)) continue;
+        seen.add(entry.obj);
+        out.push(entry);
+      }
+    }
+  }
+  return out;
+}
+
 function clearSelectionHelpers() {
   for (const helper of _selectionHelpers) {
     scene.remove(helper);
@@ -738,6 +804,26 @@ function clearSelectionHelpers() {
 
 function rebuildSelectionHelpers() {
   clearSelectionHelpers();
+  const selectedObjects = (state.params.placedObjects || []).filter(isObjectSelected);
+  if (!selectedObjects.length) return;
+
+  // Large structures can contain hundreds of blocks. Rendering one helper per
+  // block turns selection itself into a large draw-call count, so collapse big
+  // selections into one aggregate bounds helper.
+  if (selectedObjects.length > 64) {
+    const box = new THREE.Box3();
+    for (const obj of selectedObjects) {
+      const b = placedObjectBounds(obj);
+      box.expandByPoint(new THREE.Vector3(b.minX, b.minY, b.minZ));
+      box.expandByPoint(new THREE.Vector3(b.maxX, b.maxY, b.maxZ));
+    }
+    const helper = new THREE.Box3Helper(box, _selectionHelperMatColor);
+    helper.renderOrder = 18;
+    scene.add(helper);
+    _selectionHelpers.push(helper);
+    return;
+  }
+
   for (const mesh of _placedMeshes) {
     if (!isObjectSelected(mesh.userData?.placedObject)) continue;
     const helper = new THREE.BoxHelper(mesh, _selectionHelperMatColor);
@@ -1407,7 +1493,9 @@ function createPlacedMesh(obj, asset) {
   mesh.position.set(obj.x, obj.y, obj.z);
   mesh.rotation.y = obj.ry ?? 0;
   mesh.scale.set(scale.x, scale.y, scale.z);
-  mesh.castShadow = asset.id !== 'ramp';
+  // Large editor-built structures can create hundreds of shadow casters.
+  // Keep this opt-in so level blocking remains fast by default.
+  mesh.castShadow = state.params.placedAssetShadows === true && asset.id !== 'ramp';
   mesh.receiveShadow = true;
   addDangerDecals(mesh, obj, asset);
   return mesh;
@@ -1429,6 +1517,7 @@ export function rebuildPlacedObjects() {
     scene.add(mesh);
     _placedMeshes.push(mesh);
   }
+  rebuildPlacedSpatialIndex();
   rebuildSelectionHelpers();
 }
 
@@ -1501,6 +1590,8 @@ export function clearPlacedObjects() {
   }
   _placedMeshes.length = 0;
   clearSelectionHelpers();
+  _placedSpatialEntries = [];
+  _placedSpatialGrid = new Map();
   state.selectedPlacedObjectIds = [];
   state.params.placedObjects = [];
   notifySelectionChanged();

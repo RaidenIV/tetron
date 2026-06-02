@@ -9192,6 +9192,7 @@ export const state = {
   "destructionDestructibleColor": "#ffffff",
   "destructionDestructiblePhysics": "gravity",
   "placerObjectColor": "#445566",
+  "placedAssetShadows": false,
   "placerScaleX": 2,
   "placerScaleY": 1.5,
   "placerScaleZ": 1,
