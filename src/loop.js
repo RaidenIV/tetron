@@ -294,6 +294,20 @@ export function tick() {
 
   if (editorActive) {
     state.isAiming = false;
+
+    // Landscape Editor is a live test-editing mode: keep NPC team combat
+    // running so allies/enemies placed inside their awareness ranges can
+    // immediately acquire, move toward, and attack each other while the
+    // first-person editor camera is active. Plain Editor Mode remains a
+    // paused placement camera.
+    if (!state.paused && state.params.landscapeEditorModeEnabled === true) {
+      const worldDelta = delta * state.worldScale;
+      updateEnemies(worldDelta, _elapsed);
+      [...getEnemies(), ...getAllies()].forEach(npc => {
+        if (npc?.group?.position) clampPositionToBuildArea(npc.group.position, npc.radius || 0.4);
+      });
+    }
+
     updateCameraShake(delta);
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
