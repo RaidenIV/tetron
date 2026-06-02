@@ -40,6 +40,11 @@ function normalizeYaw(yaw) {
   return ((yaw % tau) + tau) % tau;
 }
 
+function snapYawToGridEdge(yaw) {
+  const quarterTurn = Math.PI / 2;
+  return normalizeYaw(Math.round((Number(yaw) || 0) / quarterTurn) * quarterTurn);
+}
+
 function isSidebarTarget(target) {
   return !!target?.closest?.('#sidebar');
 }
@@ -360,7 +365,7 @@ window.addEventListener('keydown', e => {
         ? Number(state.params.editorPlayerSpawnYaw)
         : (Number.isFinite(Number(state.params.playerSpawnYaw)) ? Number(state.params.playerSpawnYaw) : Number(state.params.editorYaw) || 0);
       const step = k === 'q' ? -Math.PI / 2 : Math.PI / 2;
-      const next = normalizeYaw(current + step);
+      const next = snapYawToGridEdge(current + step);
       state.params.editorPlayerSpawnYaw = next;
       if (state.params.playerSpawnEnabled === true) state.params.playerSpawnYaw = next;
       return;

@@ -40,6 +40,11 @@ function normalizeYaw(yaw) {
   return ((yaw % tau) + tau) % tau;
 }
 
+function snapYawToGridEdge(yaw) {
+  const quarterTurn = Math.PI / 2;
+  return normalizeYaw(Math.round(numberOr(yaw, 0) / quarterTurn) * quarterTurn);
+}
+
 function numberOr(value, fallback) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -114,12 +119,12 @@ function sanitizeEditorParams() {
   p.editorCameraX = numberOr(p.editorCameraX, playerGroup.position.x);
   p.editorCameraY = clamp(numberOr(p.editorCameraY, p.editorEyeHeight), 0.1, 200);
   p.editorCameraZ = numberOr(p.editorCameraZ, playerGroup.position.z + 6);
-  p.editorPlayerSpawnYaw = normalizeYaw(numberOr(p.editorPlayerSpawnYaw, p.playerSpawnYaw ?? p.editorYaw));
+  p.editorPlayerSpawnYaw = snapYawToGridEdge(numberOr(p.editorPlayerSpawnYaw, p.playerSpawnYaw ?? p.editorYaw));
   p.playerSpawnEnabled = p.playerSpawnEnabled === true;
   p.playerSpawnX = numberOr(p.playerSpawnX, playerGroup.position.x);
   p.playerSpawnY = Math.max(0, numberOr(p.playerSpawnY, 0));
   p.playerSpawnZ = numberOr(p.playerSpawnZ, playerGroup.position.z);
-  p.playerSpawnYaw = normalizeYaw(numberOr(p.playerSpawnYaw, p.editorPlayerSpawnYaw));
+  p.playerSpawnYaw = snapYawToGridEdge(numberOr(p.playerSpawnYaw, p.editorPlayerSpawnYaw));
   if (!Array.isArray(p.editorPlacedNpcs)) p.editorPlacedNpcs = [];
 }
 
@@ -274,6 +279,31 @@ function createPlayerSpawnMarker() {
   body.renderOrder = 26;
   group.add(body);
 
+  const indicatorMat = new THREE.MeshBasicMaterial({
+    color: cyan,
+    transparent: true,
+    opacity: 0.88,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const indicator = new THREE.Group();
+  indicator.name = 'PlayerSpawnPlacedIndicator';
+  indicator.renderOrder = 29;
+
+  const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 2.35, 8, 1, true), indicatorMat.clone());
+  beacon.name = 'PlayerSpawnPlacedIndicatorBeacon';
+  beacon.position.y = 2.55;
+  beacon.renderOrder = 29;
+  indicator.add(beacon);
+
+  const diamond = new THREE.Mesh(new THREE.OctahedronGeometry(0.18, 0), indicatorMat.clone());
+  diamond.name = 'PlayerSpawnPlacedIndicatorDiamond';
+  diamond.position.y = 3.85;
+  diamond.renderOrder = 30;
+  indicator.add(diamond);
+
+  group.add(indicator);
+
   const footprintMat = new THREE.LineBasicMaterial({
     color: '#35ff00',
     transparent: true,
@@ -314,7 +344,10 @@ function createPlayerSpawnMarker() {
   arrowPivot.renderOrder = 27;
   const arrow = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.95), arrowMat);
   arrow.name = 'PlayerSpawnMarkerFacingArrow';
-  arrow.position.set(0, 0.07, -0.88);
+  // The texture points along the plane's local +Y axis, which maps to world -Z after
+  // the flat ground rotation. Keeping the pivot yaw snapped to 90-degree increments
+  // makes the arrow perpendicular to a spawn-square edge instead of diagonal.
+  arrow.position.set(0, 0.07, -0.84);
   arrow.rotation.x = -Math.PI / 2;
   arrow.renderOrder = 27;
   arrowPivot.add(arrow);
@@ -358,6 +391,7 @@ function updatePlayerSpawnMarker(position = null, yaw = null, { preview = false 
 
   const body = marker.getObjectByName('PlayerSpawnMarkerBody');
   const footprint = marker.getObjectByName('PlayerSpawnMarkerFootprint');
+  const indicator = marker.getObjectByName('PlayerSpawnPlacedIndicator');
   const arrowPivot = marker.getObjectByName('PlayerSpawnMarkerFacingArrowPivot');
   const arrow = marker.getObjectByName('PlayerSpawnMarkerFacingArrow');
   const markerOpacity = preview ? 0.45 : 0.9;
@@ -366,7 +400,11 @@ function updatePlayerSpawnMarker(position = null, yaw = null, { preview = false 
     footprint.rotation.y = 0;
     setMarkerOpacity(footprint, markerOpacity);
   }
-  if (arrowPivot) arrowPivot.rotation.y = normalizeYaw(numberOr(yaw, p.playerSpawnYaw));
+  if (indicator) {
+    indicator.visible = !preview && p.playerSpawnEnabled === true;
+    setMarkerOpacity(indicator, indicator.visible ? 0.88 : 0);
+  }
+  if (arrowPivot) arrowPivot.rotation.y = snapYawToGridEdge(numberOr(yaw, p.playerSpawnYaw));
   if (arrow?.material) arrow.material.opacity = preview ? 0.7 : 0.95;
 }
 
@@ -384,7 +422,7 @@ export function teleportPlayerToSpawn() {
   const x = numberOr(p.playerSpawnX, playerGroup.position.x);
   const y = Math.max(0, numberOr(p.playerSpawnY, 0));
   const z = numberOr(p.playerSpawnZ, playerGroup.position.z);
-  const yaw = normalizeYaw(numberOr(p.playerSpawnYaw, p.thirdAzimuth || 0));
+  const yaw = snapYawToGridEdge(numberOr(p.playerSpawnYaw, p.thirdAzimuth || 0));
 
   playerGroup.position.set(x, y, z);
   p.thirdAzimuth = yaw;
@@ -611,7 +649,7 @@ export function updateEditorPlacement() {
 
     const sx = snapNpcAxis(_hitPoint.x);
     const sz = snapNpcAxis(_hitPoint.z);
-    const yaw = normalizeYaw(numberOr(state.params.editorPlayerSpawnYaw, state.params.editorYaw));
+    const yaw = snapYawToGridEdge(numberOr(state.params.editorPlayerSpawnYaw, state.params.editorYaw));
     updatePlayerSpawnMarker({ x: sx, y: 0, z: sz }, yaw, { preview: state.params.playerSpawnEnabled !== true });
 
     if (state.primaryFire && !_primaryPrev) {
