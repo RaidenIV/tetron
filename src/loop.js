@@ -7,7 +7,7 @@ import {
 } from './renderer.js';
 import { state } from './state.js';
 import { updateSunPosition } from './lighting.js';
-import { updateChunks } from './terrain.js';
+import { updateChunks, clampPositionToBuildArea } from './terrain.js';
 import { playerGroup, updatePlayer, updateDashStreaks } from './player.js';
 import { updateLaserProjectiles, resolveAimTarget, aimResult, syncWeaponAmmoHud } from './weapons.js';
 import { updateEnemies, getEnemyMeshes, tagEnemy, getEnemies, getAllies } from './enemies.js';
@@ -340,10 +340,14 @@ export function tick() {
   updateBulletTimeAudioPitch();
   updateBulletTimeIndicator();
   updatePlayer(delta, getMoveForward(), getMoveRight(), aimResult.point);
+  clampPositionToBuildArea(playerGroup.position, Number(state.params.playerRadius) || 0.4);
   updateDashStreaks(delta);
 
   const worldDelta = delta * state.worldScale;
   updateEnemies(worldDelta, _elapsed);
+  [...getEnemies(), ...getAllies()].forEach(npc => {
+    if (npc?.group?.position) clampPositionToBuildArea(npc.group.position, npc.radius || 0.4);
+  });
   if ((state.activeSlot ?? 0) === 0) {
     updateLaserProjectiles(delta, worldDelta);
   }

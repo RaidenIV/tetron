@@ -9,7 +9,7 @@ import { ambientLight, sunLight, fillLight, rimLight } from '../lighting.js';
 import {
   playerMat, playerBaseColor, rebuildPlayerGeo, applyPlayerMaterial, applyShieldSettings, applyPlayerWeaponSettings,
 } from '../player.js';
-import { setFloorVisible, setGridVisible, setFloorColor, setGridColor } from '../terrain.js';
+import { setFloorVisible, setGridVisible, setFloorColor, setGridColor, applyFloorSettings, fitBuildAreaToPlacedObjects } from '../terrain.js';
 import { spawnEnemiesFromSettings, clearEnemies, applyTagSettings, spawnAlliesFromSettings, clearAllies, rebuildEditorPlacedNpcs } from '../enemies.js';
 import { clearGameplayInput } from '../input.js';
 import { ASSET_CATALOGUE, ASSET_CATEGORY_LABELS } from '../assets-catalogue.js';
@@ -5945,10 +5945,38 @@ function buildScene(body) {
     key: 'fogFar', label: 'Fog Far', min: 10, max: 500, step: 5, dec: 0,
     onChange: v => { if (scene.fog) scene.fog.far = v; },
   }));
-  body.appendChild(colorPicker('Floor Color', 'floorColor', v => setFloorColor(v)));
-  body.appendChild(colorPicker('Grid Color',  'gridColor',  v => setGridColor(v)));
-  body.appendChild(toggle('Show Floor', 'showFloor', v => setFloorVisible(v)));
-  body.appendChild(toggle('Show Grid',  'showGrid',  v => setGridVisible(v)));
+  body.appendChild(colorPicker('Floor Color', 'floorColor', v => { setFloorColor(v); applyFloorSettings(); }));
+  body.appendChild(colorPicker('Grid Color',  'gridColor',  v => { setGridColor(v); applyFloorSettings(); }));
+  body.appendChild(toggle('Show Floor', 'showFloor', v => { setFloorVisible(v); applyFloorSettings(); }));
+  body.appendChild(toggle('Show Grid',  'showGrid',  v => { setGridVisible(v); applyFloorSettings(); }));
+
+  body.appendChild(subhdr('Build Area'));
+  body.appendChild(select('Floor Mode', 'floorMode', [
+    ['dynamic', 'Dynamic Follow Player'],
+    ['fixed', 'Fixed Build Area'],
+    ['hybrid', 'Hybrid'],
+  ], () => applyFloorSettings({ force: true })));
+  body.appendChild(toggle('Build Area Enabled', 'buildAreaEnabled', () => applyFloorSettings({ force: true })));
+  body.appendChild(slider({ key: 'buildAreaCenterX', label: 'Center X', min: -1000, max: 1000, step: 1, dec: 0, onChange: () => applyFloorSettings({ force: true }) }));
+  body.appendChild(slider({ key: 'buildAreaCenterZ', label: 'Center Z', min: -1000, max: 1000, step: 1, dec: 0, onChange: () => applyFloorSettings({ force: true }) }));
+  body.appendChild(slider({ key: 'buildAreaWidth', label: 'Width', min: 20, max: 1000, step: 1, dec: 0, onChange: () => applyFloorSettings({ force: true }) }));
+  body.appendChild(slider({ key: 'buildAreaDepth', label: 'Depth', min: 20, max: 1000, step: 1, dec: 0, onChange: () => applyFloorSettings({ force: true }) }));
+  body.appendChild(toggle('Auto-expand To Objects', 'buildAreaAutoExpand', () => applyFloorSettings({ force: true })));
+  body.appendChild(slider({ key: 'buildAreaAutoExpandMargin', label: 'Expand Margin', min: 0, max: 50, step: 1, dec: 0, onChange: () => applyFloorSettings({ force: true }) }));
+  body.appendChild(btn('Fit Build Area To Objects', 'sb-btn-muted', () => {
+    const changed = fitBuildAreaToPlacedObjects();
+    applyAllParams();
+    rebuildPanel();
+    notify(changed ? 'Build area fitted to placed objects ✓' : 'No placed objects to fit');
+  }));
+
+  body.appendChild(subhdr('Boundaries'));
+  body.appendChild(toggle('Boundary Visible', 'buildAreaBoundaryVisible', () => applyFloorSettings({ force: true })));
+  body.appendChild(colorPicker('Boundary Color', 'buildAreaBoundaryColor', () => applyFloorSettings({ force: true })));
+  body.appendChild(toggle('Boundary Walls', 'buildAreaBoundaryWalls', () => applyFloorSettings({ force: true })));
+  body.appendChild(slider({ key: 'buildAreaBoundaryHeight', label: 'Wall Height', min: 0.25, max: 12, step: 0.25, dec: 2, onChange: () => applyFloorSettings({ force: true }) }));
+  body.appendChild(slider({ key: 'buildAreaBoundaryOpacity', label: 'Wall Opacity', min: 0, max: 1, step: 0.05, dec: 2, onChange: () => applyFloorSettings({ force: true }) }));
+  body.appendChild(toggle('Boundary Collision', 'buildAreaBoundaryCollision', () => applyFloorSettings({ force: true })));
 
   body.appendChild(subhdr('Debug'));
   body.appendChild(toggle('Show FPS', 'showFps', () => applyHudSettings()));
@@ -6609,10 +6637,10 @@ function buildLandscape(body) {
   }));
 
   body.appendChild(subhdr('Floor'));
-  body.appendChild(colorPicker('Floor Color', 'floorColor', v => setFloorColor(v)));
-  body.appendChild(colorPicker('Grid Color',  'gridColor',  v => setGridColor(v)));
-  body.appendChild(toggle('Show Floor', 'showFloor', v => setFloorVisible(v)));
-  body.appendChild(toggle('Show Grid',  'showGrid',  v => setGridVisible(v)));
+  body.appendChild(colorPicker('Floor Color', 'floorColor', v => { setFloorColor(v); applyFloorSettings(); }));
+  body.appendChild(colorPicker('Grid Color',  'gridColor',  v => { setGridColor(v); applyFloorSettings(); }));
+  body.appendChild(toggle('Show Floor', 'showFloor', v => { setFloorVisible(v); applyFloorSettings(); }));
+  body.appendChild(toggle('Show Grid',  'showGrid',  v => { setGridVisible(v); applyFloorSettings(); }));
 }
 
 
@@ -7139,6 +7167,7 @@ function applyAllParams() {
   setGridColor(p.gridColor);
   setFloorVisible(p.showFloor);
   setGridVisible(p.showGrid);
+  applyFloorSettings({ force: true });
   const rotationDeg = ((Math.round((Number(p.placerRotationDeg) || 0) / 90) * 90) % 360 + 360) % 360;
   p.placerRotationDeg = rotationDeg;
   const snapScale = value => Math.min(6, Math.max(0.5, Math.round((Number(value) || 1) * 2) / 2));
