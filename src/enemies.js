@@ -2063,37 +2063,6 @@ function blendNpcCombatStrafe(enemy, delta, seek, toTargetX, toTargetZ, dist, en
   };
 }
 
-function getNpcFactionCombatIntent(enemy, delta, targetNpc, toTargetX, toTargetZ, dist, behavior) {
-  if (!targetNpc || getEffectiveWeapon(enemy) === 'none') return null;
-
-  const weapon = getEffectiveWeapon(enemy);
-  const strafeSign = getNpcCombatStrafeSign(enemy, delta);
-  const tangX = -toTargetZ * strafeSign;
-  const tangZ =  toTargetX * strafeSign;
-  const targetRadius = Math.max(BASE_RADIUS, Number(targetNpc?.radius) || BASE_RADIUS);
-  const selfRadius = Math.max(BASE_RADIUS, Number(enemy?.radius) || BASE_RADIUS);
-  const minDistance = selfRadius + targetRadius + 0.75;
-
-  let desiredDistance = getPreferredRingRadius(enemy);
-  if (behavior === 'keepDistance') desiredDistance = 14;
-  else if (behavior === 'orbit') desiredDistance = 6.5;
-  else if (weapon === 'contact') desiredDistance = minDistance;
-  desiredDistance = Math.max(minDistance, desiredDistance);
-
-  const radialWindow = Math.max(2.25, desiredDistance * 0.35);
-  const radialBias = weapon === 'contact'
-    ? 0.95
-    : clamp((dist - desiredDistance) / radialWindow, -0.42, 0.58);
-  const strafeWeight = weapon === 'contact' ? 0.22 : 0.94;
-  const radialWeight = weapon === 'contact' ? 0.86 : Math.abs(radialBias);
-
-  let x = tangX * strafeWeight + toTargetX * radialBias * radialWeight;
-  let z = tangZ * strafeWeight + toTargetZ * radialBias * radialWeight;
-  const len = Math.hypot(x, z);
-  if (len < 0.001) return { x: tangX, z: tangZ };
-  return { x: x / len, z: z / len };
-}
-
 function applyNpcEngagedMovementGuarantee(enemy, delta, targetPos, fromX, fromZ, toTargetX, toTargetZ, speedMult) {
   if (!enemy?.group || getEffectiveWeapon(enemy) === 'none') return;
   const baseSpeed = getNpcMoveSpeed(enemy);
@@ -2123,6 +2092,94 @@ function applyNpcEngagedMovementGuarantee(enemy, delta, targetPos, fromX, fromZ,
   resolveCircleAgainstPlacedObjects(enemy.group.position, enemy.radius);
 }
 
+
+function getNpcFactionCombatDesiredRadius(enemy, behavior, weapon, targetNpc) {
+  const selfRadius = Math.max(BASE_RADIUS, Number(enemy?.radius) || BASE_RADIUS);
+  const targetRadius = Math.max(BASE_RADIUS, Number(targetNpc?.radius) || BASE_RADIUS);
+  const minimumRadius = selfRadius + targetRadius + 1.25;
+  if (weapon === 'contact') return minimumRadius;
+  if (behavior === 'keepDistance') return Math.max(minimumRadius, 14);
+  if (behavior === 'orbit') return Math.max(minimumRadius, 6.5);
+  return Math.max(minimumRadius, getPreferredRingRadius(enemy));
+}
+
+function applyNpcFactionCombatMovement(enemy, delta, targetNpc, behavior, toTargetX, toTargetZ, dist) {
+  if (!enemy?.group || !targetNpc?.group) return false;
+  const baseSpeed = getNpcMoveSpeed(enemy);
+  if (!(baseSpeed > 0) || !(delta > 0)) return false;
+
+  const weapon = getEffectiveWeapon(enemy);
+  if (weapon === 'none') return false;
+
+  if (behavior === 'teleport') {
+    enemy.teleportCooldown = Math.max(0, Number(enemy.teleportCooldown) || 0);
+    enemy.teleportCooldown = Math.max(0, enemy.teleportCooldown - delta);
+    if (enemy.teleportCooldown <= 0 && dist < 5.5) {
+      const angle = Math.random() * Math.PI * 2;
+      const r = randomRange(9, 14);
+      enemy.group.position.x = targetNpc.group.position.x + Math.cos(angle) * r;
+      enemy.group.position.z = targetNpc.group.position.z + Math.sin(angle) * r;
+      enemy.teleportCooldown = 4;
+      resolveCircleAgainstPlacedObjects(enemy.group.position, enemy.radius);
+      enemy.lastSteer = null;
+      return true;
+    }
+  }
+
+  let moveX = 0;
+  let moveZ = 0;
+  let speedMult = Math.max(0.72, Number(enemy.def?.speedMult) || 1);
+
+  if (weapon === 'contact') {
+    moveX = toTargetX;
+    moveZ = toTargetZ;
+    speedMult = Math.max(speedMult, 0.95);
+  } else {
+    const desired = getNpcFactionCombatDesiredRadius(enemy, behavior, weapon, targetNpc);
+    const strafeSign = getNpcCombatStrafeSign(enemy, delta);
+    const tangentX = -toTargetZ * strafeSign;
+    const tangentZ =  toTargetX * strafeSign;
+
+    const radiusError = dist - desired;
+    let radialBias = clamp(radiusError / Math.max(2.2, desired * 0.32), -0.7, 0.7);
+    if (dist > desired + 7) radialBias = Math.max(radialBias, 0.75);
+    if (dist < desired - 2.5) radialBias = Math.min(radialBias, -0.75);
+
+    const tangentWeight = dist > desired + 7 ? 0.45 : 1.0;
+    moveX = tangentX * tangentWeight + toTargetX * radialBias;
+    moveZ = tangentZ * tangentWeight + toTargetZ * radialBias;
+
+    if (behavior === 'keepDistance') speedMult = Math.max(speedMult, 0.86);
+    else if (behavior === 'orbit') speedMult = Math.max(speedMult, 1.02);
+    else speedMult = Math.max(speedMult, 0.92);
+  }
+
+  const queryR = Math.max(enemy.radius * getSpacingMultiplier(enemy) + ENEMY_GROUPING.separation.queryPadding, 0.1);
+  _spatialHash.query(enemy.group.position.x, enemy.group.position.z, queryR, _queryBuf);
+  const sep = ENEMY_GROUPING.separation.enabled
+    ? computeEnemySeparation(enemy, _queryBuf)
+    : { x: 0, z: 0 };
+  moveX += sep.x * 0.35;
+  moveZ += sep.z * 0.35;
+
+  let len = Math.hypot(moveX, moveZ);
+  if (len < 0.001) {
+    const strafeSign = getNpcCombatStrafeSign(enemy, delta);
+    moveX = -toTargetZ * strafeSign;
+    moveZ =  toTargetX * strafeSign;
+    len = Math.hypot(moveX, moveZ);
+  }
+  if (len < 0.001) return false;
+
+  moveX /= len;
+  moveZ /= len;
+  enemy.group.position.x += moveX * baseSpeed * speedMult * delta;
+  enemy.group.position.z += moveZ * baseSpeed * speedMult * delta;
+  resolveCircleAgainstPlacedObjects(enemy.group.position, enemy.radius);
+  enemy.lastSteer = { x: moveX, z: moveZ };
+  return true;
+}
+
 function updateEnemyMovement(enemy, delta, targetNpc = null) {
   const baseBehavior = getEffectiveBehavior(enemy);
   const engaged = !!targetNpc || isNpcEngagedWithPlayer(enemy);
@@ -2140,6 +2197,10 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
   let seekX = 0, seekZ = 0;
 
   if (behavior === 'guard') return;
+
+  if (targetNpc && applyNpcFactionCombatMovement(enemy, delta, targetNpc, behavior, toTargetX, toTargetZ, dist)) {
+    return;
+  }
 
   if (behavior === 'orbit') {
     // Tangential movement + radial correction
@@ -2189,25 +2250,17 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
     seekX = toTargetX; seekZ = toTargetZ;
   }
 
-  const factionCombatIntent = getNpcFactionCombatIntent(enemy, delta, targetNpc, toTargetX, toTargetZ, dist, behavior);
-  if (factionCombatIntent) {
-    seekX = factionCombatIntent.x;
-    seekZ = factionCombatIntent.z;
-  } else {
-    const combatSeek = blendNpcCombatStrafe(enemy, delta, { x: seekX, z: seekZ }, toTargetX, toTargetZ, dist, engaged);
-    seekX = combatSeek.x;
-    seekZ = combatSeek.z;
-  }
+  const combatSeek = blendNpcCombatStrafe(enemy, delta, { x: seekX, z: seekZ }, toTargetX, toTargetZ, dist, engaged);
+  seekX = combatSeek.x;
+  seekZ = combatSeek.z;
   if (engaged) speedMult = Math.max(speedMult, getEffectiveWeapon(enemy) === 'contact' ? 0.75 : 0.82);
 
   // Normalise seek
   const seekLen = Math.hypot(seekX, seekZ);
   if (seekLen > 0.001) { seekX /= seekLen; seekZ /= seekLen; }
 
-  // Group slots are for surrounding the player. During ally/enemy duels they
-  // can cancel orbit motion and make ranged NPCs settle into stationary firing
-  // positions, so faction combat uses direct strafe/orbit intent instead.
-  if (!targetNpc) assignEnemyGroupSlot(enemy, targetPos, delta);
+  // Update group slot assignment around the current target.
+  assignEnemyGroupSlot(enemy, targetPos, delta);
 
   // Separation force
   const queryR = enemy.radius * getSpacingMultiplier(enemy) + ENEMY_GROUPING.separation.queryPadding;
@@ -2217,17 +2270,13 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
     : { x: 0, z: 0 };
 
   // Slot bias
-  const slot = targetNpc ? { x: 0, z: 0 } : computeSlotBias(enemy, targetPos);
+  const slot = computeSlotBias(enemy, targetPos);
 
   // Combine with archetype weights
   const w = ARCHETYPE_WEIGHTS[enemy.type] ?? { seek: 0.75, slot: 0.25, separation: 1.0 };
 
   let moveX = seekX * w.seek + slot.x * w.slot + sep.x * w.separation;
   let moveZ = seekZ * w.seek + slot.z * w.slot + sep.z * w.separation;
-  if (factionCombatIntent) {
-    moveX = factionCombatIntent.x * 0.88 + sep.x * 0.18;
-    moveZ = factionCombatIntent.z * 0.88 + sep.z * 0.18;
-  }
 
   // Smooth
   const smoothed = smoothSteer(enemy, { x: moveX, z: moveZ });
