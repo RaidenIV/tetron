@@ -10,6 +10,7 @@ import { reloadCurrentWeapon, syncWeaponAmmoHud } from './weapons.js';
 import { applyPlayerWeaponSettings } from './player.js';
 import { ASSET_CATALOGUE } from './assets-catalogue.js';
 import { isEditorModeEnabled, applyEditorMouseLookDelta } from './editor.js';
+import { respawnPlayerAtFullHealth } from './enemies.js';
 
 let _togglePanel = null;
 
@@ -374,6 +375,12 @@ window.addEventListener('keydown', e => {
     const step = k === 'q' ? -90 : 90;
     state.params.placerRotationDeg = ((Math.round((current + step) / 90) * 90) % 360 + 360) % 360;
     state.placerRotation = THREE.MathUtils.degToRad(state.params.placerRotationDeg);
+    return;
+  }
+
+  if (!editorActive && (e.key === '0' || e.code === 'Numpad0') && !e.repeat) {
+    e.preventDefault();
+    respawnPlayerAtFullHealth();
     return;
   }
 

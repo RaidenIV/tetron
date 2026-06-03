@@ -1703,10 +1703,34 @@ function getSlotEl() {
       'font-size:11px', 'font-weight:700', 'letter-spacing:0.12em',
       'color:rgba(255,255,255,0.7)', 'pointer-events:none',
       'z-index:24', 'font-family:var(--hud-font-family,system-ui)',
+      'transition:bottom 0.12s ease, left 0.12s ease',
     ].join(';');
     document.body.appendChild(_slotEl);
   }
   return _slotEl;
+}
+
+function positionSlotHud(slotEl) {
+  if (!slotEl) return;
+  const p = state.params || {};
+  const layout = p.hudLayout === 'hud2' ? 'hud2' : 'hud1';
+  const rootStyle = getComputedStyle(document.documentElement);
+  const cssPixels = (name, fallback) => {
+    const value = Number.parseFloat(rootStyle.getPropertyValue(name));
+    return Number.isFinite(value) ? value : fallback;
+  };
+  const anchorLeft = cssPixels('--hud-anchor-left', 22);
+  const anchorBottom = cssPixels('--hud-anchor-bottom', 28);
+  if (layout === 'hud2') {
+    const radarSize = cssPixels('--radar-size', Math.max(1, Number(p.radarRadius) || 90) * 2);
+    const barsHeight = cssPixels('--hud2-bars-height', 10);
+    const gap = 12;
+    slotEl.style.left = `${anchorLeft}px`;
+    slotEl.style.bottom = `${anchorBottom + barsHeight + radarSize + gap}px`;
+  } else {
+    slotEl.style.left = `${anchorLeft}px`;
+    slotEl.style.bottom = '140px';
+  }
 }
 
 // ── Per-frame update ───────────────────────────────────────────────────────────
@@ -1815,6 +1839,7 @@ export function updatePlacer(delta = 1 / 60) {
 
   // Slot HUD
   const slotEl = getSlotEl();
+  positionSlotHud(slotEl);
   slotEl.style.display = state.paused ? 'none' : '';
   if (!state.paused) {
     const selectedCount = getSelectedPlacedObjectCount();

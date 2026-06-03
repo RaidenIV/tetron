@@ -1877,6 +1877,11 @@ function respawnPlayerAfterDeath() {
   state.lastMoveZ = -Math.cos(spawnYaw);
 }
 
+export function respawnPlayerAtFullHealth() {
+  respawnPlayerAfterDeath();
+  syncPlayerHud();
+}
+
 function applyPlayerDamage(amount) {
   const p = state.params;
   if (p.playerInvincible) return;
