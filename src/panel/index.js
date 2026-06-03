@@ -3,7 +3,7 @@
 // Pattern: write to state.params first, then call onChange to push into Three.js.
 // This ensures JSON export always reflects reality.
 import * as THREE from 'three';
-import { state, defaultParams } from '../state.js';
+import { state, defaultParams, resetBulletTimeAmount } from '../state.js';
 import { scene, renderer, applyIsoCamD, setActiveCamera, onResize, isThirdPersonCameraMode } from '../renderer.js';
 import { ambientLight, sunLight, fillLight, rimLight } from '../lighting.js';
 import {
@@ -102,6 +102,8 @@ const PRESET_SETTINGS = [
       "bulletTimeDuration": 7.5,
       "bulletTimeCooldown": 4,
       "bulletTimeScale": 0.25,
+      "bulletTimeReplenishRate": 1,
+      "bulletTimeKillGain": 2,
       "shieldVisible": false,
       "shieldColor": "#1e7bff",
       "shieldOpacity": 0.4,
@@ -9521,6 +9523,8 @@ const PRESET_SETTINGS = [
     "bulletTimeDuration": 7.5,
     "bulletTimeCooldown": 4,
     "bulletTimeScale": 0.25,
+    "bulletTimeReplenishRate": 1,
+    "bulletTimeKillGain": 2,
     "shieldVisible": false,
     "shieldColor": "#1e7bff",
     "shieldOpacity": 0.4,
@@ -19965,7 +19969,9 @@ function buildDestruction(body) {
 function buildAbilities(body) {
   body.appendChild(createManualSubsection('Bullet Time', bulletBody => {
     bulletBody.appendChild(toggle('Bullet Time Enabled', 'bulletTimeEnabled'));
-    bulletBody.appendChild(slider({ key: 'bulletTimeDuration', label: 'Duration', min: 0.1, max: 30, step: 0.1, dec: 1 }));
+    bulletBody.appendChild(slider({ key: 'bulletTimeDuration', label: 'Total Amount', min: 0.1, max: 30, step: 0.1, dec: 1 }));
+    bulletBody.appendChild(slider({ key: 'bulletTimeReplenishRate', label: 'Replenish / Sec', min: 0, max: 10, step: 0.1, dec: 1 }));
+    bulletBody.appendChild(slider({ key: 'bulletTimeKillGain', label: 'Earn Per Kill', min: 0, max: 30, step: 0.1, dec: 1 }));
     bulletBody.appendChild(slider({ key: 'bulletTimeCooldown', label: 'Cooldown', min: 0, max: 120, step: 0.5, dec: 1 }));
     bulletBody.appendChild(slider({ key: 'bulletTimeScale', label: 'World Scale', min: 0.05, max: 1, step: 0.05, dec: 2 }));
   }, true));
@@ -20989,6 +20995,7 @@ function applyParamObject(params) {
   if (!Array.isArray(state.params.savedPrefabs)) state.params.savedPrefabs = [];
   if (!Array.isArray(state.params.savedScenes)) state.params.savedScenes = [];
   resetAllWeaponAmmo();
+  resetBulletTimeAmount();
 }
 
 function applyPreset(key) {

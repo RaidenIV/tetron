@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { scene, camera } from './renderer.js';
-import { state } from './state.js';
+import { state, addBulletTimeAmount } from './state.js';
 import { playerGroup } from './player.js';
 import { getSfxVolume, applyBulletTimeAudioPitch, registerManagedAudio, playObjectExplosionSound } from './audio.js';
 import { resolveCircleAgainstPlacedObjects, isPlacedObjectHit } from './placer.js';
@@ -1846,6 +1846,16 @@ function getNpcAccuracy(npc) {
   return clamp(Number.isFinite(value) ? value : 100, 0, 100) / 100;
 }
 
+function resetPlayerAmmoState() {
+  state.weaponAmmo = {};
+  state.weaponReloads = {};
+}
+
+function awardBulletTimeForKill() {
+  if (state.params.bulletTimeEnabled === false) return;
+  addBulletTimeAmount(Math.max(0, Number(state.params.bulletTimeKillGain) || 0));
+}
+
 function respawnPlayerAfterDeath() {
   const p = state.params;
   const maxHealth = Math.max(1, Number(p.playerMaxHealth) || 100);
@@ -1860,6 +1870,7 @@ function respawnPlayerAfterDeath() {
 
   p.playerHealth = maxHealth;
   p.playerArmor = maxArmor;
+  resetPlayerAmmoState();
   p.thirdAzimuth = spawnYaw;
   p.editorYaw = spawnYaw;
   p.editorPlayerSpawnYaw = spawnYaw;
@@ -1885,13 +1896,17 @@ export function respawnPlayerAtFullHealth() {
 function applyPlayerDamage(amount) {
   const p = state.params;
   if (p.playerInvincible) return;
-  let damage = Math.max(0, Number(amount) || 0);
-  if (damage <= 0) return;
+  let incomingDamage = Math.max(0, Number(amount) || 0);
+  if (incomingDamage <= 0) return;
+
   const armor = Math.max(0, Number(p.playerArmor) || 0);
-  const armorHit = Math.min(armor, damage);
-  p.playerArmor = armor - armorHit;
-  damage -= armorHit;
-  if (damage > 0) p.playerHealth = Math.max(0, (Number(p.playerHealth) || 0) - damage);
+  const armorDamage = Math.min(armor, incomingDamage);
+  p.playerArmor = Math.max(0, armor - armorDamage);
+  incomingDamage -= armorDamage;
+
+  if (incomingDamage > 0) {
+    p.playerHealth = Math.max(0, (Number(p.playerHealth) || 0) - incomingDamage);
+  }
   if ((Number(p.playerHealth) || 0) <= 0) respawnPlayerAfterDeath();
   syncPlayerHud();
 }
@@ -1953,6 +1968,7 @@ export function damageEnemiesAt(position, radius = 0.45, amount = 34) {
     if (pointHitsNpcBody(position, radius, enemy)) {
       const willDamage = Math.max(0, Number(amount) || 0) > 0;
       const killed = willDamage ? damageEnemy(enemy, amount) === true : false;
+      if (killed) awardBulletTimeForKill();
       return { hit: true, killed, target: enemy };
     }
   }
@@ -1972,7 +1988,9 @@ export function damageEnemiesInRadius(position, radius = 1, amount = 34, falloff
     if (distance > maxRadius) continue;
     const normalized = clamp(distance / maxRadius, 0, 1);
     const damage = baseDamage * (1 - Math.pow(normalized, falloffPower));
-    killed = damageEnemy(enemy, Math.max(1, damage)) === true || killed;
+    const targetKilled = damageEnemy(enemy, Math.max(1, damage)) === true;
+    if (targetKilled) awardBulletTimeForKill();
+    killed = targetKilled || killed;
     hitCount += 1;
   }
   return hitCount > 0 ? { hit: true, hitCount, killed } : null;
@@ -2030,6 +2048,7 @@ function applyExplosionSplashDamage() {
         hitSet.add(id);
         hitNpcIds.push(id);
         const killed = damageEnemy(enemy, getExplosionSplashDamage(event, enemyDistance)) === true;
+        if (killed && String(event.id || '').startsWith('weapon_splash_')) awardBulletTimeForKill();
         if (String(event.id || '').startsWith('weapon_splash_')) {
           window.dispatchEvent(new CustomEvent('game-lab-reticle-feedback', {
             detail: { hit: true, killed },

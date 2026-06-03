@@ -8,6 +8,8 @@ export const state = {
   slowTimer: 0,
   slowScale: 0.35,
   slowRequested: false,
+  slowStopRequested: false,
+  bulletTimeAmount: null,
   activePreset: 'g40',
   mouseLookActive: false,
   isAiming: false,          // true while right-mouse / L2 held
@@ -107,6 +109,8 @@ export const state = {
     "bulletTimeDuration": 7.5,
     "bulletTimeCooldown": 4,
     "bulletTimeScale": 0.25,
+    "bulletTimeReplenishRate": 1,
+    "bulletTimeKillGain": 2,
     "shieldVisible": false,
     "shieldColor": "#1e7bff",
     "shieldOpacity": 0.4,
@@ -9479,3 +9483,40 @@ export const state = {
 
 // Snapshot taken at startup — used by Reset button
 export const defaultParams = JSON.parse(JSON.stringify(state.params));
+
+function clampNumber(value, fallback, min = -Infinity, max = Infinity) {
+  const numeric = Number(value);
+  const resolved = Number.isFinite(numeric) ? numeric : fallback;
+  return Math.min(max, Math.max(min, resolved));
+}
+
+export function getBulletTimeMaxAmount() {
+  return clampNumber(state.params.bulletTimeDuration, 7.5, 0.1, 120);
+}
+
+export function ensureBulletTimeAmount() {
+  const maxAmount = getBulletTimeMaxAmount();
+  const current = Number(state.bulletTimeAmount);
+  state.bulletTimeAmount = Number.isFinite(current) ? Math.min(maxAmount, Math.max(0, current)) : maxAmount;
+  return state.bulletTimeAmount;
+}
+
+export function resetBulletTimeAmount(amount = getBulletTimeMaxAmount()) {
+  const maxAmount = getBulletTimeMaxAmount();
+  state.bulletTimeAmount = Math.min(maxAmount, Math.max(0, Number(amount) || 0));
+  if (state.slowTimer > 0) state.slowTimer = state.bulletTimeAmount;
+  return state.bulletTimeAmount;
+}
+
+export function addBulletTimeAmount(amount) {
+  const maxAmount = getBulletTimeMaxAmount();
+  const current = ensureBulletTimeAmount();
+  state.bulletTimeAmount = Math.min(maxAmount, Math.max(0, current + Math.max(0, Number(amount) || 0)));
+  if (state.slowTimer > 0) state.slowTimer = state.bulletTimeAmount;
+  return state.bulletTimeAmount;
+}
+
+export function getBulletTimeFraction() {
+  const maxAmount = getBulletTimeMaxAmount();
+  return maxAmount > 0 ? Math.min(1, Math.max(0, ensureBulletTimeAmount() / maxAmount)) : 0;
+}

@@ -5,7 +5,7 @@ import {
   setActiveCamera, updateIsoCamera, updateThirdCamera, isThirdPersonCameraMode,
   getMoveForward, getMoveRight, updateCameraShake,
 } from './renderer.js';
-import { state } from './state.js';
+import { state, ensureBulletTimeAmount, getBulletTimeMaxAmount, getBulletTimeFraction } from './state.js';
 import { updateSunPosition } from './lighting.js';
 import { updateChunks, clampPositionToBuildArea } from './terrain.js';
 import { playerGroup, updatePlayer, updateDashStreaks } from './player.js';
@@ -100,12 +100,17 @@ function updateBulletTimeActiveIcon() {
 
 function updateBulletTimeIndicator() {
   const el = document.getElementById('bullet-time-indicator');
+  const meter = document.getElementById('bullet-time-meter');
+  const meterFill = meter?.querySelector('[data-hud-fill="bullet-time"]');
   const p = state.params;
+  const enabled = p.hudVisible !== false && p.hudBulletTimeIndicator !== false && p.bulletTimeEnabled !== false;
+  const hud2 = p.hudLayout === 'hud2';
+  const amount = ensureBulletTimeAmount();
+  const ready = state.slowTimer > 0 || amount > 0.01;
+
   if (el) {
-    const enabled = p.hudVisible !== false && p.hudBulletTimeIndicator !== false && p.bulletTimeEnabled !== false;
-    el.style.display = enabled ? '' : 'none';
-    if (enabled) {
-      const ready = state.slowTimer > 0 || state.slowCooldown <= 0;
+    el.style.display = enabled && !hud2 ? '' : 'none';
+    if (enabled && !hud2) {
       const size = clamp(Number(p.hudBulletTimeIndicatorSize) || 24, 8, 64);
       const readyOpacity = clamp(Number(p.hudBulletTimeReadyOpacity) || 1, 0, 1);
       const emptyOpacity = clamp(Number(p.hudBulletTimeEmptyOpacity) || 0.5, 0, 1);
@@ -123,13 +128,17 @@ function updateBulletTimeIndicator() {
       el.style.width = `${size}px`;
       el.style.height = `${size}px`;
       el.style.opacity = String(ready ? readyOpacity : emptyOpacity);
-      if (p.hudLayout === 'hud2') {
-        positionHud2BulletTimeIndicator(el, size);
-      } else {
-        resetInlineHud2Position(el);
-      }
+      resetInlineHud2Position(el);
     }
   }
+
+  if (meter) {
+    meter.style.display = enabled && hud2 ? 'block' : 'none';
+    if (enabled && hud2 && meterFill) {
+      meterFill.style.height = `${getBulletTimeFraction() * 100}%`;
+    }
+  }
+
   updateBulletTimeActiveIcon();
 }
 
@@ -264,21 +273,40 @@ function getTargetWorldScale() {
 
 function updateTimeSlow(delta) {
   const p = state.params;
+  const maxAmount = getBulletTimeMaxAmount();
+  let amount = ensureBulletTimeAmount();
 
   state.slowCooldown = Math.max(0, state.slowCooldown - delta);
-  state.slowTimer = Math.max(0, state.slowTimer - delta);
+
+  if (state.slowStopRequested) {
+    state.slowStopRequested = false;
+    state.slowTimer = 0;
+  }
 
   if (state.slowRequested) {
     state.slowRequested = false;
 
-    if (p.bulletTimeEnabled !== false && state.slowCooldown <= 0 && state.slowTimer <= 0) {
-      const duration = clamp(Number(p.bulletTimeDuration) || 3, 0.1, 30);
-      const cooldown = clamp(Number(p.bulletTimeCooldown) || 8, 0, 120);
+    if (p.bulletTimeEnabled !== false && state.slowTimer <= 0 && state.slowCooldown <= 0 && amount > 0.01) {
       state.slowScale = clamp(Number(p.bulletTimeScale) || 0.35, 0.05, 1.0);
-      state.slowTimer = duration;
-      state.slowCooldown = cooldown;
+      state.slowTimer = amount;
       playBulletTimeActivationSounds();
     }
+  }
+
+  if (p.bulletTimeEnabled !== false && state.slowTimer > 0) {
+    amount = Math.max(0, amount - Math.max(0, delta));
+    state.bulletTimeAmount = amount;
+    state.slowTimer = amount;
+    if (amount <= 0) {
+      state.slowTimer = 0;
+      state.slowCooldown = Math.max(state.slowCooldown, clamp(Number(p.bulletTimeCooldown) || 0, 0, 120));
+    }
+  } else {
+    const replenishRate = clamp(Number(p.bulletTimeReplenishRate) || 0, 0, 120);
+    if (maxAmount > 0 && replenishRate > 0) {
+      state.bulletTimeAmount = Math.min(maxAmount, amount + replenishRate * Math.max(0, delta));
+    }
+    state.slowTimer = 0;
   }
 
   const targetScale = getTargetWorldScale();

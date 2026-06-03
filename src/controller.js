@@ -228,7 +228,8 @@ export function updateController(dt) {
   _lastDashDown = dashDown;
 
   if (slowDown && !_lastSlowDown && state.params.bulletTimeEnabled !== false) {
-    state.slowRequested = true;
+    if (state.slowTimer > 0) state.slowStopRequested = true;
+    else state.slowRequested = true;
     vibrate(pad, { weak: 0.18, strong: 0.32, duration: 120 });
   }
   _lastSlowDown = slowDown;

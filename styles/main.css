@@ -829,9 +829,37 @@ body[data-hud-layout="hud2"] .game-hud-track {
 }
 
 body[data-hud-layout="hud2"] .bullet-time-indicator {
+  display: none !important;
+}
+
+.bullet-time-meter {
   position: fixed;
+  left: calc(var(--hud-anchor-left, 22px) + var(--radar-size, 180px) + 8px);
+  bottom: calc(var(--hud-anchor-bottom, 28px) + var(--hud2-bars-height, 10px));
+  width: var(--hud2-bars-height, 10px);
+  height: var(--radar-size, 180px);
   z-index: 24;
-  margin: 0;
+  display: none;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 0;
+  background: rgba(255,255,255,0.12);
+  box-shadow: none;
+}
+
+.bullet-time-meter-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100%;
+  display: block;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+body[data-hud-layout="hud2"] .bullet-time-meter {
+  display: block;
 }
 
 /* ── 1920×1200 (16:10) display optimizations ─────────────────────────────── */

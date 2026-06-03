@@ -386,7 +386,10 @@ window.addEventListener('keydown', e => {
 
   if (!editorActive && k === 'q' && state.params.bulletTimeEnabled !== false) {
     e.preventDefault();
-    if (!e.repeat) state.slowRequested = true;
+    if (!e.repeat) {
+      if (state.slowTimer > 0) state.slowStopRequested = true;
+      else state.slowRequested = true;
+    }
   }
 
   if (e.code === 'Space') {
@@ -724,7 +727,8 @@ export function updateController(delta) {
     if (!_btHeld.get(idx)) {
       _btHeld.set(idx, true);
       if (state.params.bulletTimeEnabled !== false) {
-        state.slowRequested = true;
+        if (state.slowTimer > 0) state.slowStopRequested = true;
+        else state.slowRequested = true;
         rumble(pad, 0.2, 0.5, 120);
       }
     }
