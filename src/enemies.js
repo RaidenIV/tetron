@@ -2063,6 +2063,37 @@ function blendNpcCombatStrafe(enemy, delta, seek, toTargetX, toTargetZ, dist, en
   };
 }
 
+function getNpcFactionCombatIntent(enemy, delta, targetNpc, toTargetX, toTargetZ, dist, behavior) {
+  if (!targetNpc || getEffectiveWeapon(enemy) === 'none') return null;
+
+  const weapon = getEffectiveWeapon(enemy);
+  const strafeSign = getNpcCombatStrafeSign(enemy, delta);
+  const tangX = -toTargetZ * strafeSign;
+  const tangZ =  toTargetX * strafeSign;
+  const targetRadius = Math.max(BASE_RADIUS, Number(targetNpc?.radius) || BASE_RADIUS);
+  const selfRadius = Math.max(BASE_RADIUS, Number(enemy?.radius) || BASE_RADIUS);
+  const minDistance = selfRadius + targetRadius + 0.75;
+
+  let desiredDistance = getPreferredRingRadius(enemy);
+  if (behavior === 'keepDistance') desiredDistance = 14;
+  else if (behavior === 'orbit') desiredDistance = 6.5;
+  else if (weapon === 'contact') desiredDistance = minDistance;
+  desiredDistance = Math.max(minDistance, desiredDistance);
+
+  const radialWindow = Math.max(2.25, desiredDistance * 0.35);
+  const radialBias = weapon === 'contact'
+    ? 0.95
+    : clamp((dist - desiredDistance) / radialWindow, -0.42, 0.58);
+  const strafeWeight = weapon === 'contact' ? 0.22 : 0.94;
+  const radialWeight = weapon === 'contact' ? 0.86 : Math.abs(radialBias);
+
+  let x = tangX * strafeWeight + toTargetX * radialBias * radialWeight;
+  let z = tangZ * strafeWeight + toTargetZ * radialBias * radialWeight;
+  const len = Math.hypot(x, z);
+  if (len < 0.001) return { x: tangX, z: tangZ };
+  return { x: x / len, z: z / len };
+}
+
 function applyNpcEngagedMovementGuarantee(enemy, delta, targetPos, fromX, fromZ, toTargetX, toTargetZ, speedMult) {
   if (!enemy?.group || getEffectiveWeapon(enemy) === 'none') return;
   const baseSpeed = getNpcMoveSpeed(enemy);
@@ -2158,17 +2189,25 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
     seekX = toTargetX; seekZ = toTargetZ;
   }
 
-  const combatSeek = blendNpcCombatStrafe(enemy, delta, { x: seekX, z: seekZ }, toTargetX, toTargetZ, dist, engaged);
-  seekX = combatSeek.x;
-  seekZ = combatSeek.z;
+  const factionCombatIntent = getNpcFactionCombatIntent(enemy, delta, targetNpc, toTargetX, toTargetZ, dist, behavior);
+  if (factionCombatIntent) {
+    seekX = factionCombatIntent.x;
+    seekZ = factionCombatIntent.z;
+  } else {
+    const combatSeek = blendNpcCombatStrafe(enemy, delta, { x: seekX, z: seekZ }, toTargetX, toTargetZ, dist, engaged);
+    seekX = combatSeek.x;
+    seekZ = combatSeek.z;
+  }
   if (engaged) speedMult = Math.max(speedMult, getEffectiveWeapon(enemy) === 'contact' ? 0.75 : 0.82);
 
   // Normalise seek
   const seekLen = Math.hypot(seekX, seekZ);
   if (seekLen > 0.001) { seekX /= seekLen; seekZ /= seekLen; }
 
-  // Update group slot assignment around the current target.
-  assignEnemyGroupSlot(enemy, targetPos, delta);
+  // Group slots are for surrounding the player. During ally/enemy duels they
+  // can cancel orbit motion and make ranged NPCs settle into stationary firing
+  // positions, so faction combat uses direct strafe/orbit intent instead.
+  if (!targetNpc) assignEnemyGroupSlot(enemy, targetPos, delta);
 
   // Separation force
   const queryR = enemy.radius * getSpacingMultiplier(enemy) + ENEMY_GROUPING.separation.queryPadding;
@@ -2178,13 +2217,17 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
     : { x: 0, z: 0 };
 
   // Slot bias
-  const slot = computeSlotBias(enemy, targetPos);
+  const slot = targetNpc ? { x: 0, z: 0 } : computeSlotBias(enemy, targetPos);
 
   // Combine with archetype weights
   const w = ARCHETYPE_WEIGHTS[enemy.type] ?? { seek: 0.75, slot: 0.25, separation: 1.0 };
 
   let moveX = seekX * w.seek + slot.x * w.slot + sep.x * w.separation;
   let moveZ = seekZ * w.seek + slot.z * w.slot + sep.z * w.separation;
+  if (factionCombatIntent) {
+    moveX = factionCombatIntent.x * 0.88 + sep.x * 0.18;
+    moveZ = factionCombatIntent.z * 0.88 + sep.z * 0.18;
+  }
 
   // Smooth
   const smoothed = smoothSteer(enemy, { x: moveX, z: moveZ });
