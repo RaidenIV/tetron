@@ -2063,142 +2063,182 @@ function blendNpcCombatStrafe(enemy, delta, seek, toTargetX, toTargetZ, dist, en
   };
 }
 
-function getNpcFactionCombatDesiredRadius(npc, behavior, weapon, targetNpc) {
-  const selfRadius = Math.max(BASE_RADIUS, Number(npc?.radius) || BASE_RADIUS);
-  const targetRadius = Math.max(BASE_RADIUS, Number(targetNpc?.radius) || BASE_RADIUS);
-  const minimumRadius = selfRadius + targetRadius + 1.2;
-  if (weapon === 'contact') return minimumRadius;
-  if (behavior === 'keepDistance') return Math.max(minimumRadius, 14);
-  if (behavior === 'orbit') return Math.max(minimumRadius, 6.5);
-  return Math.max(minimumRadius, getPreferredRingRadius(npc));
+function applyNpcEngagedMovementGuarantee(enemy, delta, targetPos, fromX, fromZ, toTargetX, toTargetZ, speedMult) {
+  if (!enemy?.group || getEffectiveWeapon(enemy) === 'none') return;
+  const baseSpeed = getNpcMoveSpeed(enemy);
+  if (!(baseSpeed > 0) || !(delta > 0)) return;
+
+  const moved = Math.hypot(enemy.group.position.x - fromX, enemy.group.position.z - fromZ);
+  const expectedStep = baseSpeed * Math.max(0.35, Number(speedMult) || 1) * delta;
+  const minimumStep = Math.min(expectedStep, Math.max(0.004, expectedStep * 0.28));
+  if (moved >= minimumStep) return;
+
+  // Active ally/enemy duels must not collapse into stationary firing lines.
+  // This post-steering pass runs only when the normal seek/slot/separation stack
+  // produced no visible movement, so it preserves the existing behaviors while
+  // guaranteeing combat movement during faction-to-faction engagement.
+  const strafeSign = getNpcCombatStrafeSign(enemy, delta);
+  const dist = Math.max(0.001, Math.hypot(targetPos.x - enemy.group.position.x, targetPos.z - enemy.group.position.z));
+  const desired = getEffectiveBehavior(enemy) === 'keepDistance' ? 14 : getPreferredRingRadius(enemy);
+  const radialBias = clamp((dist - desired) / Math.max(2.5, desired * 0.35), -0.45, 0.45);
+  let moveX = (-toTargetZ * strafeSign) * 0.92 + toTargetX * radialBias;
+  let moveZ = ( toTargetX * strafeSign) * 0.92 + toTargetZ * radialBias;
+  const len = Math.hypot(moveX, moveZ);
+  if (len < 0.001) return;
+
+  const step = Math.max(minimumStep - moved, expectedStep * 0.32);
+  enemy.group.position.x += (moveX / len) * step;
+  enemy.group.position.z += (moveZ / len) * step;
+  resolveCircleAgainstPlacedObjects(enemy.group.position, enemy.radius);
 }
 
-function applyNpcFactionCombatMovement(npc, delta, targetNpc, behavior, { finalPass = false } = {}) {
-  if (!npc?.group || !targetNpc?.group || !isLiveNpc(npc) || !isLiveNpc(targetNpc)) return false;
-  if (!(delta > 0)) return false;
+function getNpcFactionCombatDistance(enemy, targetNpc, behavior, weapon) {
+  const ownRadius = Math.max(0.25, Number(enemy?.radius) || BASE_RADIUS);
+  const targetRadius = Math.max(0.25, Number(targetNpc?.radius) || BASE_RADIUS);
+  const bodyClearance = ownRadius + targetRadius + 0.85;
+  if (weapon === 'contact') return bodyClearance;
+  if (weapon === 'sniperRifle') return Math.max(15, getPreferredRingRadius(enemy) + 6);
+  if (weapon === 'grenades' || weapon === 'rocketLauncher') return Math.max(11, getPreferredRingRadius(enemy) + 3);
+  if (behavior === 'keepDistance') return 14;
+  if (behavior === 'orbit') return 6.5;
+  return Math.max(5.25, getPreferredRingRadius(enemy));
+}
 
-  const baseSpeed = getNpcMoveSpeed(npc);
-  if (!(baseSpeed > 0)) return false;
+function applyNpcFactionCombatMovement(enemy, delta, targetNpc, { postDecollision = false } = {}) {
+  if (!isLiveNpc(enemy) || !isLiveNpc(targetNpc) || !(delta > 0)) return false;
 
-  const weapon = getEffectiveWeapon(npc);
-  if (weapon === 'none') return false;
+  enemy.__factionCombatTarget = targetNpc;
+  if (!postDecollision) {
+    enemy.__factionCombatStartX = enemy.group.position.x;
+    enemy.__factionCombatStartZ = enemy.group.position.z;
+  }
 
-  const targetPos = targetNpc.group.position;
-  const dx = targetPos.x - npc.group.position.x;
-  const dz = targetPos.z - npc.group.position.z;
-  const dist = Math.max(0.001, Math.hypot(dx, dz));
-  const toTargetX = dx / dist;
-  const toTargetZ = dz / dist;
+  const baseBehavior = getEffectiveBehavior(enemy);
+  const behavior = baseBehavior === 'guard' ? 'rush' : baseBehavior;
+  const weapon = getEffectiveWeapon(enemy);
+  const baseSpeed = getNpcMoveSpeed(enemy);
+  if (!(baseSpeed > 0)) return true;
 
-  if (behavior === 'teleport') {
-    npc.teleportCooldown = Math.max(0, Number(npc.teleportCooldown) || 0) - delta;
-    if (npc.teleportCooldown <= 0 && dist < 5.5) {
+  _tmpVec.set(
+    targetNpc.group.position.x - enemy.group.position.x,
+    0,
+    targetNpc.group.position.z - enemy.group.position.z,
+  );
+  const dist = Math.max(0.001, _tmpVec.length());
+  const toTargetX = _tmpVec.x / dist;
+  const toTargetZ = _tmpVec.z / dist;
+
+  if (!postDecollision && behavior === 'teleport') {
+    enemy.teleportCooldown = Math.max(0, enemy.teleportCooldown - delta);
+    if (enemy.teleportCooldown <= 0 && dist < 5.5) {
       const angle = Math.random() * Math.PI * 2;
       const r = randomRange(9, 14);
-      npc.group.position.x = targetPos.x + Math.cos(angle) * r;
-      npc.group.position.z = targetPos.z + Math.sin(angle) * r;
-      npc.teleportCooldown = 4;
-      resolveCircleAgainstPlacedObjects(npc.group.position, npc.radius);
-      npc.lastSteer = null;
+      enemy.group.position.x = targetNpc.group.position.x + Math.cos(angle) * r;
+      enemy.group.position.z = targetNpc.group.position.z + Math.sin(angle) * r;
+      enemy.teleportCooldown = 4;
       return true;
     }
   }
 
-  let moveX = 0;
-  let moveZ = 0;
-  let speedMult = Math.max(0.72, Number(npc.def?.speedMult) || 1);
-
-  if (weapon === 'contact') {
-    moveX = toTargetX;
-    moveZ = toTargetZ;
-    speedMult = Math.max(speedMult, 0.95);
-  } else {
-    const desired = getNpcFactionCombatDesiredRadius(npc, behavior, weapon, targetNpc);
-    const strafeSign = getNpcCombatStrafeSign(npc, delta);
-    const tangentX = -toTargetZ * strafeSign;
-    const tangentZ =  toTargetX * strafeSign;
-    const radiusError = dist - desired;
-    let radialBias = clamp(radiusError / Math.max(2.2, desired * 0.32), -0.8, 0.8);
-
-    // When very far away, close distance before orbiting. Once inside combat
-    // distance, keep a strong tangential vector so firing never resolves to a
-    // stationary face-target pose.
-    const far = dist > desired + 7;
-    const tooClose = dist < desired - 2.5;
-    if (far) radialBias = Math.max(radialBias, 0.78);
-    if (tooClose) radialBias = Math.min(radialBias, -0.78);
-
-    const tangentWeight = far ? 0.45 : 1.0;
-    moveX = tangentX * tangentWeight + toTargetX * radialBias;
-    moveZ = tangentZ * tangentWeight + toTargetZ * radialBias;
-
-    if (behavior === 'keepDistance') speedMult = Math.max(speedMult, 0.86);
-    else if (behavior === 'orbit') speedMult = Math.max(speedMult, 1.02);
-    else speedMult = Math.max(speedMult, 0.92);
+  const startX = Number(enemy.__factionCombatStartX);
+  const startZ = Number(enemy.__factionCombatStartZ);
+  const expectedStep = baseSpeed * Math.max(0.45, Number(enemy.def?.speedMult) || 1) * delta;
+  if (postDecollision && Number.isFinite(startX) && Number.isFinite(startZ)) {
+    const moved = Math.hypot(enemy.group.position.x - startX, enemy.group.position.z - startZ);
+    if (moved >= Math.max(0.006, expectedStep * 0.28)) return true;
   }
 
-  // Keep the anti-clumping separation, but keep it subordinate to combat
-  // locomotion. In the current build the older slot/separation/smoothing stack
-  // can numerically cancel motion while the NPC is shooting; this path avoids
-  // the slot stack entirely for ally-vs-enemy engagements.
-  const queryR = Math.max((npc.radius || BASE_RADIUS) * getSpacingMultiplier(npc) + ENEMY_GROUPING.separation.queryPadding, 0.1);
-  _spatialHash.query(npc.group.position.x, npc.group.position.z, queryR, _queryBuf);
-  const sep = ENEMY_GROUPING.separation.enabled
-    ? computeEnemySeparation(npc, _queryBuf)
-    : { x: 0, z: 0 };
-  moveX += sep.x * 0.25;
-  moveZ += sep.z * 0.25;
+  // Faction-vs-faction combat must not reuse the player-surrounding slot/ring
+  // stack. That stack is allowed to settle at a firing slot, which made allies
+  // and enemies look frozen until one faction was gone. This movement mode is
+  // intentionally direct: choose a combat distance, add a tangential strafe, and
+  // apply translation immediately while shooting is handled separately.
+  const desired = getNpcFactionCombatDistance(enemy, targetNpc, behavior, weapon);
+  const clearance = dist - Math.max(0.25, Number(enemy.radius) || BASE_RADIUS) - Math.max(0.25, Number(targetNpc.radius) || BASE_RADIUS);
+  const strafeSign = getNpcCombatStrafeSign(enemy, delta);
+  const tangX = -toTargetZ * strafeSign;
+  const tangZ =  toTargetX * strafeSign;
+
+  let radialBias = 0;
+  let strafeWeight = 0.78;
+  let speedMult = Math.max(0.72, Number(enemy.def?.speedMult) || 1);
+
+  if (weapon === 'contact') {
+    radialBias = clearance > 0.15 ? 1 : 0;
+    strafeWeight = clearance > 0.15 ? 0.08 : 0.42;
+    speedMult = Math.max(0.75, speedMult);
+  } else if (behavior === 'rush' || behavior === 'bossPhase' || behavior === 'split') {
+    radialBias = clamp((dist - desired) / Math.max(2.5, desired * 0.45), -0.45, 0.85);
+    strafeWeight = dist > desired + 3 ? 0.42 : 0.86;
+    speedMult = Math.max(0.82, speedMult);
+  } else if (behavior === 'keepDistance') {
+    radialBias = clamp((dist - desired) / 3.0, -0.9, 0.9);
+    strafeWeight = Math.abs(dist - desired) <= 2.5 ? 0.92 : 0.56;
+    speedMult = Math.max(0.8, speedMult);
+  } else if (behavior === 'orbit') {
+    radialBias = clamp((dist - desired) / 2.5, -0.65, 0.65);
+    strafeWeight = 0.94;
+    speedMult = Math.max(1.0, speedMult);
+  } else {
+    radialBias = clamp((dist - desired) / Math.max(2.5, desired * 0.45), -0.55, 0.75);
+    strafeWeight = 0.76;
+  }
+
+  let moveX = tangX * strafeWeight + toTargetX * radialBias;
+  let moveZ = tangZ * strafeWeight + toTargetZ * radialBias;
+
+  // Keep NPCs from stacking, but do not let separation become strong enough to
+  // cancel the combat strafe. The hard decollision pass still resolves overlaps.
+  const queryR = Math.max(1, enemy.radius * getSpacingMultiplier(enemy) + ENEMY_GROUPING.separation.queryPadding);
+  _spatialHash.query(enemy.group.position.x, enemy.group.position.z, queryR, _queryBuf);
+  const sep = ENEMY_GROUPING.separation.enabled ? computeEnemySeparation(enemy, _queryBuf) : { x: 0, z: 0 };
+  moveX += sep.x * 0.22;
+  moveZ += sep.z * 0.22;
 
   let len = Math.hypot(moveX, moveZ);
   if (len < 0.001) {
-    const strafeSign = getNpcCombatStrafeSign(npc, delta);
-    moveX = -toTargetZ * strafeSign;
-    moveZ =  toTargetX * strafeSign;
-    len = Math.hypot(moveX, moveZ);
+    moveX = tangX || toTargetX;
+    moveZ = tangZ || toTargetZ;
+    len = Math.hypot(moveX, moveZ) || 1;
   }
-  if (len < 0.001) return false;
 
-  moveX /= len;
-  moveZ /= len;
-  const stepScale = finalPass ? 0.55 : 1;
-  npc.group.position.x += moveX * baseSpeed * speedMult * delta * stepScale;
-  npc.group.position.z += moveZ * baseSpeed * speedMult * delta * stepScale;
-  resolveCircleAgainstPlacedObjects(npc.group.position, npc.radius);
-  npc.lastSteer = { x: moveX, z: moveZ };
+  const stepScale = postDecollision ? 0.5 : 1;
+  const step = baseSpeed * speedMult * delta * stepScale;
+  enemy.group.position.x += (moveX / len) * step;
+  enemy.group.position.z += (moveZ / len) * step;
+  resolveCircleAgainstPlacedObjects(enemy.group.position, enemy.radius);
+
+  // Clear stale group-slot smoothing so the next non-faction movement frame does
+  // not inherit an old steering vector from a frozen duel.
+  enemy.groupSlot = undefined;
+  enemy.lastSteer = null;
   return true;
 }
 
-function applyNpcFactionCombatMovementGuarantee(npc, delta) {
-  const targetNpc = npc?._combatTarget;
-  if (!targetNpc?.group || !isLiveNpc(npc) || !isLiveNpc(targetNpc)) return;
-  const startX = Number(npc._combatFrameStartX);
-  const startZ = Number(npc._combatFrameStartZ);
-  if (!Number.isFinite(startX) || !Number.isFinite(startZ)) return;
-  const baseSpeed = getNpcMoveSpeed(npc);
-  if (!(baseSpeed > 0) || !(delta > 0)) return;
-
-  const moved = Math.hypot(npc.group.position.x - startX, npc.group.position.z - startZ);
-  const expected = baseSpeed * delta;
-  const minimum = Math.max(0.006, expected * 0.22);
-  if (moved >= minimum) return;
-
-  const behavior = getEffectiveBehavior(npc) === 'guard' ? 'rush' : getEffectiveBehavior(npc);
-  applyNpcFactionCombatMovement(npc, delta, targetNpc, behavior, { finalPass: true });
+function applyFactionCombatPostDecollision(delta) {
+  if (!(delta > 0)) return;
+  const npcs = getActiveNpcs();
+  for (const npc of npcs) {
+    const target = npc?.__factionCombatTarget;
+    if (!target) continue;
+    if (!isLiveNpc(npc) || !isLiveNpc(target) || target.isAlly === npc.isAlly || !isTargetWithinNpcAwareness(npc, target)) {
+      npc.__factionCombatTarget = null;
+      continue;
+    }
+    applyNpcFactionCombatMovement(npc, delta, target, { postDecollision: true });
+  }
 }
 
 function updateEnemyMovement(enemy, delta, targetNpc = null) {
+  if (targetNpc && applyNpcFactionCombatMovement(enemy, delta, targetNpc)) return;
+  if (!targetNpc) enemy.__factionCombatTarget = null;
+
   const baseBehavior = getEffectiveBehavior(enemy);
   const engaged = !!targetNpc || isNpcEngagedWithPlayer(enemy);
   const behavior = engaged && baseBehavior === 'guard' ? 'rush' : baseBehavior;
   const targetPos = targetNpc?.group?.position || playerGroup.position;
-  enemy._combatTarget = targetNpc && isLiveNpc(targetNpc) ? targetNpc : null;
-  enemy._combatFrameStartX = enemy.group.position.x;
-  enemy._combatFrameStartZ = enemy.group.position.z;
-
-  if (behavior === 'guard') return;
-  if (targetNpc && applyNpcFactionCombatMovement(enemy, delta, targetNpc, behavior)) {
-    return;
-  }
+  const startX = enemy.group.position.x;
+  const startZ = enemy.group.position.z;
 
   _tmpVec.set(targetPos.x - enemy.group.position.x, 0, targetPos.z - enemy.group.position.z);
   const dist = Math.max(0.001, _tmpVec.length());
@@ -2207,6 +2247,8 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
 
   let speedMult = enemy.def.speedMult || 1;
   let seekX = 0, seekZ = 0;
+
+  if (behavior === 'guard') return;
 
   if (behavior === 'orbit') {
     // Tangential movement + radial correction
@@ -2302,6 +2344,9 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
   enemy.group.position.x += moveX * baseSpeed * speedMult * delta;
   enemy.group.position.z += moveZ * baseSpeed * speedMult * delta;
   resolveCircleAgainstPlacedObjects(enemy.group.position, enemy.radius);
+  if (targetNpc) {
+    applyNpcEngagedMovementGuarantee(enemy, delta, targetPos, startX, startZ, toTargetX, toTargetZ, speedMult);
+  }
 }
 
 function updateContactDamage(enemy, delta, targetNpc = null) {
@@ -2767,7 +2812,6 @@ function updateAllyMovement(ally, delta, elapsedTime, index, target = null) {
   if (target) {
     updateEnemyMovement(ally, delta, target);
   } else {
-    ally._combatTarget = null;
     const behavior = state.params.allyBehavior || 'guard';
     const speed = Math.max(0, Number(state.params.allyMoveSpeed) || BASE_SPEED);
     const playerPos = playerGroup.position;
@@ -2854,7 +2898,6 @@ function updateEnemyTeamCombat(delta, elapsedTime = 0, { includePlayer = true } 
     const enemy = enemies[i];
     enemy.spawnFlashTimer = Math.max(0, enemy.spawnFlashTimer - delta);
     const opponentTarget = findNearestOpponent(enemy);
-    enemy._combatTarget = opponentTarget && isLiveNpc(opponentTarget) ? opponentTarget : null;
     const target = opponentTarget || (includePlayer && isPlayerWithinNpcAwareness(enemy) ? null : null);
     if (opponentTarget || includePlayer) updateEnemyMovement(enemy, delta, opponentTarget || null);
     updateNpcAwarenessRing(enemy);
@@ -2885,10 +2928,7 @@ function updateEnemyTeamCombat(delta, elapsedTime = 0, { includePlayer = true } 
 
   _spatialHash.rebuild(getActiveNpcs());
   applyHardEnemyDecollision();
-  _spatialHash.rebuild(getActiveNpcs());
-  for (const npc of getActiveNpcs()) {
-    applyNpcFactionCombatMovementGuarantee(npc, delta);
-  }
+  applyFactionCombatPostDecollision(delta);
   _spatialHash.rebuild(getActiveNpcs());
 }
 
