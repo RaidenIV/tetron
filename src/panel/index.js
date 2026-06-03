@@ -19875,7 +19875,6 @@ function buildScopedJsonControls(body, label, keys, filename) {
 }
 
 function buildEnemies(body) {
-  buildScopedJsonControls(body, 'Enemies', ENEMY_JSON_KEYS, 'enemies.json');
   body.appendChild(select('Enemy Type', 'enemyType', ENEMY_TYPE_OPTIONS));
   body.appendChild(slider({ key: 'enemyCount', label: 'Number of Enemies', min: 0, max: 50, step: 1, dec: 0 }));
   body.appendChild(slider({ key: 'enemyHealth', label: 'Health Amount', min: 1, max: 1000, step: 1, dec: 0 }));
@@ -20394,7 +20393,6 @@ function buildController(body) {
 
 
 function buildAllies(body) {
-  buildScopedJsonControls(body, 'Allies', ALLY_JSON_KEYS, 'allies.json');
   body.appendChild(select('Ally Type', 'allyType', ENEMY_TYPE_OPTIONS));
   body.appendChild(slider({ key: 'allyCount', label: 'Number of Allies', min: 0, max: 50, step: 1, dec: 0 }));
   body.appendChild(slider({ key: 'allyHealth', label: 'Health Amount', min: 1, max: 1000, step: 1, dec: 0 }));
