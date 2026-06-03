@@ -2063,11 +2063,42 @@ function blendNpcCombatStrafe(enemy, delta, seek, toTargetX, toTargetZ, dist, en
   };
 }
 
+function applyNpcEngagedMovementGuarantee(enemy, delta, targetPos, fromX, fromZ, toTargetX, toTargetZ, speedMult) {
+  if (!enemy?.group || getEffectiveWeapon(enemy) === 'none') return;
+  const baseSpeed = getNpcMoveSpeed(enemy);
+  if (!(baseSpeed > 0) || !(delta > 0)) return;
+
+  const moved = Math.hypot(enemy.group.position.x - fromX, enemy.group.position.z - fromZ);
+  const expectedStep = baseSpeed * Math.max(0.35, Number(speedMult) || 1) * delta;
+  const minimumStep = Math.min(expectedStep, Math.max(0.004, expectedStep * 0.28));
+  if (moved >= minimumStep) return;
+
+  // Active ally/enemy duels must not collapse into stationary firing lines.
+  // This post-steering pass runs only when the normal seek/slot/separation stack
+  // produced no visible movement, so it preserves the existing behaviors while
+  // guaranteeing combat movement during faction-to-faction engagement.
+  const strafeSign = getNpcCombatStrafeSign(enemy, delta);
+  const dist = Math.max(0.001, Math.hypot(targetPos.x - enemy.group.position.x, targetPos.z - enemy.group.position.z));
+  const desired = getEffectiveBehavior(enemy) === 'keepDistance' ? 14 : getPreferredRingRadius(enemy);
+  const radialBias = clamp((dist - desired) / Math.max(2.5, desired * 0.35), -0.45, 0.45);
+  let moveX = (-toTargetZ * strafeSign) * 0.92 + toTargetX * radialBias;
+  let moveZ = ( toTargetX * strafeSign) * 0.92 + toTargetZ * radialBias;
+  const len = Math.hypot(moveX, moveZ);
+  if (len < 0.001) return;
+
+  const step = Math.max(minimumStep - moved, expectedStep * 0.32);
+  enemy.group.position.x += (moveX / len) * step;
+  enemy.group.position.z += (moveZ / len) * step;
+  resolveCircleAgainstPlacedObjects(enemy.group.position, enemy.radius);
+}
+
 function updateEnemyMovement(enemy, delta, targetNpc = null) {
   const baseBehavior = getEffectiveBehavior(enemy);
   const engaged = !!targetNpc || isNpcEngagedWithPlayer(enemy);
   const behavior = engaged && baseBehavior === 'guard' ? 'rush' : baseBehavior;
   const targetPos = targetNpc?.group?.position || playerGroup.position;
+  const startX = enemy.group.position.x;
+  const startZ = enemy.group.position.z;
 
   _tmpVec.set(targetPos.x - enemy.group.position.x, 0, targetPos.z - enemy.group.position.z);
   const dist = Math.max(0.001, _tmpVec.length());
@@ -2173,6 +2204,9 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
   enemy.group.position.x += moveX * baseSpeed * speedMult * delta;
   enemy.group.position.z += moveZ * baseSpeed * speedMult * delta;
   resolveCircleAgainstPlacedObjects(enemy.group.position, enemy.radius);
+  if (targetNpc) {
+    applyNpcEngagedMovementGuarantee(enemy, delta, targetPos, startX, startZ, toTargetX, toTargetZ, speedMult);
+  }
 }
 
 function updateContactDamage(enemy, delta, targetNpc = null) {
