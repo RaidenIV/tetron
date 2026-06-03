@@ -72,7 +72,7 @@ canvas {
   --sb-number-w: 58px;
   --hud-anchor-left: 22px;
   --hud-anchor-bottom: 28px;
-  --hud2-bars-height: 42px;
+  --hud2-bars-height: 10px;
 }
 
 .sidebar {
@@ -779,11 +779,12 @@ body[data-hud-layout="hud2"] #game-hud {
 
 body[data-hud-layout="hud2"] .game-hud-row {
   min-width: 0;
-  padding: 5px 6px 6px;
+  height: 100%;
+  padding: 0;
   display: grid;
   grid-template-columns: 1fr;
-  align-items: end;
-  background: rgba(0, 0, 0, 0.42);
+  align-items: stretch;
+  background: transparent;
 }
 
 body[data-hud-layout="hud2"] .game-hud-armor,
@@ -802,11 +803,12 @@ body[data-hud-layout="hud2"] .health-icon {
 
 body[data-hud-layout="hud2"] .game-hud-content {
   width: 100%;
+  height: 100%;
+  display: flex;
 }
 
 body[data-hud-layout="hud2"] .game-hud-line {
-  height: 12px;
-  gap: 4px;
+  display: none;
 }
 
 body[data-hud-layout="hud2"] .game-hud-label,
@@ -820,8 +822,9 @@ body[data-hud-layout="hud2"] .game-hud-value {
 }
 
 body[data-hud-layout="hud2"] .game-hud-track {
-  height: 8px;
-  margin-top: 3px;
+  width: 100%;
+  height: 100%;
+  margin-top: 0;
   border-radius: 0;
 }
 
