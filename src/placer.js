@@ -727,6 +727,12 @@ function setGhostMaterial(blocked = false) {
 const _placedMeshes = [];
 const _selectionHelpers = [];
 const _selectionHelperMatColor = 0x58a6ff;
+const _placedInstanceMatrix = new THREE.Matrix4();
+const _placedInstancePosition = new THREE.Vector3();
+const _placedInstanceQuaternion = new THREE.Quaternion();
+const _placedInstanceScale = new THREE.Vector3();
+const _placedInstanceEuler = new THREE.Euler(0, 0, 0);
+const _placedInstanceColor = new THREE.Color();
 
 // Broadphase index for large player-built scenes. Without this, movement,
 // projectile checks, and NPC collision scanned every placed asset every frame,
@@ -824,9 +830,13 @@ function rebuildSelectionHelpers() {
     return;
   }
 
-  for (const mesh of _placedMeshes) {
-    if (!isObjectSelected(mesh.userData?.placedObject)) continue;
-    const helper = new THREE.BoxHelper(mesh, _selectionHelperMatColor);
+  for (const obj of selectedObjects) {
+    const b = placedObjectBounds(obj);
+    const box = new THREE.Box3(
+      new THREE.Vector3(b.minX, b.minY, b.minZ),
+      new THREE.Vector3(b.maxX, b.maxY, b.maxZ),
+    );
+    const helper = new THREE.Box3Helper(box, _selectionHelperMatColor);
     helper.renderOrder = 18;
     scene.add(helper);
     _selectionHelpers.push(helper);
@@ -839,12 +849,13 @@ function refreshSelection() {
   notifySelectionChanged();
 }
 
-function materialForAsset(asset, obj = null) {
+function materialForAsset(asset, obj = null, { instanced = false } = {}) {
   return new THREE.MeshStandardMaterial({
-    color: resolvePlacedColor(obj, asset),
+    color: instanced ? 0xffffff : resolvePlacedColor(obj, asset),
     roughness: 0.7,
     metalness: 0.1,
     flatShading: asset?.id === 'ramp',
+    vertexColors: instanced,
   });
 }
 
@@ -866,25 +877,39 @@ function disposePlacedMesh(mesh) {
   mesh.material?.dispose?.();
 }
 
-function removePlacedMesh(mesh) {
-  const meshIndex = _placedMeshes.indexOf(mesh);
-  if (meshIndex === -1) return false;
+function placedObjectFromHit(hit) {
+  if (!hit?.object) return null;
+  const data = hit.object.userData || {};
+  if (Array.isArray(data.placedObjects) && Number.isInteger(hit.instanceId)) {
+    return data.placedObjects[hit.instanceId] || null;
+  }
+  return data.placedObject || null;
+}
 
+function removePlacedObjectRecord(obj) {
   const list = state.params.placedObjects || [];
-  const obj = mesh.userData?.placedObject;
   const dataIndex = obj ? list.indexOf(obj) : -1;
-  if (dataIndex !== -1) list.splice(dataIndex, 1);
-  else if (meshIndex < list.length) list.splice(meshIndex, 1);
+  if (dataIndex === -1) return false;
+  list.splice(dataIndex, 1);
   state.params.placedObjects = list;
   rebuildPlacedObjects();
   notifySelectionChanged();
   return true;
 }
 
+function removePlacedMesh(mesh, instanceId = null) {
+  const meshIndex = _placedMeshes.indexOf(mesh);
+  if (meshIndex === -1) return false;
+  const obj = Array.isArray(mesh.userData?.placedObjects) && Number.isInteger(instanceId)
+    ? mesh.userData.placedObjects[instanceId]
+    : mesh.userData?.placedObject;
+  return removePlacedObjectRecord(obj);
+}
+
 function removePlacedObjectByAim() {
   const hits = _raycaster.intersectObjects(_placedMeshes, false);
   if (!hits.length) return false;
-  return removePlacedMesh(hits[0].object);
+  return removePlacedObjectRecord(placedObjectFromHit(hits[0]));
 }
 
 function selectPlacedObjectByAim({ toggle = true, additive = true } = {}) {
@@ -895,7 +920,7 @@ function selectPlacedObjectByAim({ toggle = true, additive = true } = {}) {
   }
 
   ensurePlacedObjectMetadata();
-  const obj = hits[0].object.userData?.placedObject;
+  const obj = placedObjectFromHit(hits[0]);
   if (!obj?.objectId) return false;
 
   const selected = new Set(state.selectedPlacedObjectIds || []);
@@ -994,7 +1019,7 @@ export function selectConnectedPlacedStructureByAim() {
   const hits = _raycaster.intersectObjects(_placedMeshes, false);
   if (!hits.length) return 0;
   ensurePlacedObjectMetadata();
-  const seed = hits[0].object.userData?.placedObject;
+  const seed = placedObjectFromHit(hits[0]);
   const connected = connectedStructureFromSeed(seed);
   state.selectedPlacedObjectIds = connected.map(obj => obj.objectId).filter(Boolean);
   rebuildSelectionHelpers();
@@ -1122,7 +1147,7 @@ function removePlacedObjectAtFootprint(sx, sz, assetId, ry, scaleSource = null) 
     }
   }
 
-  return bestIndex >= 0 && _placedMeshes[bestIndex] ? removePlacedMesh(_placedMeshes[bestIndex]) : false;
+  return bestIndex >= 0 ? removePlacedObjectRecord(list[bestIndex]) : false;
 }
 
 
@@ -1481,6 +1506,50 @@ function addDangerDecals(mesh, obj, asset) {
   if (!isDangerFaceShared(obj, bounds, 'bottom')) addDangerPlane(mesh, decalSize, decalSize, { x: 0, y: -h, z: 0 }, { x: Math.PI / 2, y: 0, z: 0 });
 }
 
+function canBatchPlacedObject(obj, asset) {
+  if (!obj || !asset) return false;
+  // Destructible assets own decal child meshes and destruction-specific render state,
+  // so keep them as standalone meshes. Simple connected/static structures can be
+  // instanced safely while selection, removal, collision, and JSON stay object-based.
+  return asset.destructible !== true && isPrefabAsset(asset) !== true;
+}
+
+function placedBatchKey(asset) {
+  const shadow = state.params.placedAssetShadows === true && asset.id !== 'ramp' ? 'shadow' : 'flat';
+  return `${asset.id}|${shadow}`;
+}
+
+function applyPlacedObjectTransformToMatrix(obj, asset) {
+  const scale = getPlacedScale(obj);
+  obj.scaleX = scale.x;
+  obj.scaleY = scale.y;
+  obj.scaleZ = scale.z;
+  if (!Number.isFinite(Number(obj.y))) obj.y = Number(asset?.yOffset ?? 0.5) * scale.y;
+  _placedInstancePosition.set(Number(obj.x) || 0, Number(obj.y) || 0, Number(obj.z) || 0);
+  _placedInstanceEuler.set(0, Number(obj.ry) || 0, 0);
+  _placedInstanceQuaternion.setFromEuler(_placedInstanceEuler);
+  _placedInstanceScale.set(scale.x, scale.y, scale.z);
+  _placedInstanceMatrix.compose(_placedInstancePosition, _placedInstanceQuaternion, _placedInstanceScale);
+  return _placedInstanceMatrix;
+}
+
+function createPlacedInstancedMesh(asset, objects) {
+  const mesh = new THREE.InstancedMesh(makeGeo(asset.id), materialForAsset(asset, null, { instanced: true }), objects.length);
+  mesh.userData.placedObjects = objects;
+  mesh.castShadow = state.params.placedAssetShadows === true && asset.id !== 'ramp';
+  mesh.receiveShadow = true;
+  for (let i = 0; i < objects.length; i++) {
+    const obj = objects[i];
+    if (!obj.objectId) obj.objectId = nextPlacedObjectId();
+    mesh.setMatrixAt(i, applyPlacedObjectTransformToMatrix(obj, asset));
+    mesh.setColorAt(i, _placedInstanceColor.set(resolvePlacedColor(obj, asset)));
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  mesh.frustumCulled = true;
+  return mesh;
+}
+
 function createPlacedMesh(obj, asset) {
   if (!obj.objectId) obj.objectId = nextPlacedObjectId();
   const mesh = new THREE.Mesh(makeGeo(asset.id), materialForAsset(asset, obj));
@@ -1510,13 +1579,39 @@ export function rebuildPlacedObjects() {
 
   const list = state.params.placedObjects || [];
   ensurePlacedObjectMetadata();
+  const batches = new Map();
+
   for (const obj of list) {
     const asset = getAsset(obj.assetId);
     if (isPrefabAsset(asset)) continue;
+    if (canBatchPlacedObject(obj, asset)) {
+      const key = placedBatchKey(asset);
+      let batch = batches.get(key);
+      if (!batch) {
+        batch = { asset, objects: [] };
+        batches.set(key, batch);
+      }
+      batch.objects.push(obj);
+      continue;
+    }
     const mesh = createPlacedMesh(obj, asset);
     scene.add(mesh);
     _placedMeshes.push(mesh);
   }
+
+  for (const batch of batches.values()) {
+    if (batch.objects.length <= 1) {
+      const obj = batch.objects[0];
+      const mesh = createPlacedMesh(obj, batch.asset);
+      scene.add(mesh);
+      _placedMeshes.push(mesh);
+      continue;
+    }
+    const mesh = createPlacedInstancedMesh(batch.asset, batch.objects);
+    scene.add(mesh);
+    _placedMeshes.push(mesh);
+  }
+
   rebuildPlacedSpatialIndex();
   rebuildSelectionHelpers();
 }
