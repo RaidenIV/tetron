@@ -148,6 +148,7 @@ const PRESET_SETTINGS = [
       "buildAreaBoundaryCollision": true,
       "showFps": true,
       "hudVisible": true,
+      "hudLayout": "hud1",
       "hudFont": "michroma",
       "hudNpcHealthBars": true,
       "hudEnemyHealthBars": true,
@@ -9566,6 +9567,7 @@ const PRESET_SETTINGS = [
     "buildAreaBoundaryCollision": true,
     "showFps": true,
     "hudVisible": true,
+    "hudLayout": "hud1",
     "hudFont": "michroma",
     "hudNpcHealthBars": true,
     "hudEnemyHealthBars": true,
@@ -18878,6 +18880,11 @@ const ICON_ENEMIES = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" view
 const ICON_DESTRUCTION = `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M361.24-112Q258-112 185-184.68 112-257.35 112-360q0-105 75.5-176.5T369-608q8 0 16.5.5T402-606l23-41q9-17 27-21.5t35 4.5l25 14 5-8q20-34 57-44t71 10l12 7-14 24-12-7q-24-14-51-7t-40 31l-4 8 25 14q17 9 21.5 27t-4.5 35l-24 42q23 38 39 78.5t16 85.5q0 102-72.26 172-72.27 70-175.5 70Zm-.24-27q92 0 156-64.5T581-359q0-31-8.5-61T547-477l-26-41 29-51q5-8 2.5-18T542-602l-63-36q-8-5-18-2t-15 11l-29 50h-48q-94 0-161.5 63T140-361q0 92 64.5 157T361-139Zm387-475v-28h68v28h-68ZM586-788v-68h28v68h-28Zm162 40-19-19 48-49 19 20-48 48ZM361-359Z"/></svg>`;
 const ICON_ABILITIES = `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="m642-477-79 128q-5 8-15.5 7T535-353l-32-131-301 302q-4 4-9.5 4.5T182-182q-5-5-5-10t5-10l302-302-130-32q-10-2-11.5-12t6.5-15l128-79-11-150q-1-10 7.5-15t16.5 2l115 97 139-57q9-4 16.5 3.5T764-745l-56 139 97 115q7 8 2.5 17t-14.5 8l-151-11ZM183-734q-5-5-5-11t5-11l21-21q5-5 11-5t11 5l21 21q5 5 5 11t-5 11l-21 21q-5 5-11 5t-11-5l-21-21Zm372 344 72-116 136 10-88-105 51-126-126 51-105-88 10 136-115 72 132 33 33 133Zm179 207-21-21q-5-5-5-11t5-11l21-21q5-5 11-5t11 5l21 21q5 5 5 11t-5 11l-21 21q-5 5-11 5t-11-5ZM577-577Z"/></svg>`;
 
+const HUD_LAYOUT_OPTIONS = [
+  ['hud1', 'HUD 1'],
+  ['hud2', 'HUD 2'],
+];
+
 const HUD_FONT_OPTIONS = [
   ['system', 'System Default'],
   ['juraBold', 'Jura Bold'],
@@ -19784,6 +19791,7 @@ function buildScene(body) {
 
 function buildHUD(body) {
   body.appendChild(toggle('HUD Enabled', 'hudVisible', () => applyHudSettings()));
+  body.appendChild(select('Layout', 'hudLayout', HUD_LAYOUT_OPTIONS, () => applyHudSettings()));
   body.appendChild(select('Font', 'hudFont', HUD_FONT_OPTIONS, () => applyHudSettings()));
   body.appendChild(toggle('Enemy Health Bars', 'hudEnemyHealthBars', () => applyHudSettings()));
   body.appendChild(toggle('Ally Health Bars', 'hudAllyHealthBars', () => applyHudSettings()));
@@ -21149,6 +21157,8 @@ function syncHudStatus() {
 
 function applyHudSettings() {
   const p = state.params;
+  const hudLayout = p.hudLayout === 'hud2' ? 'hud2' : 'hud1';
+  document.body.dataset.hudLayout = hudLayout;
   syncHudStatus();
   const hudFont = HUD_FONT_STYLES[p.hudFont] || HUD_FONT_STYLES.system;
   // Apply font CSS vars on <html> so #pause-overlay and any other HUD element
@@ -21322,6 +21332,7 @@ function applyAllParams() {
   if (!('doubleJumpAirJumps' in p)) p.doubleJumpAirJumps = 1;
   if (!('doubleJumpForceMultiplier' in p)) p.doubleJumpForceMultiplier = 1;
   if (!('doubleJumpResetVelocity' in p)) p.doubleJumpResetVelocity = true;
+  if (!('hudLayout' in p)) p.hudLayout = 'hud1';
   if (!('hudWeaponAmmoVisible' in p)) p.hudWeaponAmmoVisible = true;
   if (!('hudWeaponAmmoScale' in p)) p.hudWeaponAmmoScale = 1;
   if (!('hudWeaponAmmoOpacity' in p)) p.hudWeaponAmmoOpacity = 1;
@@ -21341,6 +21352,7 @@ function applyAllParams() {
     if (value === 'projectile') return 'pistol';
     return normalizeChoice(value, NPC_WEAPON_OPTIONS, 'rifle');
   };
+  p.hudLayout = normalizeChoice(p.hudLayout, HUD_LAYOUT_OPTIONS, 'hud1');
   p.playerWeaponType = normalizeChoice(p.playerWeaponType, PLAYER_WEAPON_OPTIONS, 'rifle');
   p.weaponInfiniteAmmo = p.weaponInfiniteAmmo === true;
   p.doubleJumpEnabled = p.doubleJumpEnabled === true;

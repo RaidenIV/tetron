@@ -70,6 +70,9 @@ canvas {
   --sb-label-w: 130px;
   --sb-gap: 12px;
   --sb-number-w: 58px;
+  --hud-anchor-left: 22px;
+  --hud-anchor-bottom: 28px;
+  --hud2-bars-height: 42px;
 }
 
 .sidebar {
@@ -310,8 +313,8 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   --hud-letter-spacing: 0.24em;
   --hud-value-letter-spacing: 0.12em;
   position: fixed;
-  left: 22px;
-  bottom: 28px;
+  left: var(--hud-anchor-left, 22px);
+  bottom: var(--hud-anchor-bottom, 28px);
   z-index: 24;
   display: flex;
   flex-direction: column;
@@ -748,13 +751,84 @@ body.is-paused * {
   left: unset;
   width: unset;
   height: unset;
-  bottom: 28px;
+  bottom: var(--hud-anchor-bottom, 28px);
   right: calc(var(--sb-width, 320px) + 28px);
   z-index: 24;
   pointer-events: none;
   border-radius: 0;
   display: block;
   box-shadow: 0 0 8px rgba(0,0,0,0.6);
+}
+
+body[data-hud-layout="hud2"] #radar-canvas {
+  left: var(--hud-anchor-left, 22px);
+  right: auto;
+  bottom: calc(var(--hud-anchor-bottom, 28px) + var(--hud2-bars-height, 42px));
+}
+
+body[data-hud-layout="hud2"] #game-hud {
+  left: var(--hud-anchor-left, 22px);
+  bottom: var(--hud-anchor-bottom, 28px);
+  width: var(--radar-size, 180px);
+  height: var(--hud2-bars-height, 42px);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  align-items: stretch;
+}
+
+body[data-hud-layout="hud2"] .game-hud-row {
+  min-width: 0;
+  padding: 5px 6px 6px;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: end;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+body[data-hud-layout="hud2"] .game-hud-armor,
+body[data-hud-layout="hud2"] .game-hud-health {
+  margin-left: 0;
+}
+
+body[data-hud-layout="hud2"] .game-hud-armor {
+  border-right: 1px solid rgba(255,255,255,0.12);
+}
+
+body[data-hud-layout="hud2"] .armor-icon,
+body[data-hud-layout="hud2"] .health-icon {
+  display: none;
+}
+
+body[data-hud-layout="hud2"] .game-hud-content {
+  width: 100%;
+}
+
+body[data-hud-layout="hud2"] .game-hud-line {
+  height: 12px;
+  gap: 4px;
+}
+
+body[data-hud-layout="hud2"] .game-hud-label,
+body[data-hud-layout="hud2"] .game-hud-value {
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+
+body[data-hud-layout="hud2"] .game-hud-value {
+  min-width: 24px;
+}
+
+body[data-hud-layout="hud2"] .game-hud-track {
+  height: 8px;
+  margin-top: 3px;
+  border-radius: 0;
+}
+
+body[data-hud-layout="hud2"] .bullet-time-indicator {
+  position: fixed;
+  z-index: 24;
+  margin: 0;
 }
 
 /* ── 1920×1200 (16:10) display optimizations ─────────────────────────────── */
@@ -764,6 +838,8 @@ body.is-paused * {
   :root {
     --sb-width: 360px;
     --sb-label-w: 148px;
+    --hud-anchor-left: 26px;
+    --hud-anchor-bottom: 38px;
   }
 
   /* HUD — more breathing room at the bottom */

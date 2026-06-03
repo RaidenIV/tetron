@@ -44,6 +44,36 @@ function drawTagIcon(ctx, x, y, iconSize, color) {
 }
 
 
+function getCssPixelVar(name, fallback) {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name);
+  const value = Number.parseFloat(raw);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function resetInlineHud2Position(el) {
+  el.style.position = '';
+  el.style.left = '';
+  el.style.right = '';
+  el.style.top = '';
+  el.style.bottom = '';
+  el.style.margin = '';
+}
+
+function positionHud2BulletTimeIndicator(el, size) {
+  const p = state.params;
+  const radarSize = Math.max(40, (Math.max(20, Number(p.radarRadius) || 90)) * 2);
+  const left = getCssPixelVar('--hud-anchor-left', 22) + radarSize + 12;
+  const bottom = getCssPixelVar('--hud-anchor-bottom', 28)
+    + getCssPixelVar('--hud2-bars-height', 42)
+    + Math.max(0, (radarSize - size) / 2);
+  el.style.position = 'fixed';
+  el.style.left = `${left}px`;
+  el.style.right = 'auto';
+  el.style.top = 'auto';
+  el.style.bottom = `${bottom}px`;
+  el.style.margin = '0';
+}
+
 function updateBulletTimeActiveIcon() {
   const el = document.getElementById('bullet-time-active-indicator');
   if (!el) return;
@@ -93,6 +123,11 @@ function updateBulletTimeIndicator() {
       el.style.width = `${size}px`;
       el.style.height = `${size}px`;
       el.style.opacity = String(ready ? readyOpacity : emptyOpacity);
+      if (p.hudLayout === 'hud2') {
+        positionHud2BulletTimeIndicator(el, size);
+      } else {
+        resetInlineHud2Position(el);
+      }
     }
   }
   updateBulletTimeActiveIcon();

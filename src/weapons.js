@@ -331,7 +331,11 @@ export function syncWeaponAmmoHud() {
   hud.style.transform = `scale(${scale})`;
   hud.style.opacity = String(opacity);
   hud.style.background = `rgba(0, 0, 0, ${bgOpacity})`;
-  hud.style.right = `calc(var(--sb-width, 320px) + 28px + var(--radar-size, 180px) + 14px + ${offsetX}px)`;
+  if (p.hudLayout === 'hud2') {
+    hud.style.right = `calc(var(--sb-width, 320px) + 28px + ${offsetX}px)`;
+  } else {
+    hud.style.right = `calc(var(--sb-width, 320px) + 28px + var(--radar-size, 180px) + 14px + ${offsetX}px)`;
+  }
   hud.style.bottom = `${28 + offsetY}px`;
   const magazineSize = getConfiguredMagazineSize(type);
   const reserveText = infinite ? '∞' : String(Math.max(0, record.reserve));

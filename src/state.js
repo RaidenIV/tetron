@@ -153,6 +153,7 @@ export const state = {
     "buildAreaBoundaryCollision": true,
     "showFps": true,
     "hudVisible": true,
+    "hudLayout": "hud1",
     "hudFont": "michroma",
     "hudNpcHealthBars": true,
     "hudEnemyHealthBars": true,
