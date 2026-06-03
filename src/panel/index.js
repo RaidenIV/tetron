@@ -19665,11 +19665,6 @@ function buildPlayer(body) {
   body.appendChild(slider({ key: 'jumpForce', label: 'Jump Force', min: 2, max: 24, step: 0.5, dec: 1 }));
   body.appendChild(slider({ key: 'jumpGravity', label: 'Gravity', min: 5, max: 80, step: 1, dec: 0 }));
 
-  body.appendChild(subhdr('Dash'));
-  body.appendChild(toggle('Dash Enabled', 'dashEnabled'));
-  body.appendChild(slider({ key: 'dashSpeed',    label: 'Speed',    min: 5,    max: 60,  step: 1,    dec: 0 }));
-  body.appendChild(slider({ key: 'dashDuration', label: 'Duration', min: 0.05, max: 0.5, step: 0.01, dec: 2 }));
-  body.appendChild(slider({ key: 'dashCooldown', label: 'Cooldown', min: 0.1,  max: 5,   step: 0.1,  dec: 1 }));
 }
 
 
@@ -19801,6 +19796,14 @@ function buildHUD(body) {
   body.appendChild(slider({ key: 'hudBulletTimeActiveIconSize', label: 'BT Active Size', min: 12, max: 128, step: 1, dec: 0, onChange: () => applyHudSettings() }));
   body.appendChild(slider({ key: 'hudBulletTimeActiveIconOpacity', label: 'BT Active Opacity', min: 0, max: 1, step: 0.05, dec: 2, onChange: () => applyHudSettings() }));
 
+  body.appendChild(subhdr('Weapon Ammo'));
+  body.appendChild(toggle('Ammo HUD', 'hudWeaponAmmoVisible', () => syncWeaponAmmoHud()));
+  body.appendChild(slider({ key: 'hudWeaponAmmoScale', label: 'Scale', min: 0.5, max: 2, step: 0.05, dec: 2, onChange: () => syncWeaponAmmoHud() }));
+  body.appendChild(slider({ key: 'hudWeaponAmmoOpacity', label: 'Opacity', min: 0, max: 1, step: 0.05, dec: 2, onChange: () => syncWeaponAmmoHud() }));
+  body.appendChild(slider({ key: 'hudWeaponAmmoBgOpacity', label: 'BG Opacity', min: 0, max: 1, step: 0.05, dec: 2, onChange: () => syncWeaponAmmoHud() }));
+  body.appendChild(slider({ key: 'hudWeaponAmmoOffsetX', label: 'Offset X', min: -400, max: 400, step: 1, dec: 0, onChange: () => syncWeaponAmmoHud() }));
+  body.appendChild(slider({ key: 'hudWeaponAmmoOffsetY', label: 'Offset Y', min: -300, max: 300, step: 1, dec: 0, onChange: () => syncWeaponAmmoHud() }));
+
   body.appendChild(subhdr('Enemy Tag'));
   body.appendChild(toggle('Tag Enabled', 'tagEnabled', () => applyTagSettings()));
   body.appendChild(colorPicker('Tag Color', 'tagColor', () => applyTagSettings()));
@@ -19875,6 +19878,7 @@ function buildScopedJsonControls(body, label, keys, filename) {
 }
 
 function buildEnemies(body) {
+  buildScopedJsonControls(body, 'Enemies', ENEMY_JSON_KEYS, 'enemies.json');
   body.appendChild(select('Enemy Type', 'enemyType', ENEMY_TYPE_OPTIONS));
   body.appendChild(slider({ key: 'enemyCount', label: 'Number of Enemies', min: 0, max: 50, step: 1, dec: 0 }));
   body.appendChild(slider({ key: 'enemyHealth', label: 'Health Amount', min: 1, max: 1000, step: 1, dec: 0 }));
@@ -19951,14 +19955,28 @@ function buildDestruction(body) {
 }
 
 function buildAbilities(body) {
-  body.appendChild(subhdr('Bullet Time'));
-  body.appendChild(toggle('Bullet Time Enabled', 'bulletTimeEnabled'));
-  body.appendChild(slider({ key: 'bulletTimeDuration', label: 'Duration', min: 0.1, max: 30, step: 0.1, dec: 1 }));
-  body.appendChild(slider({ key: 'bulletTimeCooldown', label: 'Cooldown', min: 0, max: 120, step: 0.5, dec: 1 }));
-  body.appendChild(slider({ key: 'bulletTimeScale', label: 'World Scale', min: 0.05, max: 1, step: 0.05, dec: 2 }));
+  body.appendChild(createManualSubsection('Bullet Time', bulletBody => {
+    bulletBody.appendChild(toggle('Bullet Time Enabled', 'bulletTimeEnabled'));
+    bulletBody.appendChild(slider({ key: 'bulletTimeDuration', label: 'Duration', min: 0.1, max: 30, step: 0.1, dec: 1 }));
+    bulletBody.appendChild(slider({ key: 'bulletTimeCooldown', label: 'Cooldown', min: 0, max: 120, step: 0.5, dec: 1 }));
+    bulletBody.appendChild(slider({ key: 'bulletTimeScale', label: 'World Scale', min: 0.05, max: 1, step: 0.05, dec: 2 }));
+  }, true));
 
-  body.appendChild(subhdr('Movement'));
-  body.appendChild(toggle('Double Jump', 'doubleJumpEnabled'));
+  body.appendChild(createManualSubsection('Dash', dashBody => {
+    dashBody.appendChild(toggle('Dash Enabled', 'dashEnabled'));
+    dashBody.appendChild(slider({ key: 'dashSpeed',    label: 'Speed',    min: 5,    max: 60,  step: 1,    dec: 0 }));
+    dashBody.appendChild(slider({ key: 'dashDuration', label: 'Duration', min: 0.05, max: 0.5, step: 0.01, dec: 2 }));
+    dashBody.appendChild(slider({ key: 'dashCooldown', label: 'Cooldown', min: 0.1,  max: 5,   step: 0.1,  dec: 1 }));
+  }));
+
+  body.appendChild(createManualSubsection('Double Jump', jumpBody => {
+    jumpBody.appendChild(toggle('Double Jump Enabled', 'doubleJumpEnabled'));
+    jumpBody.appendChild(slider({ key: 'doubleJumpAirJumps', label: 'Extra Jumps', min: 0, max: 5, step: 1, dec: 0 }));
+    jumpBody.appendChild(slider({ key: 'doubleJumpForceMultiplier', label: 'Force Mult.', min: 0.1, max: 2, step: 0.05, dec: 2 }));
+    jumpBody.appendChild(toggle('Reset Vertical Speed', 'doubleJumpResetVelocity'));
+  }));
+
+  body.appendChild(createManualSubsection('Shield', shieldBody => buildShield(shieldBody)));
 }
 
 function createManualSubsection(title, buildFn, open = false) {
@@ -20393,6 +20411,7 @@ function buildController(body) {
 
 
 function buildAllies(body) {
+  buildScopedJsonControls(body, 'Allies', ALLY_JSON_KEYS, 'allies.json');
   body.appendChild(select('Ally Type', 'allyType', ENEMY_TYPE_OPTIONS));
   body.appendChild(slider({ key: 'allyCount', label: 'Number of Allies', min: 0, max: 50, step: 1, dec: 0 }));
   body.appendChild(slider({ key: 'allyHealth', label: 'Health Amount', min: 1, max: 1000, step: 1, dec: 0 }));
@@ -21184,6 +21203,7 @@ function applyHudSettings() {
   });
 
   applyReticleSettings();
+  syncWeaponAmmoHud();
 }
 
 const SHADOW_QUALITY = {
@@ -21299,6 +21319,15 @@ function applyAllParams() {
   if (!('soundSfx_enemy_grunt' in p)) p.soundSfx_enemy_grunt = 1;
   if (!('soundSfx_object_explode' in p)) p.soundSfx_object_explode = p.soundSfx_explode ?? 1;
   if (!('soundProximityEnabled' in p)) p.soundProximityEnabled = true;
+  if (!('doubleJumpAirJumps' in p)) p.doubleJumpAirJumps = 1;
+  if (!('doubleJumpForceMultiplier' in p)) p.doubleJumpForceMultiplier = 1;
+  if (!('doubleJumpResetVelocity' in p)) p.doubleJumpResetVelocity = true;
+  if (!('hudWeaponAmmoVisible' in p)) p.hudWeaponAmmoVisible = true;
+  if (!('hudWeaponAmmoScale' in p)) p.hudWeaponAmmoScale = 1;
+  if (!('hudWeaponAmmoOpacity' in p)) p.hudWeaponAmmoOpacity = 1;
+  if (!('hudWeaponAmmoBgOpacity' in p)) p.hudWeaponAmmoBgOpacity = 0.36;
+  if (!('hudWeaponAmmoOffsetX' in p)) p.hudWeaponAmmoOffsetX = 0;
+  if (!('hudWeaponAmmoOffsetY' in p)) p.hudWeaponAmmoOffsetY = 0;
   const clampSetting = (value, min, max, fallback) => {
     const numeric = Number(value);
     return Math.min(max, Math.max(min, Number.isFinite(numeric) ? numeric : fallback));
@@ -21314,6 +21343,16 @@ function applyAllParams() {
   };
   p.playerWeaponType = normalizeChoice(p.playerWeaponType, PLAYER_WEAPON_OPTIONS, 'rifle');
   p.weaponInfiniteAmmo = p.weaponInfiniteAmmo === true;
+  p.doubleJumpEnabled = p.doubleJumpEnabled === true;
+  p.doubleJumpAirJumps = Math.round(clampSetting(p.doubleJumpAirJumps, 0, 5, 1));
+  p.doubleJumpForceMultiplier = clampSetting(p.doubleJumpForceMultiplier, 0.1, 2, 1);
+  p.doubleJumpResetVelocity = p.doubleJumpResetVelocity !== false;
+  p.hudWeaponAmmoVisible = p.hudWeaponAmmoVisible !== false;
+  p.hudWeaponAmmoScale = clampSetting(p.hudWeaponAmmoScale, 0.5, 2, 1);
+  p.hudWeaponAmmoOpacity = clampSetting(p.hudWeaponAmmoOpacity, 0, 1, 1);
+  p.hudWeaponAmmoBgOpacity = clampSetting(p.hudWeaponAmmoBgOpacity, 0, 1, 0.36);
+  p.hudWeaponAmmoOffsetX = Math.round(clampSetting(p.hudWeaponAmmoOffsetX, -400, 400, 0));
+  p.hudWeaponAmmoOffsetY = Math.round(clampSetting(p.hudWeaponAmmoOffsetY, -300, 300, 0));
   p.weaponRifleTracers = p.weaponRifleTracers !== false;
   const hexSetting = (value, fallback) => (/^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : fallback);
   const boolSetting = (value, fallback = false) => (value === true || value === false ? value : fallback);
@@ -21491,7 +21530,6 @@ function rebuildPanel() {
     [ICON_CAMERA, 'Camera', buildCamera],
     [ICON_PLAYER, 'Player', buildPlayer],
     [ICON_ABILITIES, 'Abilities', buildAbilities],
-    [ICON_SHIELD, 'Shield', buildShield],
     [ICON_LIGHT, 'Lighting', buildLighting],
     [ICON_SCENE, 'World', buildScene],
     [ICON_HUD, 'HUD', buildHUD],
@@ -21513,7 +21551,7 @@ function rebuildPanel() {
   // Required gameplay-test sections. This failsafe keeps these controls visible
   // even if a future edit accidentally removes them from the main section list.
   const requiredSections = [
-    [ICON_ABILITIES, 'Abilities', buildAbilities, 'Shield'],
+    [ICON_ABILITIES, 'Abilities', buildAbilities, 'Lighting'],
     [ICON_DESTRUCTION, 'Destruction', buildDestruction, 'Weapons'],
   ];
 

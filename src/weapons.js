@@ -316,7 +316,23 @@ export function syncWeaponAmmoHud() {
   const spec = getAmmoSpec(type);
   const record = getAmmoRecord(type);
   const infinite = p.weaponInfiniteAmmo === true;
-  hud.style.display = p.hudVisible !== false && p.laserEnabled !== false ? '' : 'none';
+  const ammoHudVisible = p.hudVisible !== false && p.laserEnabled !== false && p.hudWeaponAmmoVisible !== false;
+  hud.style.display = ammoHudVisible ? '' : 'none';
+  const numericSetting = (value, fallback, min, max) => {
+    const numeric = Number(value);
+    return Math.min(max, Math.max(min, Number.isFinite(numeric) ? numeric : fallback));
+  };
+  const scale = numericSetting(p.hudWeaponAmmoScale, 1, 0.5, 2);
+  const opacity = numericSetting(p.hudWeaponAmmoOpacity, 1, 0, 1);
+  const bgOpacity = numericSetting(p.hudWeaponAmmoBgOpacity, 0.36, 0, 1);
+  const offsetX = numericSetting(p.hudWeaponAmmoOffsetX, 0, -400, 400);
+  const offsetY = numericSetting(p.hudWeaponAmmoOffsetY, 0, -300, 300);
+  hud.style.transformOrigin = 'bottom right';
+  hud.style.transform = `scale(${scale})`;
+  hud.style.opacity = String(opacity);
+  hud.style.background = `rgba(0, 0, 0, ${bgOpacity})`;
+  hud.style.right = `calc(var(--sb-width, 320px) + 28px + var(--radar-size, 180px) + 14px + ${offsetX}px)`;
+  hud.style.bottom = `${28 + offsetY}px`;
   const magazineSize = getConfiguredMagazineSize(type);
   const reserveText = infinite ? '∞' : String(Math.max(0, record.reserve));
   const magazineText = spec.magazineKey ? (infinite ? String(magazineSize) : String(Math.max(0, record.magazine))) : '—';

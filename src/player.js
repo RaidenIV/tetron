@@ -871,10 +871,21 @@ function updateJump(delta) {
       state.jumpGrounded = false;
       state.jumpAirJumpsUsed = 0;
       playJumpSound();
-    } else if (p.doubleJumpEnabled && (state.jumpAirJumpsUsed || 0) < 1) {
-      state.jumpVelocity = jumpForce;
-      state.jumpAirJumpsUsed = (state.jumpAirJumpsUsed || 0) + 1;
-      playJumpSound();
+    } else {
+      const configuredAirJumps = Number(p.doubleJumpAirJumps);
+      const maxAirJumps = p.doubleJumpEnabled
+        ? Math.max(0, Math.min(5, Math.round(Number.isFinite(configuredAirJumps) ? configuredAirJumps : 1)))
+        : 0;
+      if ((state.jumpAirJumpsUsed || 0) < maxAirJumps) {
+        const configuredMultiplier = Number(p.doubleJumpForceMultiplier);
+        const forceMultiplier = Math.max(0.1, Math.min(2, Number.isFinite(configuredMultiplier) ? configuredMultiplier : 1));
+        const airJumpForce = jumpForce * forceMultiplier;
+        state.jumpVelocity = p.doubleJumpResetVelocity === false
+          ? Math.max(state.jumpVelocity, 0) + airJumpForce
+          : airJumpForce;
+        state.jumpAirJumpsUsed = (state.jumpAirJumpsUsed || 0) + 1;
+        playJumpSound();
+      }
     }
   }
   state.jumpQueued = false;
