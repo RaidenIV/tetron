@@ -214,9 +214,9 @@ let _playerDeathEl = null;
 export function playPlayerDeathSound(sourcePosition = null) {
   const volume = getSfxVolume('soundSfx_player_death', 1, sourcePosition);
   if (volume <= 0) return;
-  if (!_playerDeathEl) _playerDeathEl = registerManagedAudio(new Audio('./assets/laugh.wav'), 1);
+  if (!_playerDeathEl) _playerDeathEl = registerManagedAudio(new Audio('./assets/laugh.wav'), 1, { skipBulletTimePitch: true });
   const sound = _playerDeathEl.paused ? _playerDeathEl : _playerDeathEl.cloneNode();
-  registerManagedAudio(sound, 1);
+  registerManagedAudio(sound, 1, { skipBulletTimePitch: true });
   sound.volume = volume;
   sound.currentTime = 0;
   applyBulletTimeAudioPitch(sound, 1);

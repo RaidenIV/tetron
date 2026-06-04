@@ -11826,7 +11826,7 @@ function applyHudSettings() {
 
   const fpsEl = document.getElementById('fps-overlay');
   if (fpsEl) {
-    fpsEl.style.display = p.hudVisible && p.showFps ? '' : 'none';
+    fpsEl.style.display = p.showFps ? '' : 'none';
     const fpsCounterSize = Math.min(48, Math.max(8, Number(p.fpsCounterSize) || 11));
     fpsEl.style.setProperty('--fps-counter-size', `${fpsCounterSize}px`);
   }
