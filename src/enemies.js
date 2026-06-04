@@ -13,7 +13,7 @@ import { scene, camera } from './renderer.js';
 import { state, addBulletTimeAmount } from './state.js';
 import * as PlayerModule from './player.js';
 import { getSfxVolume, applyBulletTimeAudioPitch, registerManagedAudio, setManagedAudioVolume, playObjectExplosionSound, playBulletTimeEndSound, playPlayerDeathSound } from './audio.js';
-import { resolveCircleAgainstPlacedObjects, isPlacedObjectHit } from './placer.js';
+import { resolveCircleAgainstPlacedObjects, isPlacedObjectHit, isPlacedObjectLineBlocked } from './placer.js';
 
 const playerGroup = PlayerModule.playerGroup;
 const beginPlayerCorpseVisual = (duration) => {
@@ -622,6 +622,8 @@ const _npcProjectileRight = new THREE.Vector3();
 const _npcProjectileUp = new THREE.Vector3();
 const _npcAimPoint = new THREE.Vector3();
 const _npcFireTargetPoint = new THREE.Vector3();
+const _npcSightStart = new THREE.Vector3();
+const _npcSightEnd = new THREE.Vector3();
 
 function getDef(type) {
   return ENEMY_DEFS[type] || ENEMY_DEFS[ENEMY_TYPE.RUSHER];
@@ -864,7 +866,7 @@ function makeNpcHealthBar(npc) {
   el.dataset.team = npc.isAlly ? 'ally' : 'enemy';
   el.dataset.damaged = 'false';
   el.style.cssText = [
-    'width:92px', 'height:10px', 'box-sizing:border-box',
+    'width:92px', 'height:7.5px', 'box-sizing:border-box',
     `background:${trackColor}`,
     'border:none', 'border-radius:3px', 'overflow:hidden',
     'pointer-events:none', 'display:none', 'margin-top:0',
@@ -1106,6 +1108,35 @@ function getNpcAimPoint(targetNpc = null, out = _npcAimPoint) {
   out.copy(playerGroup.position);
   out.y += Math.max(0.6, playerRadius + 0.35);
   return out;
+}
+
+function getNpcSightPoint(npc, out = _npcSightStart) {
+  out.copy(npc.group.position);
+  out.y += Math.max(0.65, (Number(npc.radius) || BASE_RADIUS) + 0.45);
+  return out;
+}
+
+function getPlayerSightPoint(out = _npcSightEnd) {
+  const playerRadius = Math.max(0.35, Number(state.params.playerRadius) || 0.4);
+  out.copy(playerGroup.position);
+  out.y += Math.max(0.65, playerRadius + 0.45);
+  return out;
+}
+
+function hasNpcLineOfSightToPoint(npc, targetPoint) {
+  if (!npc?.group || !targetPoint) return false;
+  const start = getNpcSightPoint(npc, _npcSightStart);
+  return !isPlacedObjectLineBlocked(start, targetPoint, Math.max(0.04, (Number(npc.radius) || BASE_RADIUS) * 0.2));
+}
+
+function hasNpcLineOfSightToNpc(npc, targetNpc) {
+  if (!npc?.group || !targetNpc?.group) return false;
+  const end = getNpcAimPoint(targetNpc, _npcSightEnd);
+  return hasNpcLineOfSightToPoint(npc, end);
+}
+
+function hasNpcLineOfSightToPlayer(npc) {
+  return hasNpcLineOfSightToPoint(npc, getPlayerSightPoint(_npcSightEnd));
 }
 
 function updateNpcWeaponVisual(npc, targetPoint = null) {
@@ -2799,6 +2830,11 @@ function fireEnemyBullet(enemy, targetNpc = null, config = getNpcWeaponConfig(en
 
   const shots = Math.max(1, Number(config.pellets) || 1);
   const targetPoint = getNpcAimPoint(targetNpc, _npcFireTargetPoint);
+  if (targetNpc) {
+    if (!hasNpcLineOfSightToNpc(enemy, targetNpc)) return;
+  } else if (!enemy.isAlly && !hasNpcLineOfSightToPlayer(enemy)) {
+    return;
+  }
   const showVisual = shouldShowNpcRifleTracer(config);
 
   for (let shot = 0; shot < shots; shot++) {
@@ -2911,7 +2947,11 @@ function updateEnemyBullets(delta) {
       removeNpcProjectileAt(i);
       continue;
     }
-    if (isPlacedObjectHit(bullet.mesh.position, Math.max(0.08, bullet.radius || 0.08))) {
+    const projectileRadius = Math.max(0.08, bullet.radius || 0.08);
+    if (
+      isPlacedObjectLineBlocked(before, bullet.mesh.position, projectileRadius, { destroyOnHit: true })
+      || isPlacedObjectHit(bullet.mesh.position, projectileRadius)
+    ) {
       if (bullet.explosive) explodeNpcProjectile(bullet);
       removeNpcProjectileAt(i);
       continue;
@@ -2976,7 +3016,8 @@ function getNpcAttackRange(npc) {
 function isTargetWithinNpcAwareness(npc, targetNpc) {
   if (!isLiveNpc(npc) || !isLiveNpc(targetNpc)) return false;
   const range = getNpcAttackRange(npc);
-  return getNpcAwarenessClearance(npc, targetNpc) <= range;
+  if (getNpcAwarenessClearance(npc, targetNpc) > range) return false;
+  return hasNpcLineOfSightToNpc(npc, targetNpc);
 }
 
 function isPlayerWithinNpcAwareness(npc) {
@@ -2985,7 +3026,8 @@ function isPlayerWithinNpcAwareness(npc) {
   const dx = playerGroup.position.x - npc.group.position.x;
   const dz = playerGroup.position.z - npc.group.position.z;
   const playerRadius = Math.max(0.25, Number(state.params.playerRadius) || 0.4);
-  return Math.max(0, Math.hypot(dx, dz) - playerRadius) <= range;
+  if (Math.max(0, Math.hypot(dx, dz) - playerRadius) > range) return false;
+  return hasNpcLineOfSightToPlayer(npc);
 }
 
 function findNearestOpponent(npc) {

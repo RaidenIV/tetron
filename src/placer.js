@@ -633,6 +633,59 @@ export function isPlacedObjectHit(position, radius = 0.1) {
   return false;
 }
 
+function segmentIntersectsExpandedBounds(start, end, bounds, padding = 0.03) {
+  if (!start || !end || !bounds) return false;
+  const sx = Number(start.x), sy = Number(start.y), sz = Number(start.z);
+  const ex = Number(end.x), ey = Number(end.y), ez = Number(end.z);
+  if (![sx, sy, sz, ex, ey, ez].every(Number.isFinite)) return false;
+
+  let tMin = 0;
+  let tMax = 1;
+  const pad = Math.max(0, Number(padding) || 0);
+  const axes = [
+    [sx, ex - sx, bounds.minX - pad, bounds.maxX + pad],
+    [sy, ey - sy, bounds.minY - pad, bounds.maxY + pad],
+    [sz, ez - sz, bounds.minZ - pad, bounds.maxZ + pad],
+  ];
+
+  for (const [origin, dir, min, max] of axes) {
+    if (Math.abs(dir) < 0.000001) {
+      if (origin < min || origin > max) return false;
+      continue;
+    }
+    let t1 = (min - origin) / dir;
+    let t2 = (max - origin) / dir;
+    if (t1 > t2) [t1, t2] = [t2, t1];
+    tMin = Math.max(tMin, t1);
+    tMax = Math.min(tMax, t2);
+    if (tMin > tMax) return false;
+  }
+
+  return tMax >= 0 && tMin <= 1;
+}
+
+export function isPlacedObjectLineBlocked(start, end, radius = 0.04, options = {}) {
+  if (!_placedSpatialEntries.length || !start || !end) return false;
+  const sx = Number(start.x), sz = Number(start.z);
+  const ex = Number(end.x), ez = Number(end.z);
+  if (![sx, sz, ex, ez].every(Number.isFinite)) return false;
+
+  const pad = Math.max(0.01, Number(radius) || 0.04);
+  const midX = (sx + ex) * 0.5;
+  const midZ = (sz + ez) * 0.5;
+  const queryRadius = Math.hypot(ex - sx, ez - sz) * 0.5 + pad + 0.75;
+
+  for (const entry of queryPlacedSpatial(midX, midZ, queryRadius)) {
+    const obj = entry.obj;
+    const bounds = entry.bounds;
+    if (!obj || !bounds || bounds.asset?.clip === false) continue;
+    if (!segmentIntersectsExpandedBounds(start, end, bounds, pad)) continue;
+    if (options.destroyOnHit === true && bounds.asset?.destructible === true) destroyPlacedObject(obj);
+    return true;
+  }
+  return false;
+}
+
 // ── Ghost preview materials ────────────────────────────────────────────────────
 const _ghostMat = new THREE.MeshBasicMaterial({
   color: 0x44aaff, transparent: true, opacity: 0.45,
