@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { scene, camera } from './renderer.js';
 import { state, addBulletTimeAmount } from './state.js';
-import { playerGroup, restorePlayerAliveVisual, updatePlayerCorpseVisual } from './player.js';
+import { playerGroup, beginPlayerCorpseVisual, restorePlayerAliveVisual, updatePlayerCorpseVisual } from './player.js';
 import { getSfxVolume, applyBulletTimeAudioPitch, registerManagedAudio, playObjectExplosionSound } from './audio.js';
 import { resolveCircleAgainstPlacedObjects, isPlacedObjectHit } from './placer.js';
 
@@ -1865,7 +1865,7 @@ function beginPlayerDeath() {
   state.secondaryFire = false;
   state.isAiming = false;
   state.params.playerHealth = 0;
-  updatePlayerCorpseVisual();
+  beginPlayerCorpseVisual(duration);
 }
 
 function clearPlayerDeathState() {
@@ -1879,7 +1879,7 @@ function clearPlayerDeathState() {
 export function updatePlayerDeath(delta) {
   if (!state.playerDead) return;
   state.playerDeathTimer = Math.max(0, (Number(state.playerDeathTimer) || 0) - Math.max(0, Number(delta) || 0));
-  updatePlayerCorpseVisual();
+  updatePlayerCorpseVisual(delta);
   if (state.playerDeathTimer <= 0) {
     respawnPlayerAfterDeath();
     syncPlayerHud();
