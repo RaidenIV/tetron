@@ -975,10 +975,13 @@ body[data-hud-layout="hud2"] .bullet-time-meter {
   --kill-screen-text-size: 42px;
   --kill-screen-text-color: #ffffff;
   --kill-screen-text-opacity: 0.9;
+  --kill-screen-saturation: 0.15;
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 2147483000;
   display: none;
+  visibility: hidden;
+  opacity: 0;
   align-items: center;
   justify-content: center;
   pointer-events: none;
@@ -987,26 +990,31 @@ body[data-hud-layout="hud2"] .bullet-time-meter {
   letter-spacing: var(--hud-letter-spacing, 0.18em);
   text-align: center;
   text-transform: uppercase;
+  background: rgba(0,0,0,0.001);
+  backdrop-filter: saturate(var(--kill-screen-saturation, 0.15));
+  -webkit-backdrop-filter: saturate(var(--kill-screen-saturation, 0.15));
 }
-body[data-player-dead] #kill-screen-overlay.kill-screen-enabled,
-body[data-player-dead="true"] #kill-screen-overlay.kill-screen-enabled,
+body[data-kill-screen-active="true"] #kill-screen-overlay.kill-screen-enabled,
+body[data-player-dead] #kill-screen-overlay.kill-screen-enabled[data-kill-screen-active="true"],
+body[data-player-dead="true"] #kill-screen-overlay.kill-screen-enabled[data-kill-screen-active="true"],
 #kill-screen-overlay[data-kill-screen-active="true"] {
-  display: flex;
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 .kill-screen-text {
   position: relative;
   z-index: 1;
   display: block;
+  visibility: visible;
   color: var(--kill-screen-text-color);
   font-size: var(--kill-screen-text-size);
   line-height: 1;
   opacity: var(--kill-screen-text-opacity);
   text-shadow: 0 0 18px currentColor, 0 2px 4px rgba(0,0,0,0.85);
 }
-body[data-player-dead] .game-renderer,
-body[data-player-dead] .label-renderer,
-body[data-player-dead="true"] .game-renderer,
-body[data-player-dead="true"] .label-renderer {
+body[data-kill-screen-active="true"] .game-renderer,
+body[data-kill-screen-active="true"] .label-renderer {
   filter: saturate(var(--kill-screen-saturation, 0.15));
 }
 body[data-player-dead] #game-hud,

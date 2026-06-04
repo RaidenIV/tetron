@@ -13,6 +13,7 @@ export const state = {
   playerDead: false,
   playerDeathTimer: 0,
   playerDeathDuration: 0,
+  killScreenTimer: 0,
   activePreset: 'g41',
   mouseLookActive: false,
   isAiming: false,          // true while right-mouse / L2 held
@@ -9483,6 +9484,7 @@ export const state = {
       "editorPlayerSpawnYaw": 0,
       "playerCorpseFadeTime": 3.0,
       "killScreenEnabled": true,
+      "killScreenDuration": 3.0,
       "killScreenSaturation": 0.15,
       "killScreenText": "PLAYER KILLED",
       "killScreenTextSize": 42,

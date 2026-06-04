@@ -9429,6 +9429,7 @@
   "editorPlayerSpawnYaw": 0,
   "playerCorpseFadeTime": 3.0,
   "killScreenEnabled": true,
+  "killScreenDuration": 3.0,
   "killScreenSaturation": 0.15,
   "killScreenText": "PLAYER KILLED",
   "killScreenTextSize": 42,

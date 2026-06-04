@@ -269,7 +269,8 @@ function clamp(value, min, max) {
 function syncKillScreenRuntime() {
   const dead = state.playerDead === true;
   const enabled = state.params.killScreenEnabled !== false;
-  const active = dead && enabled;
+  const killScreenTimeLeft = Number(state.killScreenTimer);
+  const active = dead && enabled && Number.isFinite(killScreenTimeLeft) && killScreenTimeLeft > 0;
   const rawSaturation = Number(state.params.killScreenSaturation);
   const rawTextSize = Number(state.params.killScreenTextSize);
   const rawTextOpacity = Number(state.params.killScreenTextOpacity);
@@ -283,30 +284,43 @@ function syncKillScreenRuntime() {
 
   if (dead) document.body.setAttribute('data-player-dead', 'true');
   else document.body.removeAttribute('data-player-dead');
+  document.body.setAttribute('data-kill-screen-active', active ? 'true' : 'false');
   document.body.style.setProperty('--kill-screen-saturation', String(saturation));
   document.documentElement.style.setProperty('--kill-screen-saturation', String(saturation));
 
-  const rendererFilter = dead ? `saturate(${saturation})` : '';
-  if (renderer?.domElement) renderer.domElement.style.filter = rendererFilter;
-  if (labelRenderer?.domElement) labelRenderer.domElement.style.filter = rendererFilter;
+  const rendererFilter = active ? `saturate(${saturation})` : '';
+  if (renderer?.domElement) renderer.domElement.style.setProperty('filter', rendererFilter, active ? 'important' : '');
+  if (labelRenderer?.domElement) labelRenderer.domElement.style.setProperty('filter', rendererFilter, active ? 'important' : '');
 
   const overlay = document.getElementById('kill-screen-overlay');
   if (overlay) {
     overlay.classList.toggle('kill-screen-enabled', enabled);
     overlay.dataset.killScreenActive = active ? 'true' : 'false';
     overlay.setAttribute('aria-hidden', active ? 'false' : 'true');
-    overlay.style.display = active ? 'flex' : 'none';
+    overlay.style.setProperty('--kill-screen-saturation', String(saturation));
     overlay.style.setProperty('--kill-screen-text-size', `${textSize}px`);
     overlay.style.setProperty('--kill-screen-text-color', textColor);
     overlay.style.setProperty('--kill-screen-text-opacity', String(textOpacity));
+    overlay.style.setProperty('display', active ? 'flex' : 'none', 'important');
+    overlay.style.setProperty('visibility', active ? 'visible' : 'hidden', 'important');
+    overlay.style.setProperty('opacity', active ? '1' : '0', 'important');
+    overlay.style.setProperty('pointer-events', 'none');
   }
 
   const textEl = document.querySelector('[data-kill-screen-text]');
-  if (textEl) textEl.textContent = text;
+  if (textEl) {
+    textEl.textContent = text;
+    textEl.style.setProperty('display', active ? 'block' : 'none', 'important');
+    textEl.style.setProperty('visibility', active ? 'visible' : 'hidden', 'important');
+    textEl.style.setProperty('opacity', String(textOpacity), 'important');
+  }
 }
 
 function getTargetWorldScale() {
-  if (state.playerDead) return clamp(Number(state.params.killScreenWorldScale) || 0.25, 0.05, 1.0);
+  if (state.playerDead) {
+    const killScreenActive = state.params.killScreenEnabled !== false && Number(state.killScreenTimer) > 0;
+    return killScreenActive ? clamp(Number(state.params.killScreenWorldScale) || 0.25, 0.05, 1.0) : 1.0;
+  }
   if (!state.params.bulletTimeEnabled) return 1.0;
   return state.slowTimer > 0 ? clamp(Number(state.slowScale) || 0.35, 0.05, 1.0) : 1.0;
 }

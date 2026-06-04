@@ -9476,6 +9476,7 @@ const PRESET_SETTINGS = [
   "editorPlayerSpawnYaw": 0,
   "playerCorpseFadeTime": 3.0,
   "killScreenEnabled": true,
+  "killScreenDuration": 3.0,
   "killScreenSaturation": 0.15,
   "killScreenText": "PLAYER KILLED",
   "killScreenTextSize": 42,
@@ -19838,6 +19839,7 @@ function buildHUD(body) {
 
   body.appendChild(subhdr('Kill Screen'));
   body.appendChild(toggle('Kill Screen HUD', 'killScreenEnabled', () => applyHudSettings()));
+  body.appendChild(slider({ key: 'killScreenDuration', label: 'Duration', min: 0.1, max: 30, step: 0.1, dec: 1 }));
   body.appendChild(slider({ key: 'killScreenSaturation', label: 'Screen Saturation', min: 0, max: 1, step: 0.01, dec: 2, onChange: () => applyHudSettings() }));
   body.appendChild(textInputRow('Text', 'killScreenText', () => applyHudSettings()));
   body.appendChild(slider({ key: 'killScreenTextSize', label: 'Text Size', min: 12, max: 160, step: 1, dec: 0, onChange: () => applyHudSettings() }));
@@ -21253,7 +21255,9 @@ function applyHudSettings() {
   const killScreenEl = document.getElementById('kill-screen-overlay');
   const killScreenTextEl = document.querySelector('[data-kill-screen-text]');
   const killScreenEnabled = p.killScreenEnabled !== false;
-  const killScreenActive = document.body?.dataset?.playerDead === 'true' && killScreenEnabled;
+  const killScreenActive = document.body?.dataset?.playerDead === 'true'
+    && document.body?.dataset?.killScreenActive !== 'false'
+    && killScreenEnabled;
   const rawKillScreenSaturation = Number(p.killScreenSaturation);
   const rawKillScreenTextSize = Number(p.killScreenTextSize);
   const rawKillScreenTextOpacity = Number(p.killScreenTextOpacity);
@@ -21263,17 +21267,27 @@ function applyHudSettings() {
   const killScreenTextOpacity = Math.min(1, Math.max(0, Number.isFinite(rawKillScreenTextOpacity) ? rawKillScreenTextOpacity : 0.9));
   document.documentElement.style.setProperty('--kill-screen-saturation', String(killScreenSaturation));
   document.body?.style?.setProperty('--kill-screen-saturation', String(killScreenSaturation));
+  document.querySelectorAll('.game-renderer, .label-renderer').forEach(el => {
+    el.style.setProperty('filter', killScreenActive ? `saturate(${killScreenSaturation})` : '', killScreenActive ? 'important' : '');
+  });
   if (killScreenEl) {
     killScreenEl.classList.toggle('kill-screen-enabled', killScreenEnabled);
     killScreenEl.dataset.killScreenActive = killScreenActive ? 'true' : 'false';
     killScreenEl.setAttribute('aria-hidden', killScreenActive ? 'false' : 'true');
-    if (killScreenActive) killScreenEl.style.display = 'flex';
-    else killScreenEl.style.display = '';
+    killScreenEl.style.setProperty('--kill-screen-saturation', String(killScreenSaturation));
     killScreenEl.style.setProperty('--kill-screen-text-size', `${killScreenTextSize}px`);
     killScreenEl.style.setProperty('--kill-screen-text-color', killScreenTextColor);
     killScreenEl.style.setProperty('--kill-screen-text-opacity', String(killScreenTextOpacity));
+    killScreenEl.style.setProperty('display', killScreenActive ? 'flex' : 'none', 'important');
+    killScreenEl.style.setProperty('visibility', killScreenActive ? 'visible' : 'hidden', 'important');
+    killScreenEl.style.setProperty('opacity', killScreenActive ? '1' : '0', 'important');
   }
-  if (killScreenTextEl) killScreenTextEl.textContent = String(p.killScreenText ?? 'PLAYER KILLED');
+  if (killScreenTextEl) {
+    killScreenTextEl.textContent = String(p.killScreenText ?? 'PLAYER KILLED');
+    killScreenTextEl.style.setProperty('display', killScreenActive ? 'block' : 'none', 'important');
+    killScreenTextEl.style.setProperty('visibility', killScreenActive ? 'visible' : 'hidden', 'important');
+    killScreenTextEl.style.setProperty('opacity', String(killScreenTextOpacity), 'important');
+  }
 
   applyReticleSettings();
   syncWeaponAmmoHud();
@@ -21396,6 +21410,7 @@ function applyAllParams() {
   p.soundSfx_bullet_time_end = clampSetting(p.soundSfx_bullet_time_end, 0, 1, 1);
   p.playerCorpseFadeTime = clampSetting(p.playerCorpseFadeTime, 0.1, 10, 3);
   p.killScreenEnabled = p.killScreenEnabled !== false;
+  p.killScreenDuration = clampSetting(p.killScreenDuration, 0.1, 30, 3);
   p.killScreenSaturation = clampSetting(p.killScreenSaturation, 0, 1, 0.15);
   p.killScreenText = String(p.killScreenText ?? 'PLAYER KILLED').slice(0, 80);
   p.killScreenTextSize = clampSetting(p.killScreenTextSize, 12, 160, 42);

@@ -1877,12 +1877,19 @@ function getPlayerCorpseFadeTime() {
   return clamp(Number(state.params.playerCorpseFadeTime) || 3, 0.1, 10);
 }
 
+function getKillScreenDuration() {
+  return clamp(Number(state.params.killScreenDuration) || 3, 0.1, 30);
+}
+
 function beginPlayerDeath() {
   if (state.playerDead) return;
   const duration = getPlayerCorpseFadeTime();
   state.playerDead = true;
   state.playerDeathTimer = duration;
   state.playerDeathDuration = duration;
+  state.killScreenTimer = getKillScreenDuration();
+  document.body?.setAttribute?.('data-player-dead', 'true');
+  document.body?.setAttribute?.('data-kill-screen-active', state.params.killScreenEnabled !== false ? 'true' : 'false');
   state.primaryFire = false;
   state.secondaryFire = false;
   state.isAiming = false;
@@ -1894,13 +1901,17 @@ function clearPlayerDeathState() {
   state.playerDead = false;
   state.playerDeathTimer = 0;
   state.playerDeathDuration = 0;
+  state.killScreenTimer = 0;
   delete document.body.dataset.playerDead;
+  delete document.body.dataset.killScreenActive;
   restorePlayerAliveVisual();
 }
 
 export function updatePlayerDeath(delta) {
   if (!state.playerDead) return;
-  state.playerDeathTimer = Math.max(0, (Number(state.playerDeathTimer) || 0) - Math.max(0, Number(delta) || 0));
+  const step = Math.max(0, Number(delta) || 0);
+  state.playerDeathTimer = Math.max(0, (Number(state.playerDeathTimer) || 0) - step);
+  state.killScreenTimer = Math.max(0, (Number(state.killScreenTimer) || 0) - step);
   updatePlayerCorpseVisual(delta);
   if (state.playerDeathTimer <= 0) {
     respawnPlayerAfterDeath();
