@@ -21,7 +21,7 @@ import {
   selectConnectedPlacedStructureFromSelection, duplicateSelectedPlacedObjects,
   saveSelectedPlacedObjectsAsPrefab, applySelectedPlacedObjectEdits,
 } from '../placer.js';
-import { registerManagedAudio, applyBulletTimeAudioPitch, pauseManagedAudio, resumeManagedAudio } from '../audio.js';
+import { registerManagedAudio, applyBulletTimeAudioPitch, setManagedAudioVolume, pauseManagedAudio, resumeManagedAudio } from '../audio.js';
 import { resetWeaponAmmo, resetAllWeaponAmmo, syncWeaponAmmoHud } from '../weapons.js';
 import { setEditorModeEnabled, applyEditorSettings, teleportPlayerToSpawn, clearPlayerSpawn, refreshPlayerSpawnMarker } from '../editor.js';
 
@@ -10404,10 +10404,6 @@ function buildScene(body) {
   body.appendChild(slider({ key: 'buildAreaBoundaryHeight', label: 'Wall Height', min: 0.25, max: 12, step: 0.25, dec: 2, onChange: () => applyFloorSettings({ force: true }) }));
   body.appendChild(slider({ key: 'buildAreaBoundaryOpacity', label: 'Wall Opacity', min: 0, max: 1, step: 0.05, dec: 2, onChange: () => applyFloorSettings({ force: true }) }));
   body.appendChild(toggle('Boundary Collision', 'buildAreaBoundaryCollision', () => applyFloorSettings({ force: true })));
-
-  body.appendChild(subhdr('Debug'));
-  body.appendChild(toggle('Show FPS', 'showFps', () => applyHudSettings()));
-  body.appendChild(slider({ key: 'fpsCounterSize', label: 'FPS Size', min: 8, max: 48, step: 1, dec: 0, onChange: () => applyHudSettings() }));
 }
 
 
@@ -10466,6 +10462,10 @@ function buildHUD(body) {
   body.appendChild(colorPicker('Enemy Dot', 'radarEnemyColor'));
   body.appendChild(colorPicker('Tagged Icon', 'radarTaggedColor'));
   body.appendChild(slider({ key: 'radarOpacity', label: 'Opacity', min: 0, max: 1, step: 0.05, dec: 2 }));
+
+  body.appendChild(subhdr('Debug'));
+  body.appendChild(toggle('Show FPS', 'showFps', () => applyHudSettings()));
+  body.appendChild(slider({ key: 'fpsCounterSize', label: 'FPS Size', min: 8, max: 48, step: 1, dec: 0, onChange: () => applyHudSettings() }));
 }
 
 function pickParamSubset(keys) {
@@ -10896,7 +10896,7 @@ function getAmbienceEl() {
   if (!_ambienceEl) {
     _ambienceEl = registerManagedAudio(new Audio('./assets/storm.mp3'));
     _ambienceEl.loop = true;
-    _ambienceEl.volume = Math.max(0, Math.min(1, Number(state.params.soundSfx_ambience) ?? 0.5));
+    setManagedAudioVolume(_ambienceEl, Math.max(0, Math.min(1, Number(state.params.soundSfx_ambience) ?? 0.5)));
   }
   return _ambienceEl;
 }
@@ -10964,7 +10964,7 @@ function buildSound(body) {
     min: 0, max: 1, step: 0.05, dec: 2,
     onChange: (v) => {
       const el = getAmbienceEl();
-      el.volume = Math.max(0, Math.min(1, v));
+      setManagedAudioVolume(el, Math.max(0, Math.min(1, v)));
       if (v > 0 && el.paused && !state.params.soundMuted) {
         playAmbienceIfAllowed();
       } else if (v <= 0) {

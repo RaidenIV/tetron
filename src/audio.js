@@ -31,6 +31,32 @@ export function getBulletTimeAudioRate() {
   return isBulletTimeActive() ? BULLET_TIME_AUDIO_RATE : 1;
 }
 
+function shouldDuckForKillScreen(keyOrAudio = null) {
+  if (!isKillScreenSlowActive()) return false;
+  if (keyOrAudio === 'soundSfx_player_death') return false;
+  if (keyOrAudio?.__skipKillScreenDucking === true) return false;
+  return true;
+}
+
+function getKillScreenVolumeScale(keyOrAudio = null) {
+  return shouldDuckForKillScreen(keyOrAudio) ? 0.5 : 1;
+}
+
+export function setManagedAudioVolume(audio, baseVolume = 1, options = {}) {
+  if (!audio) return audio;
+  const volume = clamp(numeric(baseVolume, 1), 0, 1);
+  audio.__baseVolume = volume;
+  audio.__skipKillScreenDucking = options.skipKillScreenDucking === true || audio.__skipKillScreenDucking === true;
+  try { audio.volume = clamp(volume * getKillScreenVolumeScale(audio), 0, 1); } catch (_) {}
+  return audio;
+}
+
+function applyManagedAudioVolume(audio) {
+  if (!audio || !Number.isFinite(Number(audio.__baseVolume))) return audio;
+  try { audio.volume = clamp(Number(audio.__baseVolume) * getKillScreenVolumeScale(audio), 0, 1); } catch (_) {}
+  return audio;
+}
+
 export function applyBulletTimeAudioPitch(audio, baseRate = 1) {
   if (!audio) return audio;
   const base = Number(baseRate) || 1;
@@ -60,6 +86,8 @@ export function registerManagedAudio(audio, baseRate = 1, options = {}) {
   if (!audio) return audio;
   audio.__basePlaybackRate = Number(baseRate) || 1;
   audio.__skipBulletTimePitch = options.skipBulletTimePitch === true || audio.__skipBulletTimePitch === true;
+  audio.__skipKillScreenDucking = options.skipKillScreenDucking === true || audio.__skipKillScreenDucking === true;
+  if (!Number.isFinite(Number(audio.__baseVolume))) audio.__baseVolume = clamp(Number(audio.volume) || 1, 0, 1);
   if (options.bulletTimeSound === true) _bulletTimeActiveAudio.add(audio);
   _managedAudio.add(audio);
 
@@ -74,6 +102,7 @@ export function registerManagedAudio(audio, baseRate = 1, options = {}) {
   }
 
   applyBulletTimeAudioPitch(audio, audio.__basePlaybackRate);
+  applyManagedAudioVolume(audio);
   return audio;
 }
 
@@ -82,6 +111,7 @@ export function updateBulletTimeAudioPitch() {
   _managedAudio.forEach(audio => {
     if (!audio) { _managedAudio.delete(audio); return; }
     applyBulletTimeAudioPitch(audio, audio.__basePlaybackRate || 1);
+    applyManagedAudioVolume(audio);
   });
 }
 
@@ -146,7 +176,7 @@ export function playDashSound(sourcePosition = null) {
   const sound = _dashSoundEl.paused ? _dashSoundEl : _dashSoundEl.cloneNode();
   registerManagedAudio(sound, 1);
   sound.currentTime = 0;
-  sound.volume = volume;
+  setManagedAudioVolume(sound, volume);
   applyBulletTimeAudioPitch(sound);
   sound.play().catch(() => {});
 }
@@ -159,7 +189,7 @@ export function playObjectExplosionSound(sourcePosition = null) {
   if (!_objectExplosionEl) _objectExplosionEl = registerManagedAudio(new Audio('./assets/xpl1.wav'));
   const sound = _objectExplosionEl.paused ? _objectExplosionEl : _objectExplosionEl.cloneNode();
   registerManagedAudio(sound, 1);
-  sound.volume = volume;
+  setManagedAudioVolume(sound, volume);
   sound.currentTime = 0;
   applyBulletTimeAudioPitch(sound);
   sound.play().catch(() => {});
@@ -184,7 +214,7 @@ function playBulletTimeSound(templateRef, assetPath, volumeKey) {
     skipBulletTimePitch: true,
     bulletTimeSound: true,
   });
-  sound.volume = volume;
+  setManagedAudioVolume(sound, volume);
   sound.currentTime = 0;
   applyBulletTimeAudioPitch(sound, 1);
   sound.play().catch(() => {});
@@ -204,7 +234,7 @@ export function playBulletTimeEndSound() {
   }
   const sound = _bulletTimeEndEl.paused ? _bulletTimeEndEl : _bulletTimeEndEl.cloneNode();
   registerManagedAudio(sound, 1, { skipBulletTimePitch: true });
-  sound.volume = volume;
+  setManagedAudioVolume(sound, volume);
   sound.currentTime = 0;
   applyBulletTimeAudioPitch(sound, 1);
   sound.play().catch(() => {});
@@ -212,13 +242,24 @@ export function playBulletTimeEndSound() {
 
 let _playerDeathEl = null;
 export function playPlayerDeathSound(sourcePosition = null) {
-  const volume = getSfxVolume('soundSfx_player_death', 1, sourcePosition);
-  if (volume <= 0) return;
-  if (!_playerDeathEl) _playerDeathEl = registerManagedAudio(new Audio('./assets/laugh.wav'), 1, { skipBulletTimePitch: true });
-  const sound = _playerDeathEl.paused ? _playerDeathEl : _playerDeathEl.cloneNode();
-  registerManagedAudio(sound, 1, { skipBulletTimePitch: true });
-  sound.volume = volume;
-  sound.currentTime = 0;
-  applyBulletTimeAudioPitch(sound, 1);
-  sound.play().catch(() => {});
+  const sourceSnapshot = sourcePosition?.clone ? sourcePosition.clone() : sourcePosition;
+  window.setTimeout(() => {
+    const volume = getSfxVolume('soundSfx_player_death', 1, sourceSnapshot);
+    if (volume <= 0) return;
+    if (!_playerDeathEl) {
+      _playerDeathEl = registerManagedAudio(new Audio('./assets/laugh.wav'), 1, {
+        skipBulletTimePitch: true,
+        skipKillScreenDucking: true,
+      });
+    }
+    const sound = _playerDeathEl.paused ? _playerDeathEl : _playerDeathEl.cloneNode();
+    registerManagedAudio(sound, 1, {
+      skipBulletTimePitch: true,
+      skipKillScreenDucking: true,
+    });
+    setManagedAudioVolume(sound, volume, { skipKillScreenDucking: true });
+    sound.currentTime = 0;
+    applyBulletTimeAudioPitch(sound, 1);
+    sound.play().catch(() => {});
+  }, 2000);
 }

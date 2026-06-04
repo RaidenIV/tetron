@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { scene } from './renderer.js';
 import { state } from './state.js';
 import { resolveCircleAgainstPlacedObjects, getWalkablePlacedObjectHeight } from './placer.js';
-import { registerManagedAudio, applyBulletTimeAudioPitch } from './audio.js';
+import { registerManagedAudio, applyBulletTimeAudioPitch, setManagedAudioVolume } from './audio.js';
 
 // ── Geometry & material ────────────────────────────────────────────────────────
 // The player is a CapsuleGeometry inside a Group.
@@ -43,7 +43,7 @@ function playJumpSound() {
   if (!_jumpSoundEl) _jumpSoundEl = registerManagedAudio(new Audio('./assets/jump.wav'));
   const sound = _jumpSoundEl.paused ? _jumpSoundEl : _jumpSoundEl.cloneNode();
   registerManagedAudio(sound, 1);
-  sound.volume = volume;
+  setManagedAudioVolume(sound, volume);
   applyBulletTimeAudioPitch(sound);
   sound.currentTime = 0;
   sound.play().catch(() => {});

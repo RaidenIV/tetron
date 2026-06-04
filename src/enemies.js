@@ -12,7 +12,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { scene, camera } from './renderer.js';
 import { state, addBulletTimeAmount } from './state.js';
 import * as PlayerModule from './player.js';
-import { getSfxVolume, applyBulletTimeAudioPitch, registerManagedAudio, playObjectExplosionSound, playBulletTimeEndSound, playPlayerDeathSound } from './audio.js';
+import { getSfxVolume, applyBulletTimeAudioPitch, registerManagedAudio, setManagedAudioVolume, playObjectExplosionSound, playBulletTimeEndSound, playPlayerDeathSound } from './audio.js';
 import { resolveCircleAgainstPlacedObjects, isPlacedObjectHit } from './placer.js';
 
 const playerGroup = PlayerModule.playerGroup;
@@ -111,12 +111,12 @@ const _corpseBox = new THREE.Box3();
 const _corpseWorldPos = new THREE.Vector3();
 const _splashVec = new THREE.Vector3();
 
-// Same rectangular rifle proportions used by the player rifle visual. NPC rifles
-// are shown only while that NPC's effective weapon is rifle/laser-like.
-const NPC_RIFLE = Object.freeze({ width: 0.08, height: 0.18, length: 1.125, grip: 0.16, sideGap: 0.105, forwardOffset: 0.12 });
+// NPC weapons use the same proportions and offset keys as the player weapon
+// visual, but are mounted in each NPC's local +Z-facing frame.
+const NPC_WEAPON_REST = Object.freeze({ sideGap: 0.105, forwardOffset: 0.12 });
 const NPC_HEALTH_BAR_RATIO_EPSILON = 0.001;
 const NPC_HEALTH_BAR_DISTANCE_DEFAULT = 60;
-const _npcRifleGeo = new THREE.BoxGeometry(NPC_RIFLE.width, NPC_RIFLE.height, NPC_RIFLE.length);
+const _npcWeaponGeometryCache = new Map();
 const _npcRifleMat = new THREE.MeshStandardMaterial({
   color: 0x20242b,
   metalness: 0.55,
@@ -325,7 +325,7 @@ function playEnemyGruntSound(sourcePosition = null) {
   if (!_enemyGruntEl) _enemyGruntEl = registerManagedAudio(new Audio('./assets/grunt.wav'));
   const sound = _enemyGruntEl.paused ? _enemyGruntEl : _enemyGruntEl.cloneNode();
   registerManagedAudio(sound, 1);
-  sound.volume = volume;
+  setManagedAudioVolume(sound, volume);
   applyBulletTimeAudioPitch(sound);
   sound.currentTime = 0;
   sound.play().catch(() => {});
@@ -955,30 +955,126 @@ function updateNpcHealthBar(npc, { force = false } = {}) {
 }
 
 function markNpcHealthBarDamaged(npc) {
-  if (!npc || npc._healthBarDamaged === true) return;
+  if (!npc) return;
   npc._healthBarDamaged = true;
-  if (npc._healthBarEl) npc._healthBarEl.dataset.damaged = 'true';
+  if (npc._healthBarEl) {
+    npc._healthBarEl.dataset.damaged = 'true';
+    npc._healthBarEl.style.setProperty('display', 'block');
+    npc._healthBarEl.style.visibility = 'visible';
+    npc._healthBarEl.style.opacity = '1';
+  }
+  if (npc._healthBarState) {
+    npc._healthBarState.display = 'block';
+    npc._healthBarState.visibility = 'visible';
+    npc._healthBarState.opacity = '1';
+    npc._healthBarState.ratio = null;
+  }
+  updateNpcHealthBar(npc, { force: true });
+}
+
+function getNpcWeaponVisualType(weapon = 'rifle') {
+  if (weapon === 'laser') return 'rifle';
+  if (weapon === 'sniper') return 'sniperRifle';
+  if (weapon === 'projectile') return 'pistol';
+  return ['pistol', 'rifle', 'shotgun', 'sniperRifle', 'grenades', 'rocketLauncher'].includes(weapon)
+    ? weapon
+    : 'rifle';
+}
+
+function getNpcWeaponParamPrefix(type = 'rifle') {
+  switch (type) {
+    case 'pistol': return 'Pistol';
+    case 'shotgun': return 'Shotgun';
+    case 'sniperRifle': return 'Sniper';
+    case 'grenades': return 'Grenade';
+    case 'rocketLauncher': return 'Rocket';
+    case 'rifle':
+    default: return 'Rifle';
+  }
+}
+
+function getNpcWeaponSpec(type = 'rifle') {
+  switch (getNpcWeaponVisualType(type)) {
+    case 'pistol':
+      return { kind: 'box', width: 0.18, height: 0.16, length: 0.65, grip: 0.12 };
+    case 'shotgun':
+      return { kind: 'box', width: 0.2, height: 0.14, length: 1.35, grip: 0.16 };
+    case 'sniperRifle':
+      return { kind: 'box', width: 0.14, height: 0.12, length: 1.8, grip: 0.18 };
+    case 'grenades':
+      return { kind: 'sphere', width: 0.24, height: 0.24, length: 0.35, grip: 0.08 };
+    case 'rocketLauncher':
+      return { kind: 'cylinder', width: 0.28, height: 0.28, length: 1.35, grip: 0.2 };
+    case 'rifle':
+    default:
+      return { kind: 'box', width: 0.08, height: 0.18, length: 1.125, grip: 0.16 };
+  }
+}
+
+function getNpcWeaponOffset(type, axis) {
+  const prefix = getNpcWeaponParamPrefix(type);
+  const value = Number(state.params[`weapon${prefix}Offset${axis}`]);
+  return clamp(Number.isFinite(value) ? value : 0, -2, 2);
+}
+
+function getNpcWeaponGeometry(type) {
+  const visualType = getNpcWeaponVisualType(type);
+  const cached = _npcWeaponGeometryCache.get(visualType);
+  if (cached) return cached;
+  const spec = getNpcWeaponSpec(visualType);
+  let geo;
+  if (spec.kind === 'sphere') {
+    geo = new THREE.SphereGeometry(spec.width * 0.5, 16, 10);
+  } else if (spec.kind === 'cylinder') {
+    geo = new THREE.CylinderGeometry(spec.width * 0.5, spec.width * 0.5, spec.length, 14);
+  } else {
+    geo = new THREE.BoxGeometry(spec.width, spec.height, spec.length);
+  }
+  _npcWeaponGeometryCache.set(visualType, geo);
+  return geo;
+}
+
+function rebuildNpcWeaponVisual(npc, weaponType = 'rifle') {
+  if (!npc?._weaponGroup) return;
+  const visualType = getNpcWeaponVisualType(weaponType);
+  const spec = getNpcWeaponSpec(visualType);
+  if (npc._weaponMesh) {
+    npc._weaponGroup.remove(npc._weaponMesh);
+    npc._weaponMesh = null;
+  }
+
+  const mesh = new THREE.Mesh(getNpcWeaponGeometry(visualType), _npcRifleMat);
+  mesh.name = `${npc.isAlly ? 'Ally' : 'Enemy'}Weapon_${visualType}`;
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  if (spec.kind === 'cylinder') {
+    mesh.rotation.x = Math.PI / 2;
+    mesh.position.z = spec.length * 0.5 - spec.grip;
+  } else if (spec.kind === 'sphere') {
+    mesh.position.z = spec.length * 0.5;
+  } else {
+    mesh.position.z = spec.length * 0.5 - spec.grip;
+  }
+
+  npc._weaponMuzzle.position.set(0, 0, spec.length - spec.grip);
+  npc._weaponGroup.add(mesh);
+  npc._weaponMesh = mesh;
+  npc._weaponVisualType = visualType;
+  npc._weaponTransformKey = '';
 }
 
 function makeNpcRifleVisual(npc) {
   const weaponGroup = new THREE.Group();
-  weaponGroup.name = npc.isAlly ? 'AllyWeapon_Rifle_RightHand' : 'EnemyWeapon_Rifle_RightHand';
-
-  const rifle = new THREE.Mesh(_npcRifleGeo, _npcRifleMat);
-  rifle.name = npc.isAlly ? 'AllyRifle' : 'EnemyRifle';
-  rifle.castShadow = false;
-  rifle.receiveShadow = false;
-  rifle.position.z = NPC_RIFLE.length * 0.5 - NPC_RIFLE.grip;
-  weaponGroup.add(rifle);
+  weaponGroup.name = npc.isAlly ? 'AllyWeapon_RightHand' : 'EnemyWeapon_RightHand';
 
   const muzzle = new THREE.Object3D();
-  muzzle.name = npc.isAlly ? 'AllyRifleMuzzle' : 'EnemyRifleMuzzle';
-  muzzle.position.set(0, 0, NPC_RIFLE.length - NPC_RIFLE.grip);
+  muzzle.name = npc.isAlly ? 'AllyWeaponMuzzle' : 'EnemyWeaponMuzzle';
   weaponGroup.add(muzzle);
 
   npc.group.add(weaponGroup);
   npc._weaponGroup = weaponGroup;
   npc._weaponMuzzle = muzzle;
+  rebuildNpcWeaponVisual(npc, getEffectiveWeapon(npc));
   updateNpcWeaponVisual(npc);
 }
 
@@ -1015,21 +1111,28 @@ function getNpcAimPoint(targetNpc = null, out = _npcAimPoint) {
 function updateNpcWeaponVisual(npc, targetPoint = null) {
   if (!npc?._weaponGroup) return;
   const weapon = getEffectiveWeapon(npc);
-  const visible = weapon === 'rifle' || weapon === 'laser';
+  const visible = weapon !== 'none' && weapon !== 'contact';
   if (npc._weaponVisible !== visible) {
     npc._weaponGroup.visible = visible;
     npc._weaponVisible = visible;
   }
   if (!visible) return;
 
+  const visualType = getNpcWeaponVisualType(weapon);
+  if (npc._weaponVisualType !== visualType || !npc._weaponMesh) {
+    rebuildNpcWeaponVisual(npc, visualType);
+  }
+
   const radius = Math.max(0.25, Number(npc.radius) || BASE_RADIUS);
   const bodyLength = Math.max(0.5, BASE_LENGTH * (Number(npc.sizeMult) || 1));
-  const transformKey = `${radius.toFixed(3)}:${bodyLength.toFixed(3)}`;
+  const offsetX = getNpcWeaponOffset(visualType, 'X');
+  const offsetY = getNpcWeaponOffset(visualType, 'Y');
+  const transformKey = `${visualType}:${radius.toFixed(3)}:${bodyLength.toFixed(3)}:${offsetX.toFixed(3)}:${offsetY.toFixed(3)}`;
   if (npc._weaponTransformKey !== transformKey) {
     npc._weaponGroup.position.set(
-      radius + NPC_RIFLE.sideGap,
-      radius + bodyLength * 0.56,
-      NPC_RIFLE.forwardOffset,
+      radius + NPC_WEAPON_REST.sideGap + offsetX,
+      radius + bodyLength * 0.56 + offsetY,
+      visualType === 'grenades' ? 0.02 : NPC_WEAPON_REST.forwardOffset,
     );
     npc._weaponTransformKey = transformKey;
   }
@@ -1677,6 +1780,10 @@ function isLaserLikeWeapon(weapon) {
   return weapon === 'laser' || weapon === 'rifle' || weapon === 'sniperRifle';
 }
 
+function usesNpcWeaponMuzzle(weapon) {
+  return weapon !== 'contact' && weapon !== 'none';
+}
+
 const NPC_PLAYER_WEAPON_SPECS = Object.freeze({
   pistol: { prefix: 'Pistol', fireRate: 3.6, speed: 70, range: 55, damage: 24, spread: 0.01, projectileSize: 0.28, projectileLength: 0.65, projectileColor: '#d8dde6', projectileBloomColor: '#d8dde6', projectileBloom: false, projectileBloomIntensity: 1, projectileBloomSize: 1, visual: 'solid' },
   rifle: { prefix: 'Rifle', fireRate: 5, speed: 80, range: 42, damage: 34, spread: 0.003, projectileSize: 0.36, projectileLength: 0.84, projectileColor: '#ff1100', projectileBloomColor: '#ff1100', projectileBloom: true, projectileBloomIntensity: 1, projectileBloomSize: 1, visual: 'laser' },
@@ -2109,7 +2216,7 @@ function damageEnemy(enemy, amount) {
   const prevHp = Number(enemy.hp) || 0;
   if (!invincible) enemy.hp -= Math.max(0, Number(amount) || 0);
   if ((Number(enemy.hp) || 0) < prevHp) markNpcHealthBarDamaged(enemy);
-  updateNpcHealthBar(enemy);
+  else updateNpcHealthBar(enemy, { force: true });
   const killed = wasAlive && enemy.hp <= 0 && !enemy.isAlly;
   if (enemy.hp <= 0) destroyEnemy(enemy);
   return killed;
@@ -2495,7 +2602,7 @@ function playNpcWeaponAsset(path, volume, playbackRate = 1) {
   const audio = base.paused ? base : base.cloneNode();
   registerManagedAudio(audio, playbackRate);
   audio.currentTime = 0;
-  audio.volume = clamp(volume, 0, 1);
+  setManagedAudioVolume(audio, volume);
   applyBulletTimeAudioPitch(audio, playbackRate);
   audio.play().catch(() => {});
 }
@@ -2698,7 +2805,7 @@ function fireEnemyBullet(enemy, targetNpc = null, config = getNpcWeaponConfig(en
     const mesh = createNpcProjectileMesh(config);
     mesh.name = enemy.isAlly ? 'AllyProjectile' : 'EnemyProjectile';
     mesh.visible = showVisual;
-    if (isLaserLikeWeapon(config.type) && enemy._weaponMuzzle) {
+    if (usesNpcWeaponMuzzle(config.type) && enemy._weaponMuzzle) {
       updateNpcWeaponVisual(enemy, targetPoint);
       enemy._weaponMuzzle.getWorldPosition(mesh.position);
     } else {
