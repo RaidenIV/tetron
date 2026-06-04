@@ -11,9 +11,31 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { scene, camera } from './renderer.js';
 import { state, addBulletTimeAmount } from './state.js';
-import { playerGroup, beginPlayerCorpseVisual, restorePlayerAliveVisual, updatePlayerCorpseVisual } from './player.js';
+import * as PlayerModule from './player.js';
 import { getSfxVolume, applyBulletTimeAudioPitch, registerManagedAudio, playObjectExplosionSound } from './audio.js';
 import { resolveCircleAgainstPlacedObjects, isPlacedObjectHit } from './placer.js';
+
+const playerGroup = PlayerModule.playerGroup;
+const beginPlayerCorpseVisual = (duration) => {
+  if (typeof PlayerModule.beginPlayerCorpseVisual === 'function') {
+    return PlayerModule.beginPlayerCorpseVisual(duration);
+  }
+  if (playerGroup) playerGroup.visible = false;
+  return undefined;
+};
+const restorePlayerAliveVisual = () => {
+  if (typeof PlayerModule.restorePlayerAliveVisual === 'function') {
+    return PlayerModule.restorePlayerAliveVisual();
+  }
+  if (playerGroup) playerGroup.visible = true;
+  return undefined;
+};
+const updatePlayerCorpseVisual = (delta) => {
+  if (typeof PlayerModule.updatePlayerCorpseVisual === 'function') {
+    return PlayerModule.updatePlayerCorpseVisual(delta);
+  }
+  return undefined;
+};
 
 export const ENEMY_TYPE = Object.freeze({
   RUSHER: 'rusher',

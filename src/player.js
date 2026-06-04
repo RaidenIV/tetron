@@ -120,6 +120,20 @@ playerWeaponGroup.add(playerWeaponMuzzle);
 let playerWeaponMesh = null;
 let playerWeaponModelKey = '';
 let playerWeaponLength = 1.125;
+
+// ── Player death corpse physics ───────────────────────────────────────────────
+// Player death uses the same visible pattern as enemy/ally deaths: the live
+// player mesh is hidden and replaced by a standalone physics corpse that tumbles,
+// settles on the floor, and fades out before respawn.
+const PLAYER_CORPSE_GRAVITY = 9;
+let playerPhysicsCorpse = null;
+const _corpseBox = new THREE.Box3();
+const _corpseWorldPos = new THREE.Vector3();
+const _corpseWorldQuat = new THREE.Quaternion();
+const _corpseUp = new THREE.Vector3(0, 1, 0);
+const _corpseRestAxis = new THREE.Vector3();
+const _corpseRestQuat = new THREE.Quaternion();
+
 const _weaponForwardLocal = new THREE.Vector3(0, 0, -1);
 const _weaponUp = new THREE.Vector3(0, 1, 0);
 const _weaponWorldPos = new THREE.Vector3();
@@ -781,7 +795,90 @@ export function applyPlayerMaterial() {
   playerMat.needsUpdate = true;
 }
 
+function snapPlayerCorpseToFloor(mesh, allowDownwardSnap = false) {
+  if (!mesh) return false;
+  mesh.updateMatrixWorld(true);
+  _corpseBox.setFromObject(mesh);
+  const floorY = 0;
+  const delta = floorY - _corpseBox.min.y;
+  if (delta > 0.0001 || (allowDownwardSnap && Math.abs(delta) > 0.0001)) {
+    mesh.position.y += delta;
+    mesh.updateMatrixWorld(true);
+    return true;
+  }
+  return delta >= -0.0001;
+}
+
+function disposePlayerPhysicsCorpse() {
+  if (!playerPhysicsCorpse) return;
+  scene.remove(playerPhysicsCorpse.mesh);
+  playerPhysicsCorpse.mesh.geometry?.dispose?.();
+  playerPhysicsCorpse.mesh.material?.dispose?.();
+  playerPhysicsCorpse = null;
+}
+
+function createPlayerCorpseMaterial() {
+  const material = playerMat.clone();
+  material.color?.copy?.(playerBaseColor);
+  material.emissive?.set?.(playerBaseColor);
+  if ('emissiveIntensity' in material) material.emissiveIntensity = 0.06;
+  material.opacity = 1;
+  material.transparent = true;
+  return material;
+}
+
+export function beginPlayerCorpseVisual(duration = 3) {
+  disposePlayerPhysicsCorpse();
+
+  const maxLife = Math.max(0.1, Number(duration) || Number(state.params.playerCorpseFadeTime) || 3);
+  const material = createPlayerCorpseMaterial();
+  const mesh = new THREE.Mesh(playerGeo.clone(), material);
+  mesh.name = 'PlayerPhysicsCorpse';
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+
+  playerMesh.getWorldPosition(_corpseWorldPos);
+  playerMesh.getWorldQuaternion(_corpseWorldQuat);
+  mesh.position.copy(_corpseWorldPos);
+  mesh.quaternion.copy(_corpseWorldQuat);
+
+  const yaw = Number(state.params.thirdAzimuth) || 0;
+  _corpseRestAxis.set(Math.sin(yaw), 0, Math.cos(yaw)).normalize();
+  _corpseRestQuat.setFromUnitVectors(_corpseUp, _corpseRestAxis);
+
+  scene.add(mesh);
+  snapPlayerCorpseToFloor(mesh, false);
+
+  const shoveYaw = Math.random() * Math.PI * 2;
+  const shoveSpeed = 0.35 + Math.random() * 0.55;
+  playerPhysicsCorpse = {
+    mesh,
+    vx: Math.cos(shoveYaw) * shoveSpeed,
+    vy: 0,
+    vz: Math.sin(shoveYaw) * shoveSpeed,
+    rx: (Math.random() < 0.5 ? -1 : 1) * (2.2 + Math.random() * 1.2),
+    ry: (Math.random() - 0.5) * 0.35,
+    rz: (Math.random() < 0.5 ? -1 : 1) * (2.2 + Math.random() * 1.2),
+    restQuat: _corpseRestQuat.clone(),
+    life: maxLife,
+    maxLife,
+    fadeTime: maxLife,
+    grounded: false,
+    groundTime: 0,
+    sleepTimer: 0,
+    sleeping: false,
+  };
+
+  playerMesh.visible = false;
+  playerWeaponGroup.visible = false;
+  playerContactShadow.visible = false;
+  playerMat.opacity = 0;
+  playerMat.transparent = true;
+  playerMat.needsUpdate = true;
+}
+
 export function restorePlayerAliveVisual() {
+  disposePlayerPhysicsCorpse();
   playerMat.opacity = 1;
   playerMat.transparent = false;
   playerMesh.visible = true;
@@ -790,17 +887,86 @@ export function restorePlayerAliveVisual() {
   playerMat.needsUpdate = true;
 }
 
-export function updatePlayerCorpseVisual() {
+export function updatePlayerCorpseVisual(delta = 0) {
   if (!state.playerDead) return;
+
+  if (!playerPhysicsCorpse) {
+    beginPlayerCorpseVisual(Math.max(0.1, Number(state.playerDeathDuration) || Number(state.params.playerCorpseFadeTime) || 3));
+  }
+
+  const corpse = playerPhysicsCorpse;
+  const step = Math.max(0, Number(delta) || 0);
+  if (step > 0 && corpse) {
+    corpse.life = Math.max(0, corpse.life - step);
+
+    if (!corpse.sleeping) {
+      corpse.vy -= PLAYER_CORPSE_GRAVITY * step;
+      corpse.mesh.position.x += corpse.vx * step;
+      corpse.mesh.position.y += corpse.vy * step;
+      corpse.mesh.position.z += corpse.vz * step;
+      corpse.mesh.rotation.x += corpse.rx * step;
+      corpse.mesh.rotation.y += corpse.ry * step;
+      corpse.mesh.rotation.z += corpse.rz * step;
+
+      const onFloor = snapPlayerCorpseToFloor(corpse.mesh, false);
+      if (onFloor) {
+        corpse.grounded = true;
+        corpse.groundTime = (corpse.groundTime || 0) + step;
+        corpse.vy = 0;
+
+        const floorFriction = Math.exp(-4.8 * step);
+        const angularFriction = Math.exp(-5.6 * step);
+        corpse.vx *= floorFriction;
+        corpse.vz *= floorFriction;
+        corpse.rx *= angularFriction;
+        corpse.ry *= angularFriction;
+        corpse.rz *= angularFriction;
+
+        const settleAmount = Math.min(1, Math.max(0, step * 5.5));
+        corpse.mesh.quaternion.slerp(corpse.restQuat, settleAmount);
+        snapPlayerCorpseToFloor(corpse.mesh, true);
+
+        const nearlyStill = corpse.groundTime > 0.18
+          && Math.hypot(corpse.vx, corpse.vz) < 0.08
+          && Math.hypot(corpse.rx, corpse.ry, corpse.rz) < 0.12;
+        corpse.sleepTimer = nearlyStill ? (corpse.sleepTimer || 0) + step : 0;
+        if (corpse.sleepTimer > 0.16) {
+          corpse.vx = 0;
+          corpse.vy = 0;
+          corpse.vz = 0;
+          corpse.rx = 0;
+          corpse.ry = 0;
+          corpse.rz = 0;
+          corpse.mesh.quaternion.copy(corpse.restQuat);
+          snapPlayerCorpseToFloor(corpse.mesh, true);
+          corpse.sleeping = true;
+        }
+      } else {
+        corpse.grounded = false;
+        corpse.groundTime = 0;
+        corpse.sleepTimer = 0;
+      }
+    } else {
+      snapPlayerCorpseToFloor(corpse.mesh, true);
+    }
+
+    playerGroup.position.x = corpse.mesh.position.x;
+    playerGroup.position.z = corpse.mesh.position.z;
+    playerGroup.position.y = 0;
+  }
+
   const duration = Math.max(0.1, Number(state.playerDeathDuration) || Number(state.params.playerCorpseFadeTime) || 3);
   const timer = Math.max(0, Number(state.playerDeathTimer) || 0);
-  const opacity = Math.min(1, Math.max(0, timer / duration));
-  playerMat.transparent = true;
-  playerMat.opacity = opacity;
-  playerMesh.visible = opacity > 0.02;
-  playerWeaponGroup.visible = opacity > 0.02;
-  playerContactShadow.visible = opacity > 0.04 && !!state.params.shadows && !!state.params.showFloor;
-  playerMat.needsUpdate = true;
+  const t = Math.min(1, Math.max(0, timer / duration));
+  if (corpse?.mesh?.material) {
+    corpse.mesh.material.opacity = t;
+    corpse.mesh.material.transparent = true;
+    if ('emissiveIntensity' in corpse.mesh.material) corpse.mesh.material.emissiveIntensity = 0.06 * t;
+  }
+
+  playerMesh.visible = false;
+  playerWeaponGroup.visible = false;
+  playerContactShadow.visible = false;
 }
 
 // ── Dash ghost afterimages ─────────────────────────────────────────────────────
@@ -939,7 +1105,7 @@ function updateJump(delta) {
 const _v = new THREE.Vector3();
 
 export function updatePlayer(delta, moveForward, moveRight, aimTarget = null) {
-  if (state.playerDead) { updatePlayerCorpseVisual(); return; }
+  if (state.playerDead) { updatePlayerCorpseVisual(delta); return; }
   const p = state.params;
   const movementScale = Math.max(0.05, Math.min(1, Number(state.worldScale) || 1));
   const movementDelta = delta * movementScale;
