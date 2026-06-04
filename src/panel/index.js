@@ -48086,6 +48086,8 @@ function buildLighting(body) {
 }
 
 function buildScene(body) {
+  body.appendChild(toggle('Show Floor', 'showFloor', v => { setFloorVisible(v); applyFloorSettings(); }));
+  body.appendChild(toggle('Show Grid',  'showGrid',  v => { setGridVisible(v); applyFloorSettings(); }));
   body.appendChild(colorPicker('Background', 'bgColor', v => {
     scene.background = new THREE.Color(v);
     if (scene.fog) scene.fog.color.set(v);
@@ -48100,8 +48102,6 @@ function buildScene(body) {
   }));
   body.appendChild(colorPicker('Floor Color', 'floorColor', v => { setFloorColor(v); applyFloorSettings(); }));
   body.appendChild(colorPicker('Grid Color',  'gridColor',  v => { setGridColor(v); applyFloorSettings(); }));
-  body.appendChild(toggle('Show Floor', 'showFloor', v => { setFloorVisible(v); applyFloorSettings(); }));
-  body.appendChild(toggle('Show Grid',  'showGrid',  v => { setGridVisible(v); applyFloorSettings(); }));
 
   body.appendChild(subhdr('Build Area'));
   body.appendChild(select('Floor Mode', 'floorMode', [
@@ -48138,10 +48138,10 @@ function buildScene(body) {
 
 function buildHUD(body) {
   body.appendChild(toggle('HUD Enabled', 'hudVisible', () => applyHudSettings()));
-  body.appendChild(select('Layout', 'hudLayout', HUD_LAYOUT_OPTIONS, () => applyHudSettings()));
-  body.appendChild(select('Font', 'hudFont', HUD_FONT_OPTIONS, () => applyHudSettings()));
   body.appendChild(toggle('Enemy Health Bars', 'hudEnemyHealthBars', () => applyHudSettings()));
   body.appendChild(toggle('Ally Health Bars', 'hudAllyHealthBars', () => applyHudSettings()));
+  body.appendChild(select('Layout', 'hudLayout', HUD_LAYOUT_OPTIONS, () => applyHudSettings()));
+  body.appendChild(select('Font', 'hudFont', HUD_FONT_OPTIONS, () => applyHudSettings()));
   body.appendChild(slider({ key: 'hudNpcHealthBarRange', label: 'Health Bar Range', min: 0, max: 200, step: 1, dec: 0, onChange: () => applyHudSettings() }));
   body.appendChild(toggle('Bullet Time Indicator', 'hudBulletTimeIndicator', () => applyHudSettings()));
   body.appendChild(slider({ key: 'hudBulletTimeIndicatorSize', label: 'BT Icon Size', min: 8, max: 64, step: 1, dec: 0, onChange: () => applyHudSettings() }));
@@ -48245,7 +48245,6 @@ function buildScopedJsonControls(body, label, keys, filename) {
 }
 
 function buildEnemies(body) {
-  buildScopedJsonControls(body, 'Enemies', ENEMY_JSON_KEYS, 'enemies.json');
   body.appendChild(select('Enemy Type', 'enemyType', ENEMY_TYPE_OPTIONS));
   body.appendChild(slider({ key: 'enemyCount', label: 'Number of Enemies', min: 0, max: 50, step: 1, dec: 0 }));
   body.appendChild(slider({ key: 'enemyHealth', label: 'Health Amount', min: 1, max: 1000, step: 1, dec: 0 }));
@@ -48781,7 +48780,6 @@ function buildController(body) {
 
 
 function buildAllies(body) {
-  buildScopedJsonControls(body, 'Allies', ALLY_JSON_KEYS, 'allies.json');
   body.appendChild(select('Ally Type', 'allyType', ENEMY_TYPE_OPTIONS));
   body.appendChild(slider({ key: 'allyCount', label: 'Number of Allies', min: 0, max: 50, step: 1, dec: 0 }));
   body.appendChild(slider({ key: 'allyHealth', label: 'Health Amount', min: 1, max: 1000, step: 1, dec: 0 }));
