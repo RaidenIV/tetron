@@ -466,6 +466,12 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   box-shadow: none;
 }
 
+.npc-health-bar[data-damaged="false"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
 
 .ammo-hud {
   position: fixed;
@@ -793,7 +799,7 @@ body[data-hud-layout="hud2"] .game-hud-health {
   margin-left: 0;
 }
 
-body[data-hud-layout="hud2"] .game-hud-armor {
+body[data-hud-layout="hud2"] .game-hud-health {
   border-right: 1px solid rgba(255,255,255,0.12);
 }
 

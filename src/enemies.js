@@ -892,15 +892,37 @@ function makeNpcHealthBar(npc) {
   npc._healthBarObj = obj;
   npc._healthBarState = {
     display: 'none',
-    opacity: '',
+    visibility: 'hidden',
+    opacity: '0',
     ratio: null,
     width: '',
   };
+  setNpcHealthBarVisible(npc, false, npc._healthBarState, { force: true });
   updateNpcHealthBar(npc, { force: true });
 }
 
 function getNpcHealthBarMaxDistance() {
   return Math.max(0, Number(state.params.hudNpcHealthBarRange ?? NPC_HEALTH_BAR_DISTANCE_DEFAULT) || 0);
+}
+
+function setNpcHealthBarVisible(npc, visible, cache = null, { force = false } = {}) {
+  if (!npc?._healthBarEl) return;
+  const stateCache = cache || (npc._healthBarState = npc._healthBarState || {});
+  const display = visible ? 'block' : 'none';
+  const visibility = visible ? 'visible' : 'hidden';
+  const opacity = visible ? '1' : '0';
+  if (force || stateCache.display !== display) {
+    npc._healthBarEl.style.setProperty('display', display, visible ? '' : 'important');
+    stateCache.display = display;
+  }
+  if (force || stateCache.visibility !== visibility) {
+    npc._healthBarEl.style.visibility = visibility;
+    stateCache.visibility = visibility;
+  }
+  if (force || stateCache.opacity !== opacity) {
+    npc._healthBarEl.style.opacity = opacity;
+    stateCache.opacity = opacity;
+  }
 }
 
 function updateNpcHealthBar(npc, { force = false } = {}) {
@@ -916,19 +938,12 @@ function updateNpcHealthBar(npc, { force = false } = {}) {
     || camera.position.distanceToSquared(npc.group.position) <= maxDistance * maxDistance;
   const damaged = npc._healthBarDamaged === true;
   const visible = enabled && damaged && ratio > 0 && inRange;
-  const display = visible ? 'block' : 'none';
   const cache = npc._healthBarState || (npc._healthBarState = {});
 
-  if (force || cache.display !== display) {
-    npc._healthBarEl.style.setProperty('display', display, visible ? '' : 'important');
-    cache.display = display;
-  }
+  npc._healthBarEl.dataset.damaged = damaged ? 'true' : 'false';
+  setNpcHealthBarVisible(npc, visible, cache, { force });
   if (!visible) return;
 
-  if (force || cache.opacity !== '1') {
-    npc._healthBarEl.style.opacity = '1';
-    cache.opacity = '1';
-  }
   if (force || cache.ratio === null || Math.abs(cache.ratio - ratio) >= NPC_HEALTH_BAR_RATIO_EPSILON) {
     const width = `${Math.round(ratio * 1000) / 10}%`;
     if (force || cache.width !== width) {
@@ -940,7 +955,7 @@ function updateNpcHealthBar(npc, { force = false } = {}) {
 }
 
 function markNpcHealthBarDamaged(npc) {
-  if (!npc) return;
+  if (!npc || npc._healthBarDamaged === true) return;
   npc._healthBarDamaged = true;
   if (npc._healthBarEl) npc._healthBarEl.dataset.damaged = 'true';
 }
