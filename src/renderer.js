@@ -12,12 +12,14 @@ renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
 renderer.toneMapping         = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.9;
 renderer.domElement.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;';
+renderer.domElement.classList.add('game-renderer');
 document.body.appendChild(renderer.domElement);
 
 // ── CSS2D renderer ─────────────────────────────────────────────────────────────
 export const labelRenderer = new CSS2DRenderer();
 labelRenderer.setSize(window.innerWidth, window.innerHeight);
 labelRenderer.domElement.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:5;';
+labelRenderer.domElement.classList.add('label-renderer');
 document.body.appendChild(labelRenderer.domElement);
 
 // ── Scene ──────────────────────────────────────────────────────────────────────

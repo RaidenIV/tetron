@@ -773,6 +773,33 @@ export function applyPlayerMaterial() {
   playerBaseColor.copy(playerMat.color);
   playerMat.metalness = p.playerMetalness;
   playerMat.roughness = p.playerRoughness;
+  if (!state.playerDead) {
+    playerMat.opacity = 1;
+    playerMat.transparent = false;
+    playerMesh.visible = true;
+  }
+  playerMat.needsUpdate = true;
+}
+
+export function restorePlayerAliveVisual() {
+  playerMat.opacity = 1;
+  playerMat.transparent = false;
+  playerMesh.visible = true;
+  playerWeaponGroup.visible = true;
+  playerContactShadow.visible = !!state.params.shadows && !!state.params.showFloor;
+  playerMat.needsUpdate = true;
+}
+
+export function updatePlayerCorpseVisual() {
+  if (!state.playerDead) return;
+  const duration = Math.max(0.1, Number(state.playerDeathDuration) || Number(state.params.playerCorpseFadeTime) || 3);
+  const timer = Math.max(0, Number(state.playerDeathTimer) || 0);
+  const opacity = Math.min(1, Math.max(0, timer / duration));
+  playerMat.transparent = true;
+  playerMat.opacity = opacity;
+  playerMesh.visible = opacity > 0.02;
+  playerWeaponGroup.visible = opacity > 0.02;
+  playerContactShadow.visible = opacity > 0.04 && !!state.params.shadows && !!state.params.showFloor;
   playerMat.needsUpdate = true;
 }
 
@@ -912,6 +939,7 @@ function updateJump(delta) {
 const _v = new THREE.Vector3();
 
 export function updatePlayer(delta, moveForward, moveRight, aimTarget = null) {
+  if (state.playerDead) { updatePlayerCorpseVisual(); return; }
   const p = state.params;
   const movementScale = Math.max(0.05, Math.min(1, Number(state.worldScale) || 1));
   const movementDelta = delta * movementScale;

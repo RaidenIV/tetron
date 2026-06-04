@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { scene, camera } from './renderer.js';
 import { state, addBulletTimeAmount } from './state.js';
-import { playerGroup } from './player.js';
+import { playerGroup, restorePlayerAliveVisual, updatePlayerCorpseVisual } from './player.js';
 import { getSfxVolume, applyBulletTimeAudioPitch, registerManagedAudio, playObjectExplosionSound } from './audio.js';
 import { resolveCircleAgainstPlacedObjects, isPlacedObjectHit } from './placer.js';
 
@@ -1851,12 +1851,48 @@ function resetPlayerAmmoState() {
   state.weaponReloads = {};
 }
 
+function getPlayerCorpseFadeTime() {
+  return clamp(Number(state.params.playerCorpseFadeTime) || 3, 0.1, 10);
+}
+
+function beginPlayerDeath() {
+  if (state.playerDead) return;
+  const duration = getPlayerCorpseFadeTime();
+  state.playerDead = true;
+  state.playerDeathTimer = duration;
+  state.playerDeathDuration = duration;
+  state.primaryFire = false;
+  state.secondaryFire = false;
+  state.isAiming = false;
+  state.params.playerHealth = 0;
+  updatePlayerCorpseVisual();
+}
+
+function clearPlayerDeathState() {
+  state.playerDead = false;
+  state.playerDeathTimer = 0;
+  state.playerDeathDuration = 0;
+  delete document.body.dataset.playerDead;
+  restorePlayerAliveVisual();
+}
+
+export function updatePlayerDeath(delta) {
+  if (!state.playerDead) return;
+  state.playerDeathTimer = Math.max(0, (Number(state.playerDeathTimer) || 0) - Math.max(0, Number(delta) || 0));
+  updatePlayerCorpseVisual();
+  if (state.playerDeathTimer <= 0) {
+    respawnPlayerAfterDeath();
+    syncPlayerHud();
+  }
+}
+
 function awardBulletTimeForKill() {
   if (state.params.bulletTimeEnabled === false) return;
   addBulletTimeAmount(Math.max(0, Number(state.params.bulletTimeKillGain) || 0));
 }
 
 function respawnPlayerAfterDeath() {
+  clearPlayerDeathState();
   const p = state.params;
   const maxHealth = Math.max(1, Number(p.playerMaxHealth) || 100);
   const maxArmor = Math.max(0, Number(p.playerMaxArmor) || 0);
@@ -1894,6 +1930,7 @@ export function respawnPlayerAtFullHealth() {
 }
 
 function applyPlayerDamage(amount) {
+  if (state.playerDead) return;
   const p = state.params;
   if (p.playerInvincible) return;
   let incomingDamage = Math.max(0, Number(amount) || 0);
@@ -1907,7 +1944,7 @@ function applyPlayerDamage(amount) {
   if (incomingDamage > 0) {
     p.playerHealth = Math.max(0, (Number(p.playerHealth) || 0) - incomingDamage);
   }
-  if ((Number(p.playerHealth) || 0) <= 0) respawnPlayerAfterDeath();
+  if ((Number(p.playerHealth) || 0) <= 0) beginPlayerDeath();
   syncPlayerHud();
 }
 

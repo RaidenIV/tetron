@@ -335,14 +335,14 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   align-items: center;
 }
 .game-hud-armor {
-  --hud-color: #4dff63;
-  --hud-track-bg: rgba(77,255,99,0.18);
-  --hud-track-border: rgba(77,255,99,0.32);
-}
-.game-hud-health {
   --hud-color: #33ddff;
   --hud-track-bg: rgba(53,221,255,0.18);
   --hud-track-border: rgba(53,231,255,0.32);
+}
+.game-hud-health {
+  --hud-color: #4dff63;
+  --hud-track-bg: rgba(77,255,99,0.18);
+  --hud-track-border: rgba(77,255,99,0.32);
   grid-template-columns: 30px 1fr 30px;
   margin-left: 24px;
 }
@@ -457,12 +457,12 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
 }
 .armor-fill {
   width: 100%;
-  background: #4dff63;
+  background: #33ddff;
   box-shadow: none;
 }
 .health-fill {
   width: 100%;
-  background: #33ddff;
+  background: #4dff63;
   box-shadow: none;
 }
 
@@ -969,3 +969,50 @@ body[data-hud-layout="hud2"] .bullet-time-meter {
   width: 34px; height: 34px; color: currentColor; opacity: var(--reticle-opacity);
 }
 .sb-reticle-picker-btn { width: 100%; justify-content: center; }
+
+
+#kill-screen-overlay {
+  --kill-screen-text-size: 42px;
+  --kill-screen-text-color: #ffffff;
+  --kill-screen-text-opacity: 0.9;
+  position: fixed;
+  inset: 0;
+  z-index: 28;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-family: var(--hud-font-family, 'Segoe UI', system-ui, sans-serif);
+  font-weight: var(--hud-font-weight, 800);
+  letter-spacing: var(--hud-letter-spacing, 0.18em);
+  text-align: center;
+  text-transform: uppercase;
+}
+body[data-player-dead="true"] #kill-screen-overlay.kill-screen-enabled {
+  display: flex;
+}
+.kill-screen-text {
+  color: var(--kill-screen-text-color);
+  font-size: var(--kill-screen-text-size);
+  line-height: 1;
+  opacity: var(--kill-screen-text-opacity);
+  text-shadow: 0 0 18px currentColor, 0 2px 4px rgba(0,0,0,0.85);
+}
+body[data-player-dead="true"] .game-renderer,
+body[data-player-dead="true"] .label-renderer {
+  filter: saturate(var(--kill-screen-saturation, 0.15));
+}
+body[data-player-dead="true"] #game-hud,
+body[data-player-dead="true"] #radar-canvas,
+body[data-player-dead="true"] #ammo-hud,
+body[data-player-dead="true"] #instructions,
+body[data-player-dead="true"] #fps-overlay,
+body[data-player-dead="true"] #target-reticle,
+body[data-player-dead="true"] #hit-marker,
+body[data-player-dead="true"] #kill-confirmation,
+body[data-player-dead="true"] #bullet-time-meter,
+body[data-player-dead="true"] #bullet-time-indicator,
+body[data-player-dead="true"] #bullet-time-active-indicator,
+body[data-player-dead="true"] #pause-overlay {
+  display: none !important;
+}

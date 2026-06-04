@@ -10,7 +10,10 @@ export const state = {
   slowRequested: false,
   slowStopRequested: false,
   bulletTimeAmount: null,
-  activePreset: 'g40',
+  playerDead: false,
+  playerDeathTimer: 0,
+  playerDeathDuration: 0,
+  activePreset: 'g41',
   mouseLookActive: false,
   isAiming: false,          // true while right-mouse / L2 held
   activeSlot: 0,            // 0 = laser, 1 = object placer
@@ -49,7 +52,7 @@ export const state = {
   _camPos:    { x: 28, y: 28, z: 28 },
   _camTarget: { x: 0,  y: 0,  z: 0  },
 
-  params: {
+  params:   {
       "cameraMode": "third2",
       "isoCamD": 12,
       "thirdDist": 5,
@@ -63,7 +66,7 @@ export const state = {
       "third2BodyFrameHeight": 1.35,
       "third2BodyScreenY": 0.45,
       "third2MinEyeHeight": 0.15,
-      "thirdAzimuth": 3.092999999999982,
+      "thirdAzimuth": 1.5108146928204036,
       "thirdLookAhead": 3.8,
       "thirdSmoothPos": 10,
       "thirdSmoothLook": 12,
@@ -75,7 +78,7 @@ export const state = {
       "aimSmooth": 10,
       "thirdMouseSensitivityX": 0.003,
       "thirdMouseSensitivityY": 0.0024,
-      "thirdPitch": -0.028399999999998135,
+      "thirdPitch": -0.07879999999999802,
       "thirdOffsetMode": "parallel",
       "thirdOffsetX": 1.25,
       "thirdOffsetY": -0.25,
@@ -97,7 +100,7 @@ export const state = {
       "playerHealth": 100,
       "playerMaxArmor": 100,
       "playerArmor": 100,
-      "playerInvincible": true,
+      "playerInvincible": false,
       "jumpEnabled": true,
       "doubleJumpEnabled": true,
       "doubleJumpAirJumps": 1,
@@ -184,13 +187,13 @@ export const state = {
       "laserProjectileSpeed": 80,
       "laserRange": 42,
       "laserFireRate": 5,
-      "enemyType": "rusher",
+      "enemyType": "sniper",
       "enemyCount": 10,
-      "enemyHealth": 10,
+      "enemyHealth": 100,
       "enemyInvincible": false,
-      "enemyBehavior": "rush",
-      "enemyMoveSpeed": 3,
-      "enemyDamage": 10,
+      "enemyBehavior": "keepDistance",
+      "enemyMoveSpeed": 6,
+      "enemyDamage": 20,
       "enemyPlacement": "random",
       "enemyWeaponType": "rifle",
       "allyType": "orbiter",
@@ -9455,7 +9458,7 @@ export const state = {
       "reticleHitMarkerEnabled": true,
       "enemyAwarenessOutlineColor": "#000000",
       "allyAwarenessOutlineColor": "#ffffff",
-      "enemyAccuracy": 60,
+      "enemyAccuracy": 75,
       "allyAccuracy": 60,
       "enemyAwarenessFillTransparent": true,
       "allyAwarenessFillTransparent": true,
@@ -9477,7 +9480,16 @@ export const state = {
       "playerSpawnY": 0,
       "playerSpawnZ": 0,
       "playerSpawnYaw": 3.141592653589793,
-      "editorPlayerSpawnYaw": 0
+      "editorPlayerSpawnYaw": 0,
+      "playerCorpseFadeTime": 3.0,
+      "killScreenEnabled": true,
+      "killScreenSaturation": 0.15,
+      "killScreenText": "PLAYER KILLED",
+      "killScreenTextSize": 42,
+      "killScreenTextColor": "#ffffff",
+      "killScreenTextOpacity": 0.9,
+      "killScreenWorldScale": 0.25,
+      "soundSfx_bullet_time_end": 1
   }
 };
 

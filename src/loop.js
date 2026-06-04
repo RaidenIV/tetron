@@ -10,11 +10,11 @@ import { updateSunPosition } from './lighting.js';
 import { updateChunks, clampPositionToBuildArea } from './terrain.js';
 import { playerGroup, updatePlayer, updateDashStreaks } from './player.js';
 import { updateLaserProjectiles, resolveAimTarget, aimResult, syncWeaponAmmoHud } from './weapons.js';
-import { updateEnemies, updateNpcTeamCombat, getEnemyMeshes, tagEnemy, getEnemies, getAllies } from './enemies.js';
+import { updateEnemies, updateNpcTeamCombat, getEnemyMeshes, tagEnemy, getEnemies, getAllies, updatePlayerDeath } from './enemies.js';
 import { updatePlacer } from './placer.js';
 import { isEditorModeEnabled, updateEditorCamera, updateEditorPlacement } from './editor.js';
 import { updateController } from './input.js';
-import { updateBulletTimeAudioPitch, playBulletTimeActivationSounds } from './audio.js';
+import { updateBulletTimeAudioPitch, playBulletTimeActivationSounds, playBulletTimeEndSound } from './audio.js';
 
 const clock = new THREE.Clock();
 // ── Radar canvas ──────────────────────────────────────────────────────────────
@@ -266,12 +266,23 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function syncKillScreenRuntime() {
+  const dead = state.playerDead === true;
+  document.body.toggleAttribute('data-player-dead', dead);
+  const overlay = document.getElementById('kill-screen-overlay');
+  if (overlay) {
+    overlay.classList.toggle('kill-screen-enabled', dead && state.params.killScreenEnabled !== false);
+  }
+}
+
 function getTargetWorldScale() {
+  if (state.playerDead) return clamp(Number(state.params.killScreenWorldScale) || 0.25, 0.05, 1.0);
   if (!state.params.bulletTimeEnabled) return 1.0;
   return state.slowTimer > 0 ? clamp(Number(state.slowScale) || 0.35, 0.05, 1.0) : 1.0;
 }
 
 function updateTimeSlow(delta) {
+  const wasBulletTimeActive = state.slowTimer > 0;
   const p = state.params;
   const maxAmount = getBulletTimeMaxAmount();
   let amount = ensureBulletTimeAmount();
@@ -315,6 +326,7 @@ function updateTimeSlow(delta) {
     : TIME_SLOW_CONFIG.recoverRate;
 
   state.worldScale += (targetScale - state.worldScale) * Math.min(1, rate * delta);
+  if (wasBulletTimeActive && state.slowTimer <= 0) playBulletTimeEndSound();
 }
 
 export function tick() {
@@ -352,6 +364,7 @@ export function tick() {
   syncWeaponAmmoHud();
   updateBulletTimeAudioPitch();
   updateBulletTimeIndicator();
+  syncKillScreenRuntime();
   updatePlacer(delta);
   updateEditorPlacement(delta);
 
@@ -420,11 +433,19 @@ export function tick() {
   }
 
   updateTimeSlow(delta);
+  syncKillScreenRuntime();
   updateBulletTimeAudioPitch();
   updateBulletTimeIndicator();
-  updatePlayer(delta, getMoveForward(), getMoveRight(), aimResult.point);
-  clampPositionToBuildArea(playerGroup.position, Number(state.params.playerRadius) || 0.4);
-  updateDashStreaks(delta);
+  if (state.playerDead) {
+    state.primaryFire = false;
+    state.secondaryFire = false;
+    state.isAiming = false;
+    updatePlayerDeath(delta);
+  } else {
+    updatePlayer(delta, getMoveForward(), getMoveRight(), aimResult.point);
+    clampPositionToBuildArea(playerGroup.position, Number(state.params.playerRadius) || 0.4);
+    updateDashStreaks(delta);
+  }
 
   const worldDelta = delta * state.worldScale;
   updateEnemies(worldDelta, _elapsed);

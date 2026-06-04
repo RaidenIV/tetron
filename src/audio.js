@@ -155,6 +155,7 @@ export function playObjectExplosionSound(sourcePosition = null) {
 
 let _bulletTimeSlowEl = null;
 let _bulletTimeHeartEl = null;
+let _bulletTimeEndEl = null;
 
 function playBulletTimeSound(templateRef, assetPath, volumeKey) {
   const volume = getSfxVolume(volumeKey, 1);
@@ -181,4 +182,18 @@ function playBulletTimeSound(templateRef, assetPath, volumeKey) {
 export function playBulletTimeActivationSounds() {
   _bulletTimeSlowEl = playBulletTimeSound(_bulletTimeSlowEl, './assets/slow.wav', 'soundSfx_bullet_time_slow');
   _bulletTimeHeartEl = playBulletTimeSound(_bulletTimeHeartEl, './assets/heart.mp3', 'soundSfx_bullet_time_heart');
+}
+
+export function playBulletTimeEndSound() {
+  const volume = getSfxVolume('soundSfx_bullet_time_end', 1);
+  if (volume <= 0) return;
+  if (!_bulletTimeEndEl) {
+    _bulletTimeEndEl = registerManagedAudio(new Audio('./assets/bt_end.wav'), 1, { skipBulletTimePitch: true });
+  }
+  const sound = _bulletTimeEndEl.paused ? _bulletTimeEndEl : _bulletTimeEndEl.cloneNode();
+  registerManagedAudio(sound, 1, { skipBulletTimePitch: true });
+  sound.volume = volume;
+  sound.currentTime = 0;
+  applyBulletTimeAudioPitch(sound, 1);
+  sound.play().catch(() => {});
 }
