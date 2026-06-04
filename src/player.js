@@ -957,7 +957,8 @@ export function updatePlayerCorpseVisual(delta = 0) {
 
   const duration = Math.max(0.1, Number(state.playerDeathDuration) || Number(state.params.playerCorpseFadeTime) || 3);
   const timer = Math.max(0, Number(state.playerDeathTimer) || 0);
-  const t = Math.min(1, Math.max(0, timer / duration));
+  const fadeWindow = Math.min(duration, Math.max(0.1, Number(state.params.playerCorpseFadeTime) || 3));
+  const t = Math.min(1, Math.max(0, timer / fadeWindow));
   if (corpse?.mesh?.material) {
     corpse.mesh.material.opacity = t;
     corpse.mesh.material.transparent = true;

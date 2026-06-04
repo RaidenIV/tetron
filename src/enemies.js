@@ -1893,11 +1893,12 @@ function endBulletTimeForPlayerDeath() {
 
 function beginPlayerDeath() {
   if (state.playerDead) return;
-  const duration = getPlayerCorpseFadeTime();
+  const killScreenDuration = getKillScreenDuration();
+  const duration = Math.max(getPlayerCorpseFadeTime(), killScreenDuration);
   state.playerDead = true;
   state.playerDeathTimer = duration;
   state.playerDeathDuration = duration;
-  state.killScreenTimer = getKillScreenDuration();
+  state.killScreenTimer = killScreenDuration;
   endBulletTimeForPlayerDeath();
   document.body?.setAttribute?.('data-player-dead', 'true');
   document.body?.setAttribute?.('data-kill-screen-active', state.params.killScreenEnabled !== false ? 'true' : 'false');
