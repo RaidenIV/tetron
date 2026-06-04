@@ -913,7 +913,8 @@ function updateNpcHealthBar(npc, { force = false } = {}) {
   const maxDistance = getNpcHealthBarMaxDistance();
   const inRange = maxDistance <= 0 || !camera?.position
     || camera.position.distanceToSquared(npc.group.position) <= maxDistance * maxDistance;
-  const visible = enabled && ratio > 0 && inRange;
+  const damaged = npc._healthBarDamaged === true || Number(npc.hp) < Number(npc.maxHp);
+  const visible = enabled && damaged && ratio > 0 && inRange;
   const display = visible ? 'block' : 'none';
   const cache = npc._healthBarState || (npc._healthBarState = {});
 
@@ -1078,6 +1079,7 @@ function makeEnemy(type, position, index = 0, options = {}) {
   const enemy = {
     type, def, group, mesh, material, maxHp, team, isAlly: team === 'ally',
     hp: maxHp,
+    _healthBarDamaged: false,
     radius: BASE_RADIUS * def.sizeMult,
     sizeMult: def.sizeMult,
     spawnFlashTimer: 0.65,
@@ -2081,7 +2083,9 @@ function damageEnemy(enemy, amount) {
   enemy.material.emissive.set(0xffffff);
   enemy.material.emissiveIntensity = 0.45;
   const invincible = enemy.isAlly ? state.params.allyInvincible : state.params.enemyInvincible;
+  const prevHp = Number(enemy.hp) || 0;
   if (!invincible) enemy.hp -= Math.max(0, Number(amount) || 0);
+  if ((Number(enemy.hp) || 0) < prevHp) enemy._healthBarDamaged = true;
   updateNpcHealthBar(enemy);
   const killed = wasAlive && enemy.hp <= 0 && !enemy.isAlly;
   if (enemy.hp <= 0) destroyEnemy(enemy);
