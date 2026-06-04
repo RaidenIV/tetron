@@ -295,9 +295,13 @@ function syncKillScreenRuntime() {
   const rawSaturation = Number(state.params.killScreenSaturation);
   const rawTextSize = Number(state.params.killScreenTextSize);
   const rawTextOpacity = Number(state.params.killScreenTextOpacity);
+  const rawTextOffsetX = Number(state.params.killScreenTextOffsetX);
+  const rawTextOffsetY = Number(state.params.killScreenTextOffsetY);
   const saturation = clamp(Number.isFinite(rawSaturation) ? rawSaturation : 0.15, 0, 1);
   const textSize = clamp(Number.isFinite(rawTextSize) ? rawTextSize : 42, 12, 160);
   const textOpacity = clamp(Number.isFinite(rawTextOpacity) ? rawTextOpacity : 0.9, 0, 1);
+  const textOffsetX = clamp(Number.isFinite(rawTextOffsetX) ? rawTextOffsetX : 0, -600, 600);
+  const textOffsetY = clamp(Number.isFinite(rawTextOffsetY) ? rawTextOffsetY : 0, -400, 400);
   const textColor = /^#[0-9a-f]{6}$/i.test(String(state.params.killScreenTextColor || ''))
     ? state.params.killScreenTextColor
     : '#ffffff';
@@ -323,6 +327,8 @@ function syncKillScreenRuntime() {
     overlay.style.setProperty('--kill-screen-text-size', `${textSize}px`);
     overlay.style.setProperty('--kill-screen-text-color', textColor);
     overlay.style.setProperty('--kill-screen-text-opacity', String(textOpacity));
+    overlay.style.setProperty('--kill-screen-text-offset-x', `${textOffsetX}px`);
+    overlay.style.setProperty('--kill-screen-text-offset-y', `${textOffsetY}px`);
     overlay.dataset.killScreenFont = killScreenFontKey;
     overlay.style.fontFamily = killScreenFont.family;
     overlay.style.fontWeight = String(killScreenFont.weight || 800);
@@ -340,6 +346,7 @@ function syncKillScreenRuntime() {
     textEl.style.setProperty('display', active ? 'block' : 'none', 'important');
     textEl.style.setProperty('visibility', active ? 'visible' : 'hidden', 'important');
     textEl.style.setProperty('opacity', String(textOpacity), 'important');
+    textEl.style.setProperty('transform', `translate(${textOffsetX}px, ${textOffsetY}px)`, 'important');
     textEl.style.fontFamily = killScreenFont.family;
     textEl.style.fontWeight = String(killScreenFont.weight || 800);
     textEl.style.fontStretch = killScreenFont.stretch || 'normal';

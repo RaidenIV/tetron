@@ -976,9 +976,11 @@ body[data-hud-layout="hud2"] .bullet-time-meter {
   --kill-screen-text-color: #ffffff;
   --kill-screen-text-opacity: 0.9;
   --kill-screen-saturation: 0.15;
+  --kill-screen-text-offset-x: 0px;
+  --kill-screen-text-offset-y: 0px;
   position: fixed;
   inset: 0;
-  z-index: 2147483000;
+  z-index: 90;
   display: none;
   visibility: hidden;
   opacity: 0;
@@ -991,8 +993,6 @@ body[data-hud-layout="hud2"] .bullet-time-meter {
   text-align: center;
   text-transform: uppercase;
   background: rgba(0,0,0,0.001);
-  backdrop-filter: saturate(var(--kill-screen-saturation, 0.15));
-  -webkit-backdrop-filter: saturate(var(--kill-screen-saturation, 0.15));
 }
 body[data-kill-screen-active="true"] #kill-screen-overlay.kill-screen-enabled,
 body[data-player-dead] #kill-screen-overlay.kill-screen-enabled[data-kill-screen-active="true"],
@@ -1012,6 +1012,7 @@ body[data-player-dead="true"] #kill-screen-overlay.kill-screen-enabled[data-kill
   line-height: 1;
   opacity: var(--kill-screen-text-opacity);
   text-shadow: 0 0 18px currentColor, 0 2px 4px rgba(0,0,0,0.85);
+  transform: translate(var(--kill-screen-text-offset-x, 0px), var(--kill-screen-text-offset-y, 0px));
 }
 body[data-kill-screen-active="true"] .game-renderer,
 body[data-kill-screen-active="true"] .label-renderer {

@@ -157,6 +157,71 @@ function pointHitsNpcBody(point, hitRadius, npc) {
   return distanceToNpcBody(point, npc) <= Math.max(0.001, Number(hitRadius) || 0);
 }
 
+const _segP1 = new THREE.Vector3();
+const _segQ1 = new THREE.Vector3();
+const _segP2 = new THREE.Vector3();
+const _segQ2 = new THREE.Vector3();
+const _segD1 = new THREE.Vector3();
+const _segD2 = new THREE.Vector3();
+const _segR = new THREE.Vector3();
+const _segC1 = new THREE.Vector3();
+const _segC2 = new THREE.Vector3();
+
+function segmentSegmentDistance(a0, a1, b0, b1) {
+  _segD1.copy(a1).sub(a0);
+  _segD2.copy(b1).sub(b0);
+  _segR.copy(a0).sub(b0);
+  const aa = _segD1.dot(_segD1);
+  const ee = _segD2.dot(_segD2);
+  const ff = _segD2.dot(_segR);
+  let ss = 0;
+  let tt = 0;
+
+  if (aa <= 1e-8 && ee <= 1e-8) return a0.distanceTo(b0);
+  if (aa <= 1e-8) {
+    ss = 0;
+    tt = clamp(ff / ee, 0, 1);
+  } else {
+    const cc = _segD1.dot(_segR);
+    if (ee <= 1e-8) {
+      tt = 0;
+      ss = clamp(-cc / aa, 0, 1);
+    } else {
+      const bb = _segD1.dot(_segD2);
+      const denom = aa * ee - bb * bb;
+      ss = denom !== 0 ? clamp((bb * ff - cc * ee) / denom, 0, 1) : 0;
+      tt = (bb * ss + ff) / ee;
+      if (tt < 0) {
+        tt = 0;
+        ss = clamp(-cc / aa, 0, 1);
+      } else if (tt > 1) {
+        tt = 1;
+        ss = clamp((bb - cc) / aa, 0, 1);
+      }
+    }
+  }
+
+  _segC1.copy(a0).addScaledVector(_segD1, ss);
+  _segC2.copy(b0).addScaledVector(_segD2, tt);
+  return _segC1.distanceTo(_segC2);
+}
+
+function distanceSegmentToNpcBody(start, end, npc) {
+  if (!npc?.group) return Infinity;
+  const radius = Math.max(0.1, Number(npc.radius) || BASE_RADIUS);
+  const minY = Number(npc.group.position.y) || 0;
+  const maxY = minY + getNpcBodyHeight(npc);
+  _segP1.set(Number(start?.x) || 0, Number(start?.y) || 0, Number(start?.z) || 0);
+  _segQ1.set(Number(end?.x) || 0, Number(end?.y) || 0, Number(end?.z) || 0);
+  _segP2.set(npc.group.position.x, minY, npc.group.position.z);
+  _segQ2.set(npc.group.position.x, maxY, npc.group.position.z);
+  return Math.max(0, segmentSegmentDistance(_segP1, _segQ1, _segP2, _segQ2) - radius);
+}
+
+function segmentHitsNpcBody(start, end, hitRadius, npc) {
+  return distanceSegmentToNpcBody(start, end, npc) <= Math.max(0.001, Number(hitRadius) || 0);
+}
+
 function distanceToPlayerBody(point) {
   const radius = Math.max(0.25, Number(state.params.playerRadius) || 0.4);
   const length = Math.max(0.1, Number(state.params.playerLength) || 1.2);
@@ -2055,6 +2120,29 @@ export function damageEnemiesAt(position, radius = 0.45, amount = 34) {
     }
   }
   return null;
+}
+
+export function damageEnemiesAlongSegment(start, end, radius = 0.45, amount = 34) {
+  const targets = getDamageableNpcs({ includeAllies: isAllyFriendlyFireEnabled() });
+  let best = null;
+  let bestDistSq = Infinity;
+  for (let i = targets.length - 1; i >= 0; i--) {
+    const enemy = targets[i];
+    if (!segmentHitsNpcBody(start, end, radius, enemy)) continue;
+    const dx = (Number(enemy.group?.position?.x) || 0) - (Number(start?.x) || 0);
+    const dy = (Number(enemy.group?.position?.y) || 0) - (Number(start?.y) || 0);
+    const dz = (Number(enemy.group?.position?.z) || 0) - (Number(start?.z) || 0);
+    const distSq = dx * dx + dy * dy + dz * dz;
+    if (distSq < bestDistSq) {
+      best = enemy;
+      bestDistSq = distSq;
+    }
+  }
+  if (!best) return null;
+  const willDamage = Math.max(0, Number(amount) || 0) > 0;
+  const killed = willDamage ? damageEnemy(best, amount) === true : false;
+  if (killed) awardBulletTimeForKill();
+  return { hit: true, killed, target: best };
 }
 
 export function damageEnemiesInRadius(position, radius = 1, amount = 34, falloff = 1) {

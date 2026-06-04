@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { state } from './state.js';
 import { scene, camera } from './renderer.js';
 import { playerGroup, getPlayerWeaponMuzzle, triggerPlayerWeaponRecoil } from './player.js';
-import { damageEnemiesAt, damageEnemiesInRadius, getEnemies, getAllies } from './enemies.js';
+import { damageEnemiesAt, damageEnemiesAlongSegment, damageEnemiesInRadius, getEnemies, getAllies } from './enemies.js';
 import { isPlacedObjectHit } from './placer.js';
 import { getSfxVolume, applyBulletTimeAudioPitch, registerManagedAudio, playObjectExplosionSound } from './audio.js';
 
@@ -864,7 +864,9 @@ function triggerReticleHitFeedback(result = {}) {
   if (p.hudVisible === false || p.reticleVisible === false) return;
 
   const marker = document.getElementById('hit-marker');
-  if (marker) {
+  if (marker && p.reticleHitMarkerEnabled !== false) {
+    marker.style.display = 'block';
+    marker.setAttribute('aria-hidden', 'false');
     const color = /^#[0-9a-f]{6}$/i.test(String(p.reticleHitMarkerColor || '')) ? p.reticleHitMarkerColor : '#ffffff';
     const size = clamp(Number(p.reticleHitMarkerSize) || 54, 12, 160);
     const weight = clamp(Number(p.reticleHitMarkerWeight) || 3, 0.5, 12);
@@ -1026,6 +1028,7 @@ function createProjectile(config, dir) {
       (Math.random() - 0.5) * 8,
       (Math.random() - 0.5) * 8,
     ),
+    previousPosition: visual.group.position.clone(),
   };
   _activeProjectiles.push(projectile);
 }
@@ -1094,6 +1097,8 @@ export function updateLaserProjectiles(delta, projectileDelta = delta) {
     const projectile = _activeProjectiles[i];
     const { visual, config: projectileConfig } = projectile;
     const step = projectile.velocity.length() * projectileDelta;
+    const previousPosition = projectile.previousPosition || (projectile.previousPosition = visual.group.position.clone());
+    previousPosition.copy(visual.group.position);
 
     projectile.age += delta;
     projectile.life -= delta;
@@ -1142,14 +1147,16 @@ export function updateLaserProjectiles(delta, projectileDelta = delta) {
     }
 
     if (projectileConfig.explosive) {
-      const impactResult = damageEnemiesAt(visual.group.position, projectileConfig.hitRadius, 0);
+      const impactResult = damageEnemiesAlongSegment(previousPosition, visual.group.position, projectileConfig.hitRadius, 0)
+        || damageEnemiesAt(visual.group.position, projectileConfig.hitRadius, 0);
       if (impactResult?.hit) {
         _activeProjectiles.splice(i, 1);
         explodeProjectile(projectile);
         continue;
       }
     } else {
-      const hitResult = damageEnemiesAt(visual.group.position, projectileConfig.hitRadius, projectileConfig.damage);
+      const hitResult = damageEnemiesAlongSegment(previousPosition, visual.group.position, projectileConfig.hitRadius, projectileConfig.damage)
+        || damageEnemiesAt(visual.group.position, projectileConfig.hitRadius, projectileConfig.damage);
       if (hitResult?.hit) {
         triggerReticleHitFeedback(hitResult);
         _activeProjectiles.splice(i, 1);
