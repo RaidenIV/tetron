@@ -2396,10 +2396,16 @@ function playNpcShootSound(config, sourcePosition = null) {
     playNpcWeaponAsset('./assets/blaster2.wav', volume, 0.96 + Math.random() * 0.08);
     return;
   }
+  if (config.type === 'shotgun') {
+    playNpcWeaponAsset('./assets/shotgun2.wav', volume, 0.96 + Math.random() * 0.08);
+    return;
+  }
+  if (config.type === 'sniperRifle') {
+    playNpcWeaponAsset('./assets/sniper.wav', volume, 0.98 + Math.random() * 0.04);
+    return;
+  }
   const pitchByWeapon = {
     pistol: 1.16,
-    shotgun: 0.78,
-    sniperRifle: 0.62,
     rocketLauncher: 0.58,
   };
   playNpcWeaponAsset('./assets/blaster1.wav', volume, (pitchByWeapon[config.type] || 1) * (0.94 + Math.random() * 0.12));

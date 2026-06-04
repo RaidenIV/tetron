@@ -15,7 +15,19 @@ function isBulletTimeActive() {
   return state.params.bulletTimeEnabled !== false && state.slowTimer > 0;
 }
 
+function isKillScreenSlowActive() {
+  return state.playerDead === true
+    && state.params.killScreenEnabled !== false
+    && Number(state.killScreenTimer) > 0;
+}
+
+function getKillScreenAudioRate() {
+  const scale = Number(state.params.killScreenWorldScale);
+  return clamp(Number.isFinite(scale) ? scale : 0.25, 0.05, 1);
+}
+
 export function getBulletTimeAudioRate() {
+  if (isKillScreenSlowActive()) return getKillScreenAudioRate();
   return isBulletTimeActive() ? BULLET_TIME_AUDIO_RATE : 1;
 }
 

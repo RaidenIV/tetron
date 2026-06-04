@@ -297,13 +297,13 @@ export function reloadCurrentWeapon() {
   const reloadTime = getConfiguredReloadTime(type);
   if (reloadTime <= 0) {
     const completed = completeWeaponReload(type);
-    if (completed) playReloadSound();
+    if (completed) playReloadSound(type);
     return completed;
   }
 
   state.weaponReloads = state.weaponReloads || {};
   state.weaponReloads[type] = { timeRemaining: reloadTime, duration: reloadTime };
-  playReloadSound();
+  playReloadSound(type);
   syncWeaponAmmoHud();
   return true;
 }
@@ -930,20 +930,27 @@ function playShootSound(config) {
     playWeaponAsset('./assets/blaster2.wav', vol, 0.96 + Math.random() * 0.08);
     return;
   }
+  if (config.type === 'shotgun') {
+    playWeaponAsset('./assets/shotgun2.wav', vol, 0.96 + Math.random() * 0.08);
+    return;
+  }
+  if (config.type === 'sniperRifle') {
+    playWeaponAsset('./assets/sniper.wav', vol, 0.98 + Math.random() * 0.04);
+    return;
+  }
   const pitchByWeapon = {
     pistol: 1.16,
-    shotgun: 0.78,
-    sniperRifle: 0.62,
     rocketLauncher: 0.58,
   };
   playWeaponAsset('./assets/blaster1.wav', vol, (pitchByWeapon[config.type] || 1) * (0.94 + Math.random() * 0.12));
 }
 
 
-function playReloadSound() {
-  const vol = getSfxVolume('soundSfx_reload', 1);
+function playReloadSound(type = getSelectedWeaponType()) {
+  const vol = getSfxVolume(type === 'pistol' ? 'soundSfx_pistol_reload' : 'soundSfx_reload', 1);
   if (!vol || state.params.soundMuted) return;
-  playWeaponAsset('./assets/reload.wav', vol, 1);
+  const path = type === 'sniperRifle' ? './assets/sniper_reload.wav' : './assets/reload.wav';
+  playWeaponAsset(path, vol, 1);
 }
 
 function playEmptyMagazineSound() {
