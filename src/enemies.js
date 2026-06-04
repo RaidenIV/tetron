@@ -862,6 +862,7 @@ function makeNpcHealthBar(npc) {
   const el = document.createElement('div');
   el.className = 'npc-health-bar game-hud-track';
   el.dataset.team = npc.isAlly ? 'ally' : 'enemy';
+  el.dataset.damaged = 'false';
   el.style.cssText = [
     'width:92px', 'height:10px', 'box-sizing:border-box',
     `background:${trackColor}`,
@@ -913,13 +914,13 @@ function updateNpcHealthBar(npc, { force = false } = {}) {
   const maxDistance = getNpcHealthBarMaxDistance();
   const inRange = maxDistance <= 0 || !camera?.position
     || camera.position.distanceToSquared(npc.group.position) <= maxDistance * maxDistance;
-  const damaged = npc._healthBarDamaged === true || Number(npc.hp) < Number(npc.maxHp);
+  const damaged = npc._healthBarDamaged === true;
   const visible = enabled && damaged && ratio > 0 && inRange;
   const display = visible ? 'block' : 'none';
   const cache = npc._healthBarState || (npc._healthBarState = {});
 
   if (force || cache.display !== display) {
-    npc._healthBarEl.style.display = display;
+    npc._healthBarEl.style.setProperty('display', display, visible ? '' : 'important');
     cache.display = display;
   }
   if (!visible) return;
@@ -936,6 +937,12 @@ function updateNpcHealthBar(npc, { force = false } = {}) {
     }
     cache.ratio = ratio;
   }
+}
+
+function markNpcHealthBarDamaged(npc) {
+  if (!npc) return;
+  npc._healthBarDamaged = true;
+  if (npc._healthBarEl) npc._healthBarEl.dataset.damaged = 'true';
 }
 
 function makeNpcRifleVisual(npc) {
@@ -2086,7 +2093,7 @@ function damageEnemy(enemy, amount) {
   const invincible = enemy.isAlly ? state.params.allyInvincible : state.params.enemyInvincible;
   const prevHp = Number(enemy.hp) || 0;
   if (!invincible) enemy.hp -= Math.max(0, Number(amount) || 0);
-  if ((Number(enemy.hp) || 0) < prevHp) enemy._healthBarDamaged = true;
+  if ((Number(enemy.hp) || 0) < prevHp) markNpcHealthBarDamaged(enemy);
   updateNpcHealthBar(enemy);
   const killed = wasAlive && enemy.hp <= 0 && !enemy.isAlly;
   if (enemy.hp <= 0) destroyEnemy(enemy);
