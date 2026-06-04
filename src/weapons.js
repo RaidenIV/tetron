@@ -1117,11 +1117,17 @@ export function updateLaserProjectiles(delta, projectileDelta = delta) {
     }
     if (visual.glow) visual.glow.visible = visual.group.visible && projectileConfig.projectileBloom !== false;
 
+    const rocketFloorY = Math.max(0.035, projectile.radius);
     const hitGround = projectileConfig.ballistic && !projectileConfig.physicsObject && projectile.age > 0.08 && visual.group.position.y <= 0.09;
+    const rocketHitFloor = projectileConfig.visual === 'rocket' && projectile.age > 0.02 && visual.group.position.y <= rocketFloorY;
     const laserThroughFloor = projectileConfig.visual === 'laser' && visual.group.position.y <= 0.02;
     const hitObject = isPlacedObjectHit(visual.group.position, projectileConfig.visual === 'rocket' ? 0.16 : 0.1);
 
-    if (laserThroughFloor || hitGround || hitObject) {
+    if (rocketHitFloor) {
+      visual.group.position.y = rocketFloorY;
+    }
+
+    if (laserThroughFloor || hitGround || rocketHitFloor || hitObject) {
       _activeProjectiles.splice(i, 1);
       if (projectileConfig.explosive) explodeProjectile(projectile);
       else disposeProjectile(projectile);

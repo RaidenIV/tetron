@@ -913,7 +913,10 @@ const _v = new THREE.Vector3();
 
 export function updatePlayer(delta, moveForward, moveRight, aimTarget = null) {
   const p = state.params;
-  updateJump(delta);
+  const movementScale = Math.max(0.05, Math.min(1, Number(state.worldScale) || 1));
+  const movementDelta = delta * movementScale;
+
+  updateJump(movementDelta);
   applyPlayerContactShadow();
   updatePlayerWeaponVisual(delta, aimTarget);
 
@@ -948,7 +951,7 @@ export function updatePlayer(delta, moveForward, moveRight, aimTarget = null) {
     const aimMult = (state.isAiming && state.params.aimEnabled !== false)
       ? Math.max(0.1, Math.min(1, Number(state.params.aimSpeedMult) || 0.55))
       : 1;
-    playerGroup.position.addScaledVector(_v, speed * aimMult * delta);
+    playerGroup.position.addScaledVector(_v, speed * aimMult * movementDelta);
     resolveCircleAgainstPlacedObjects(playerGroup.position, getPlayerCollisionRadius(), 4, {
       walkableRamps: true,
       footY: playerGroup.position.y,
@@ -960,7 +963,7 @@ export function updatePlayer(delta, moveForward, moveRight, aimTarget = null) {
   }
 
   // Dash — shunts in a fixed direction at higher speed while dashTimer > 0
-  const dashDelta = delta * Math.max(0.05, Math.min(1, Number(state.worldScale) || 1));
+  const dashDelta = movementDelta;
   if (state.dashTimer > 0) {
     state.dashTimer -= dashDelta;
     playerGroup.position.x += state.dashVX * p.dashSpeed * dashDelta;
