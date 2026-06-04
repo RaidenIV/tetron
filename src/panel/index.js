@@ -21400,10 +21400,10 @@ function applyAllParams() {
   if (!('hudWeaponAmmoBgOpacity' in p)) p.hudWeaponAmmoBgOpacity = 0.36;
   if (!('hudWeaponAmmoOffsetX' in p)) p.hudWeaponAmmoOffsetX = 0;
   if (!('hudWeaponAmmoOffsetY' in p)) p.hudWeaponAmmoOffsetY = 0;
-  const clampSetting = (value, min, max, fallback) => {
+  function clampSetting(value, min, max, fallback) {
     const numeric = Number(value);
     return Math.min(max, Math.max(min, Number.isFinite(numeric) ? numeric : fallback));
-  };
+  }
   const normalizeChoice = (value, options, fallback) => (
     options.some(([key]) => key === value) ? value : fallback
   );
@@ -21427,7 +21427,9 @@ function applyAllParams() {
   p.hudWeaponAmmoOffsetX = Math.round(clampSetting(p.hudWeaponAmmoOffsetX, -400, 400, 0));
   p.hudWeaponAmmoOffsetY = Math.round(clampSetting(p.hudWeaponAmmoOffsetY, -300, 300, 0));
   p.weaponRifleTracers = p.weaponRifleTracers !== false;
-  const hexSetting = (value, fallback) => (/^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : fallback);
+  function hexSetting(value, fallback) {
+    return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : fallback;
+  }
   const boolSetting = (value, fallback = false) => (value === true || value === false ? value : fallback);
   const weaponDefaults = {
     Pistol: { damage: 24, range: 55, spread: 0.01, fireRate: 3.6, speed: 70, size: 0.28, length: 0.65, bloomIntensity: 1, bloomSize: 1, color: '#d8dde6', bloomColor: '#d8dde6', bloom: false, reticle: 'dot', reticleSize: 24, reticleWeight: 2, reticleOpacity: 1 },
