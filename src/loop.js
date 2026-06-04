@@ -268,11 +268,41 @@ function clamp(value, min, max) {
 
 function syncKillScreenRuntime() {
   const dead = state.playerDead === true;
-  document.body.toggleAttribute('data-player-dead', dead);
+  const enabled = state.params.killScreenEnabled !== false;
+  const active = dead && enabled;
+  const rawSaturation = Number(state.params.killScreenSaturation);
+  const rawTextSize = Number(state.params.killScreenTextSize);
+  const rawTextOpacity = Number(state.params.killScreenTextOpacity);
+  const saturation = clamp(Number.isFinite(rawSaturation) ? rawSaturation : 0.15, 0, 1);
+  const textSize = clamp(Number.isFinite(rawTextSize) ? rawTextSize : 42, 12, 160);
+  const textOpacity = clamp(Number.isFinite(rawTextOpacity) ? rawTextOpacity : 0.9, 0, 1);
+  const textColor = /^#[0-9a-f]{6}$/i.test(String(state.params.killScreenTextColor || ''))
+    ? state.params.killScreenTextColor
+    : '#ffffff';
+  const text = String(state.params.killScreenText ?? 'PLAYER KILLED');
+
+  if (dead) document.body.setAttribute('data-player-dead', 'true');
+  else document.body.removeAttribute('data-player-dead');
+  document.body.style.setProperty('--kill-screen-saturation', String(saturation));
+  document.documentElement.style.setProperty('--kill-screen-saturation', String(saturation));
+
+  const rendererFilter = dead ? `saturate(${saturation})` : '';
+  if (renderer?.domElement) renderer.domElement.style.filter = rendererFilter;
+  if (labelRenderer?.domElement) labelRenderer.domElement.style.filter = rendererFilter;
+
   const overlay = document.getElementById('kill-screen-overlay');
   if (overlay) {
-    overlay.classList.toggle('kill-screen-enabled', dead && state.params.killScreenEnabled !== false);
+    overlay.classList.toggle('kill-screen-enabled', enabled);
+    overlay.dataset.killScreenActive = active ? 'true' : 'false';
+    overlay.setAttribute('aria-hidden', active ? 'false' : 'true');
+    overlay.style.display = active ? 'flex' : 'none';
+    overlay.style.setProperty('--kill-screen-text-size', `${textSize}px`);
+    overlay.style.setProperty('--kill-screen-text-color', textColor);
+    overlay.style.setProperty('--kill-screen-text-opacity', String(textOpacity));
   }
+
+  const textEl = document.querySelector('[data-kill-screen-text]');
+  if (textEl) textEl.textContent = text;
 }
 
 function getTargetWorldScale() {

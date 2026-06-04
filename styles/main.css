@@ -977,7 +977,7 @@ body[data-hud-layout="hud2"] .bullet-time-meter {
   --kill-screen-text-opacity: 0.9;
   position: fixed;
   inset: 0;
-  z-index: 28;
+  z-index: 80;
   display: none;
   align-items: center;
   justify-content: center;
@@ -988,20 +988,39 @@ body[data-hud-layout="hud2"] .bullet-time-meter {
   text-align: center;
   text-transform: uppercase;
 }
-body[data-player-dead="true"] #kill-screen-overlay.kill-screen-enabled {
+body[data-player-dead] #kill-screen-overlay.kill-screen-enabled,
+body[data-player-dead="true"] #kill-screen-overlay.kill-screen-enabled,
+#kill-screen-overlay[data-kill-screen-active="true"] {
   display: flex;
 }
 .kill-screen-text {
+  position: relative;
+  z-index: 1;
+  display: block;
   color: var(--kill-screen-text-color);
   font-size: var(--kill-screen-text-size);
   line-height: 1;
   opacity: var(--kill-screen-text-opacity);
   text-shadow: 0 0 18px currentColor, 0 2px 4px rgba(0,0,0,0.85);
 }
+body[data-player-dead] .game-renderer,
+body[data-player-dead] .label-renderer,
 body[data-player-dead="true"] .game-renderer,
 body[data-player-dead="true"] .label-renderer {
   filter: saturate(var(--kill-screen-saturation, 0.15));
 }
+body[data-player-dead] #game-hud,
+body[data-player-dead] #radar-canvas,
+body[data-player-dead] #ammo-hud,
+body[data-player-dead] #instructions,
+body[data-player-dead] #fps-overlay,
+body[data-player-dead] #target-reticle,
+body[data-player-dead] #hit-marker,
+body[data-player-dead] #kill-confirmation,
+body[data-player-dead] #bullet-time-meter,
+body[data-player-dead] #bullet-time-indicator,
+body[data-player-dead] #bullet-time-active-indicator,
+body[data-player-dead] #pause-overlay,
 body[data-player-dead="true"] #game-hud,
 body[data-player-dead="true"] #radar-canvas,
 body[data-player-dead="true"] #ammo-hud,

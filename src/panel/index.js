@@ -21252,13 +21252,26 @@ function applyHudSettings() {
 
   const killScreenEl = document.getElementById('kill-screen-overlay');
   const killScreenTextEl = document.querySelector('[data-kill-screen-text]');
+  const killScreenEnabled = p.killScreenEnabled !== false;
+  const killScreenActive = document.body?.dataset?.playerDead === 'true' && killScreenEnabled;
+  const rawKillScreenSaturation = Number(p.killScreenSaturation);
+  const rawKillScreenTextSize = Number(p.killScreenTextSize);
+  const rawKillScreenTextOpacity = Number(p.killScreenTextOpacity);
+  const killScreenSaturation = Math.min(1, Math.max(0, Number.isFinite(rawKillScreenSaturation) ? rawKillScreenSaturation : 0.15));
+  const killScreenTextSize = Math.min(160, Math.max(12, Number.isFinite(rawKillScreenTextSize) ? rawKillScreenTextSize : 42));
+  const killScreenTextColor = /^#[0-9a-f]{6}$/i.test(String(p.killScreenTextColor || '')) ? p.killScreenTextColor : '#ffffff';
+  const killScreenTextOpacity = Math.min(1, Math.max(0, Number.isFinite(rawKillScreenTextOpacity) ? rawKillScreenTextOpacity : 0.9));
+  document.documentElement.style.setProperty('--kill-screen-saturation', String(killScreenSaturation));
+  document.body?.style?.setProperty('--kill-screen-saturation', String(killScreenSaturation));
   if (killScreenEl) {
-    const enabled = p.killScreenEnabled !== false;
-    killScreenEl.classList.toggle('kill-screen-enabled', enabled);
-    killScreenEl.style.setProperty('--kill-screen-text-size', `${Math.min(160, Math.max(12, Number(p.killScreenTextSize) || 42))}px`);
-    killScreenEl.style.setProperty('--kill-screen-text-color', /^#[0-9a-f]{6}$/i.test(String(p.killScreenTextColor || '')) ? p.killScreenTextColor : '#ffffff');
-    killScreenEl.style.setProperty('--kill-screen-text-opacity', String(Math.min(1, Math.max(0, Number(p.killScreenTextOpacity) || 0))));
-    document.documentElement.style.setProperty('--kill-screen-saturation', String(Math.min(1, Math.max(0, Number(p.killScreenSaturation) || 0))));
+    killScreenEl.classList.toggle('kill-screen-enabled', killScreenEnabled);
+    killScreenEl.dataset.killScreenActive = killScreenActive ? 'true' : 'false';
+    killScreenEl.setAttribute('aria-hidden', killScreenActive ? 'false' : 'true');
+    if (killScreenActive) killScreenEl.style.display = 'flex';
+    else killScreenEl.style.display = '';
+    killScreenEl.style.setProperty('--kill-screen-text-size', `${killScreenTextSize}px`);
+    killScreenEl.style.setProperty('--kill-screen-text-color', killScreenTextColor);
+    killScreenEl.style.setProperty('--kill-screen-text-opacity', String(killScreenTextOpacity));
   }
   if (killScreenTextEl) killScreenTextEl.textContent = String(p.killScreenText ?? 'PLAYER KILLED');
 
