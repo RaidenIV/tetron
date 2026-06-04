@@ -262,6 +262,27 @@ const TIME_SLOW_CONFIG = Object.freeze({
   recoverRate: 5.0,
 });
 
+const KILL_SCREEN_FONT_STYLES = Object.freeze({
+  system: { family: "'Segoe UI', system-ui, sans-serif", weight: 800, stretch: 'normal', letterSpacing: '0.24em' },
+  juraBold: { family: "'Jura', 'Segoe UI', system-ui, sans-serif", weight: 700, stretch: 'normal', letterSpacing: '0.2em' },
+  juraMedium: { family: "'Jura', 'Segoe UI', system-ui, sans-serif", weight: 500, stretch: 'normal', letterSpacing: '0.2em' },
+  juraLight: { family: "'Jura', 'Segoe UI', system-ui, sans-serif", weight: 300, stretch: 'normal', letterSpacing: '0.2em' },
+  michroma: { family: "'Michroma', 'Segoe UI', system-ui, sans-serif", weight: 400, stretch: 'normal', letterSpacing: '0.12em' },
+  eurostile: { family: "'Eurostile', 'Segoe UI', system-ui, sans-serif", weight: 700, stretch: 'expanded', letterSpacing: '0.16em' },
+  rodinDb: { family: "'FOT-Rodin Pro DB', 'Segoe UI', system-ui, sans-serif", weight: 700, stretch: 'normal', letterSpacing: '0.12em' },
+  microgrammaExtendedBold: { family: "'Microgramma D Extended Bold', 'Eurostile', 'Segoe UI', system-ui, sans-serif", weight: 800, stretch: 'expanded', letterSpacing: '0.18em' },
+  square721TlBoldExtended: { family: "'Square 721 TL Bold Extended', 'Eurostile', 'Segoe UI', system-ui, sans-serif", weight: 800, stretch: 'expanded', letterSpacing: '0.16em' },
+  square721ExtendedBold: { family: "'Square 721 Extended Bold', 'Eurostile', 'Segoe UI', system-ui, sans-serif", weight: 800, stretch: 'expanded', letterSpacing: '0.16em' },
+});
+
+function getKillScreenFontStyle() {
+  const key = Object.prototype.hasOwnProperty.call(KILL_SCREEN_FONT_STYLES, state.params.killScreenFont)
+    ? state.params.killScreenFont
+    : 'michroma';
+  return { key, style: KILL_SCREEN_FONT_STYLES[key] || KILL_SCREEN_FONT_STYLES.system };
+}
+
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -281,6 +302,7 @@ function syncKillScreenRuntime() {
     ? state.params.killScreenTextColor
     : '#ffffff';
   const text = String(state.params.killScreenText ?? 'PLAYER KILLED');
+  const { key: killScreenFontKey, style: killScreenFont } = getKillScreenFontStyle();
 
   if (dead) document.body.setAttribute('data-player-dead', 'true');
   else document.body.removeAttribute('data-player-dead');
@@ -301,6 +323,11 @@ function syncKillScreenRuntime() {
     overlay.style.setProperty('--kill-screen-text-size', `${textSize}px`);
     overlay.style.setProperty('--kill-screen-text-color', textColor);
     overlay.style.setProperty('--kill-screen-text-opacity', String(textOpacity));
+    overlay.dataset.killScreenFont = killScreenFontKey;
+    overlay.style.fontFamily = killScreenFont.family;
+    overlay.style.fontWeight = String(killScreenFont.weight || 800);
+    overlay.style.fontStretch = killScreenFont.stretch || 'normal';
+    overlay.style.letterSpacing = killScreenFont.letterSpacing || '0.18em';
     overlay.style.setProperty('display', active ? 'flex' : 'none', 'important');
     overlay.style.setProperty('visibility', active ? 'visible' : 'hidden', 'important');
     overlay.style.setProperty('opacity', active ? '1' : '0', 'important');
@@ -313,6 +340,10 @@ function syncKillScreenRuntime() {
     textEl.style.setProperty('display', active ? 'block' : 'none', 'important');
     textEl.style.setProperty('visibility', active ? 'visible' : 'hidden', 'important');
     textEl.style.setProperty('opacity', String(textOpacity), 'important');
+    textEl.style.fontFamily = killScreenFont.family;
+    textEl.style.fontWeight = String(killScreenFont.weight || 800);
+    textEl.style.fontStretch = killScreenFont.stretch || 'normal';
+    textEl.style.letterSpacing = killScreenFont.letterSpacing || '0.18em';
   }
 }
 
