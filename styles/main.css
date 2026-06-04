@@ -835,9 +835,9 @@ body[data-hud-layout="hud2"] .bullet-time-indicator {
 .bullet-time-meter {
   position: fixed;
   left: calc(var(--hud-anchor-left, 22px) + var(--radar-size, 180px) + 8px);
-  bottom: calc(var(--hud-anchor-bottom, 28px) + var(--hud2-bars-height, 10px));
+  bottom: var(--hud-anchor-bottom, 28px);
   width: var(--hud2-bars-height, 10px);
-  height: var(--radar-size, 180px);
+  height: calc(var(--radar-size, 180px) + var(--hud2-bars-height, 10px));
   z-index: 24;
   display: none;
   pointer-events: none;
