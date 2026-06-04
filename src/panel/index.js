@@ -48245,10 +48245,10 @@ function buildScopedJsonControls(body, label, keys, filename) {
 }
 
 function buildEnemies(body) {
+  body.appendChild(toggle('Enemy Invincibility', 'enemyInvincible'));
   body.appendChild(select('Enemy Type', 'enemyType', ENEMY_TYPE_OPTIONS));
   body.appendChild(slider({ key: 'enemyCount', label: 'Number of Enemies', min: 0, max: 50, step: 1, dec: 0 }));
   body.appendChild(slider({ key: 'enemyHealth', label: 'Health Amount', min: 1, max: 1000, step: 1, dec: 0 }));
-  body.appendChild(toggle('Enemy Invincible', 'enemyInvincible'));
   body.appendChild(select('Behavior', 'enemyBehavior', ENEMY_BEHAVIOR_OPTIONS));
   body.appendChild(slider({ key: 'enemyMoveSpeed', label: 'Movement Speed', min: 0, max: 12, step: 0.1, dec: 1 }));
   body.appendChild(slider({ key: 'enemyDamage', label: 'Damage Amount', min: 0, max: 250, step: 1, dec: 0 }));
@@ -48780,11 +48780,11 @@ function buildController(body) {
 
 
 function buildAllies(body) {
+  body.appendChild(toggle('Ally Invincibility', 'allyInvincible'));
+  body.appendChild(toggle('Friendly Fire', 'allyFriendlyFire'));
   body.appendChild(select('Ally Type', 'allyType', ENEMY_TYPE_OPTIONS));
   body.appendChild(slider({ key: 'allyCount', label: 'Number of Allies', min: 0, max: 50, step: 1, dec: 0 }));
   body.appendChild(slider({ key: 'allyHealth', label: 'Health Amount', min: 1, max: 1000, step: 1, dec: 0 }));
-  body.appendChild(toggle('Ally Invincible', 'allyInvincible'));
-  body.appendChild(toggle('Friendly Fire', 'allyFriendlyFire'));
   body.appendChild(select('Behavior', 'allyBehavior', ENEMY_BEHAVIOR_OPTIONS));
   body.appendChild(slider({ key: 'allyMoveSpeed', label: 'Movement Speed', min: 0, max: 12, step: 0.1, dec: 1 }));
   body.appendChild(slider({ key: 'allyDamage', label: 'Damage Amount', min: 0, max: 250, step: 1, dec: 0 }));
