@@ -152,6 +152,7 @@ const PRESET_SETTINGS = [
   "buildAreaBoundaryOpacity": 0.28,
   "buildAreaBoundaryCollision": true,
   "showFps": true,
+  "fpsCounterSize": 11,
   "hudVisible": true,
   "hudLayout": "hud2",
   "hudFont": "michroma",
@@ -9117,6 +9118,7 @@ const PRESET_SETTINGS = [
   "soundSfx_shoot": 1,
   "soundSfx_dash": 1,
   "soundSfx_player_hit": 1,
+  "soundSfx_player_death": 1,
   "soundSfx_standard_hit": 1,
   "soundSfx_elite_hit": 1,
   "soundSfx_explode": 1,
@@ -10405,6 +10407,7 @@ function buildScene(body) {
 
   body.appendChild(subhdr('Debug'));
   body.appendChild(toggle('Show FPS', 'showFps', () => applyHudSettings()));
+  body.appendChild(slider({ key: 'fpsCounterSize', label: 'FPS Size', min: 8, max: 48, step: 1, dec: 0, onChange: () => applyHudSettings() }));
 }
 
 
@@ -10934,6 +10937,7 @@ function buildSound(body) {
     ['Dash',           'soundSfx_dash'],
     ['Jump',           'soundSfx_jump'],
     ['Player Hit',     'soundSfx_player_hit'],
+    ['Player Death',   'soundSfx_player_death'],
     ['Enemy Grunt',    'soundSfx_enemy_grunt'],
     ['Bullet Time Slow', 'soundSfx_bullet_time_slow'],
     ['Bullet Time Heart', 'soundSfx_bullet_time_heart'],
@@ -11821,7 +11825,11 @@ function applyHudSettings() {
   if (instructionsEl) instructionsEl.style.display = p.hudVisible ? '' : 'none';
 
   const fpsEl = document.getElementById('fps-overlay');
-  if (fpsEl) fpsEl.style.display = p.hudVisible && p.showFps ? '' : 'none';
+  if (fpsEl) {
+    fpsEl.style.display = p.hudVisible && p.showFps ? '' : 'none';
+    const fpsCounterSize = Math.min(48, Math.max(8, Number(p.fpsCounterSize) || 11));
+    fpsEl.style.setProperty('--fps-counter-size', `${fpsCounterSize}px`);
+  }
 
   const btIndicatorEl = document.getElementById('bullet-time-indicator');
   if (btIndicatorEl) {
@@ -12024,6 +12032,8 @@ function applyAllParams() {
   if (!('reticleHitMarkerDuration' in p)) p.reticleHitMarkerDuration = 190;
   if (!('reticleKillConfirmDuration' in p)) p.reticleKillConfirmDuration = 320;
   if (!('soundSfx_enemy_grunt' in p)) p.soundSfx_enemy_grunt = 1;
+  if (!('soundSfx_player_death' in p)) p.soundSfx_player_death = 1;
+  p.soundSfx_player_death = clampSetting(p.soundSfx_player_death, 0, 1, 1);
   if (!('soundSfx_object_explode' in p)) p.soundSfx_object_explode = p.soundSfx_explode ?? 1;
 
   if (!('soundSfx_bullet_time_end' in p)) p.soundSfx_bullet_time_end = 1;
@@ -12045,6 +12055,7 @@ function applyAllParams() {
   if (!('doubleJumpForceMultiplier' in p)) p.doubleJumpForceMultiplier = 1;
   if (!('doubleJumpResetVelocity' in p)) p.doubleJumpResetVelocity = true;
   if (!('hudLayout' in p)) p.hudLayout = 'hud1';
+  p.fpsCounterSize = clampSetting(p.fpsCounterSize, 8, 48, 11);
   if (!('hudWeaponAmmoVisible' in p)) p.hudWeaponAmmoVisible = true;
   if (!('hudWeaponAmmoScale' in p)) p.hudWeaponAmmoScale = 1;
   if (!('hudWeaponAmmoOpacity' in p)) p.hudWeaponAmmoOpacity = 1;
@@ -12415,7 +12426,7 @@ export function initPanel() {
       <button class="sb-close" id="sb-close-btn" title="Minimize sidebar" aria-label="Minimize sidebar">◀</button>
     </div>
     <div id="sb-body" class="sb-body"></div>
-    <div class="sb-footer-logo" aria-hidden="true"><img class="sb-logo" src="./assets/white.png" alt=""></div>
+    <div class="sb-footer-logo" aria-hidden="true"><img class="sb-logo" src="./assets/white.svg" alt=""></div>
   `;
   document.getElementById('sb-close-btn')?.addEventListener('click', togglePanel);
 

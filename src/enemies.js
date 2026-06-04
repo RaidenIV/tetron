@@ -12,7 +12,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { scene, camera } from './renderer.js';
 import { state, addBulletTimeAmount } from './state.js';
 import * as PlayerModule from './player.js';
-import { getSfxVolume, applyBulletTimeAudioPitch, registerManagedAudio, playObjectExplosionSound, playBulletTimeEndSound } from './audio.js';
+import { getSfxVolume, applyBulletTimeAudioPitch, registerManagedAudio, playObjectExplosionSound, playBulletTimeEndSound, playPlayerDeathSound } from './audio.js';
 import { resolveCircleAgainstPlacedObjects, isPlacedObjectHit } from './placer.js';
 
 const playerGroup = PlayerModule.playerGroup;
@@ -1967,6 +1967,7 @@ function beginPlayerDeath() {
   state.playerDeathDuration = duration;
   state.killScreenTimer = killScreenDuration;
   endBulletTimeForPlayerDeath();
+  playPlayerDeathSound(playerGroup?.position || null);
   document.body?.setAttribute?.('data-player-dead', 'true');
   document.body?.setAttribute?.('data-kill-screen-active', state.params.killScreenEnabled !== false ? 'true' : 'false');
   state.primaryFire = false;

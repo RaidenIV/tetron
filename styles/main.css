@@ -300,7 +300,7 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   color: #ffffff; background: #000000;
   border: 1px solid rgba(255,255,255,0.18);
   border-radius: 6px; padding: 5px 8px;
-  font-size: 11px; font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: var(--fps-counter-size, 11px); font-family: 'Segoe UI', system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
   pointer-events: none; z-index: 20;
 }

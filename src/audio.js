@@ -209,3 +209,16 @@ export function playBulletTimeEndSound() {
   applyBulletTimeAudioPitch(sound, 1);
   sound.play().catch(() => {});
 }
+
+let _playerDeathEl = null;
+export function playPlayerDeathSound(sourcePosition = null) {
+  const volume = getSfxVolume('soundSfx_player_death', 1, sourcePosition);
+  if (volume <= 0) return;
+  if (!_playerDeathEl) _playerDeathEl = registerManagedAudio(new Audio('./assets/laugh.wav'), 1);
+  const sound = _playerDeathEl.paused ? _playerDeathEl : _playerDeathEl.cloneNode();
+  registerManagedAudio(sound, 1);
+  sound.volume = volume;
+  sound.currentTime = 0;
+  applyBulletTimeAudioPitch(sound, 1);
+  sound.play().catch(() => {});
+}
