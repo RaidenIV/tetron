@@ -3,14 +3,14 @@
 // Pattern: write to state.params first, then call onChange to push into Three.js.
 // This ensures JSON export always reflects reality.
 import * as THREE from 'three';
-import { state, defaultParams } from '../state.js';
+import { state, defaultParams, resetBulletTimeAmount } from '../state.js';
 import { scene, renderer, applyIsoCamD, setActiveCamera, onResize, isThirdPersonCameraMode } from '../renderer.js';
 import { ambientLight, sunLight, fillLight, rimLight } from '../lighting.js';
 import {
   playerMat, playerBaseColor, rebuildPlayerGeo, applyPlayerMaterial, applyShieldSettings, applyPlayerWeaponSettings,
 } from '../player.js';
 import { setFloorVisible, setGridVisible, setFloorColor, setGridColor, applyFloorSettings, fitBuildAreaToPlacedObjects } from '../terrain.js';
-import { spawnEnemiesFromSettings, clearEnemies, applyTagSettings, spawnAlliesFromSettings, clearAllies, rebuildEditorPlacedNpcs } from '../enemies.js';
+import { spawnEnemiesFromSettings, clearEnemies, applyTagSettings, spawnAlliesFromSettings, clearAllies, rebuildEditorPlacedNpcs, applyNpcWeaponSettings } from '../enemies.js';
 import { clearGameplayInput } from '../input.js';
 import { ASSET_CATALOGUE, ASSET_CATEGORY_LABELS } from '../assets-catalogue.js';
 import {
@@ -21,9 +21,9 @@ import {
   selectConnectedPlacedStructureFromSelection, duplicateSelectedPlacedObjects,
   saveSelectedPlacedObjectsAsPrefab, applySelectedPlacedObjectEdits,
 } from '../placer.js';
-import { registerManagedAudio, applyBulletTimeAudioPitch, pauseManagedAudio, resumeManagedAudio } from '../audio.js';
+import { registerManagedAudio, applyBulletTimeAudioPitch, setManagedAudioVolume, pauseManagedAudio, resumeManagedAudio } from '../audio.js';
 import { resetWeaponAmmo, resetAllWeaponAmmo, syncWeaponAmmoHud } from '../weapons.js';
-import { setEditorModeEnabled, applyEditorSettings, teleportPlayerToSpawn, clearPlayerSpawn, refreshPlayerSpawnMarker } from '../editor.js';
+import { setEditorModeEnabled, applyEditorSettings, teleportPlayerToSpawn, clearPlayerSpawn, refreshPlayerSpawnMarker, clearEnemySpawn, refreshEnemySpawnMarker, clearAllySpawn, refreshAllySpawnMarker } from '../editor.js';
 
 const sidebar = document.getElementById('sidebar');
 
@@ -40,9430 +40,12 @@ const ICON_HUD = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox=
 const ICON_CONTROLLER = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M189-186q-51 0-86-35t-35-86q0-8 .5-15t2.5-15l84-336q12-45 48-73t82-28h390q46 0 82 28t48 73l84 336q2 8 3 15.5t1 15.5q0 51-35.5 85.5T771-186q-35 0-64-18.5T662-254l-29-59q-8-17-24-25t-34-8H385q-18 0-34 8t-24 25l-29 59q-15 32-44.5 50T189-186Zm3-28q26 0 48-14t33-37l28-58q12-24 35-37.5t49-13.5h190q27 0 49.5 14.5T660-322l28 57q11 23 33 37t48 14q39 0 67-26.5t28-64.5q0-3-3-25l-84-335q-9-35-37.5-58T675-746H285q-37 0-65.5 23T183-665L99-330q-1 4-3 24 0 39 28.5 65.5T192-214Zm367.5-326.5Q568-549 568-560t-8.5-19.5Q551-588 540-588t-19.5 8.5Q512-571 512-560t8.5 19.5Q529-532 540-532t19.5-8.5Zm80-80Q648-629 648-640t-8.5-19.5Q631-668 620-668t-19.5 8.5Q592-651 592-640t8.5 19.5Q609-612 620-612t19.5-8.5Zm0 160Q648-469 648-480t-8.5-19.5Q631-508 620-508t-19.5 8.5Q592-491 592-480t8.5 19.5Q609-452 620-452t19.5-8.5Zm80-80Q728-549 728-560t-8.5-19.5Q711-588 700-588t-19.5 8.5Q672-571 672-560t8.5 19.5Q689-532 700-532t19.5-8.5ZM350-480q4-4 4-10v-56h56q6 0 10-4t4-10q0-6-4-10t-10-4h-56v-56q0-6-4-10t-10-4q-6 0-10 4t-4 10v56h-56q-6 0-10 4t-4 10q0 6 4 10t10 4h56v56q0 6 4 10t10 4q6 0 10-4Zm130 0Z"/></svg>`;
 
 const ICON_SOUND = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M564-195v-30q81-30 130.5-100T744-481q0-86-49.5-156T564-737v-30q92 33 150 111t58 175q0 97-58 175T564-195ZM188-412v-136h130l126-126v388L318-412H188Zm376 56v-250q30 22 45 55.5t15 70.5q0 37-15.5 69.5T564-356ZM416-606l-86 86H216v80h114l86 86v-252ZM316-480Z"/></svg>`;
-const ICON_ALLIES = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M52-262v-26q0-35 38-58.5t97-23.5q8 0 18 1t22 3q-8 15-11.5 30.5T212-305v43H52Zm240 0v-39q0-21.84 13-39.92Q318-359 344-372t60-19.5q34-6.5 75.6-6.5 42.4 0 76.4 6.5 34 6.5 60 19.5t39 31.08q13 18.08 13 39.92v39H292Zm456 0v-42.7q0-17.08-3.5-32.19T734-366q13-2 22.5-3t17.5-1q59 0 96.5 23.5T908-288v26H748Zm-428-28h320v-11q0-31-44-50t-116-19q-72 0-116 19t-44 50v11ZM186.73-407q-20.73 0-35.23-14.69Q137-436.38 137-457q0-20 14.69-34.5T187-506q20 0 35 14.5t15 34.8q0 19.7-14.45 34.7-14.45 15-35.82 15ZM774-407q-20 0-35-15t-15-34.7q0-20.3 15-34.8 15-14.5 35.19-14.5 20.81 0 35.31 14.5Q824-477 824-457q0 20.62-14.37 35.31Q795.25-407 774-407Zm-293.65-21Q448-428 425-450.75T402-506q0-33.15 22.75-55.58Q447.5-584 480-584q33.15 0 55.58 22.32Q558-539.35 558-506.35 558-474 535.68-451q-22.33 23-55.33 23Zm.15-28q20.5 0 35-15t14.5-35.5q0-20.5-14.37-35Q501.25-556 480-556q-20 0-35 14.37-15 14.38-15 35.63 0 20 15 35t35.5 15Zm-.5 166Zm0-216Z"/></svg>`;
+const ICON_ALLIES = `<img class="sb-icon-img" src="./assets/allies.svg" alt="" aria-hidden="true" />`;
 const ICON_LANDSCAPE = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M206-416q8-15 21.88-23.5Q241.75-448 259-448q18 0 33.1 9.37 15.1 9.38 21.9 26.63l19 44q9 19 33.06 17.43Q390.13-352.14 397-371l83-261q12-37 44-58.5t70.38-21.5Q632-712 664-691q32 21 44 57l148 404q2 7-1 12.5t-10.97 5.5q-4.55 0-8.34-2.5T830-221L681-625q-9-28-33.5-43.5T594-684q-29 0-53.5 16T507-624l-83 261q-7 19-23 30.5T364.61-321q-18.35 0-33.98-9.5Q315-340 307-357l-21-50q-8-17-27.5-17.5T230-408l-98 189q-1.69 3.18-5.08 5.09-3.39 1.91-7.12 1.91-7.8 0-11.8-6-4-6 0-13l98-185Zm58.94-148q-37.94 0-65.44-27.15-27.5-27.14-27.5-64.61Q172-694 199.5-721q27.5-27 65.44-27t64.5 26.92Q356-694.15 356-655.69 356-618 329.44-591t-64.5 27Zm-.1-28q26.84 0 45-19T328-656.5q0-26.5-18.16-45t-45-18.5Q238-720 219-701.6q-19 18.4-19 45.6 0 26 19 45t45.84 19ZM365-321ZM264-656Z"/></svg>`;
 const ICON_ASSETS = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M450-199 256-312q-14.25-8.43-22.12-22.21Q226-348 226-364v-226q0-16 7.88-29.79Q241.75-633.57 256-642l194-113q14.33-8 30.16-8 15.84 0 29.84 8l194 113q14.25 8.43 22.13 22.21Q734-606 734-590v226q0 16-7.87 29.79Q718.25-320.43 704-312L510-199q-14.33 8-30.16 8-15.84 0-29.84-8Zm16-23v-248L254-590v226q0 8 4 15t12 12l196 115Zm28 0 196-115q8-5 12-12t4-15v-226L494-470v248ZM145.96-666q-5.96 0-9.96-4.03-4-4.02-4-9.97v-88q0-24.75 17.63-42.38Q167.25-828 192-828h88q5.95 0 9.98 4.04 4.02 4.03 4.02 10 0 5.96-4.02 9.96-4.03 4-9.98 4h-88q-14 0-23 9t-9 23v88q0 5.95-4.04 9.97-4.03 4.03-10 4.03ZM192-132q-24.75 0-42.37-17.63Q132-167.25 132-192v-88q0-5.95 4.04-9.98 4.03-4.02 10-4.02 5.96 0 9.96 4.02 4 4.03 4 9.98v88q0 14 9 23t23 9h88q5.95 0 9.98 4.04 4.02 4.03 4.02 10 0 5.96-4.02 9.96-4.03 4-9.98 4h-88Zm576 0h-88q-5.95 0-9.97-4.04-4.03-4.03-4.03-10 0-5.96 4.03-9.96 4.02-4 9.97-4h88q14 0 23-9t9-23v-88q0-5.95 4.04-9.98 4.03-4.02 10-4.02 5.96 0 9.96 4.02 4 4.03 4 9.98v88q0 24.75-17.62 42.37Q792.75-132 768-132Zm32-548v-88q0-14-9-23t-23-9h-88q-5.95 0-9.97-4.04-4.03-4.03-4.03-10 0-5.96 4.03-9.96 4.02-4 9.97-4h88q24.75 0 42.38 17.62Q828-792.75 828-768v88q0 5.95-4.04 9.97-4.03 4.03-10 4.03-5.96 0-9.96-4.03-4-4.02-4-9.97ZM480-494l212-122-196-113q-8-5-16-5t-16 5L268-616l212 122Zm0 14Zm0-14Zm14 24Zm-28 0Z"/></svg>`;
 const ICON_SCENARIOS = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="m192-748 39 78q7 14 20 22t28 8q30 0 46-25.5t2-52.5l-15-30h80l39 78q7 14 20 22t28 8q30 0 46-25.5t2-52.5l-15-30h80l39 78q7 14 20 22t28 8q30 0 46-25.5t2-52.5l-15-30h56q26 0 43 17t17 43v416q0 26-17 43t-43 17H192q-26 0-43-17t-17-43v-416q0-26 17-43t43-17Zm-32 136v340q0 14 9 23t23 9h576q14 0 23-9t9-23v-340H160Zm0 0v372-372Z"/></svg>`;
 const PRESET_SETTINGS = [
-  { key: 'g40', label: 'G40', path: './presets/g40.json', data: {
-      "cameraMode": "third2",
-      "isoCamD": 12,
-      "thirdDist": 5,
-      "thirdHeight": 3,
-      "thirdFov": 62,
-      "thirdMinDist": 3,
-      "thirdPitchDistanceCompression": 0.75,
-      "third2PitchMin": -0.9,
-      "third2PitchMax": 0.85,
-      "third2BodyFrameStrength": 1,
-      "third2BodyFrameHeight": 1.35,
-      "third2BodyScreenY": 0.45,
-      "third2MinEyeHeight": 0.15,
-      "thirdAzimuth": 5.286629385640168,
-      "thirdLookAhead": 3.8,
-      "thirdSmoothPos": 10,
-      "thirdSmoothLook": 12,
-      "thirdMouseLook": true,
-      "aimEnabled": true,
-      "aimFovDelta": -18,
-      "aimDistDelta": -1.5,
-      "aimSpeedMult": 0.55,
-      "aimSmooth": 10,
-      "thirdMouseSensitivityX": 0.003,
-      "thirdMouseSensitivityY": 0.0024,
-      "thirdPitch": -0.09799999999999828,
-      "thirdOffsetMode": "parallel",
-      "thirdOffsetX": 1.25,
-      "thirdOffsetY": -0.25,
-      "thirdOffsetZ": -0.25,
-      "cameraShakeEnabled": true,
-      "cameraShakeIntensity": 1.5,
-      "cameraShakeDuration": 1,
-      "cameraShakeFrequency": 40,
-      "cameraShakeProximity": true,
-      "cameraShakeRadius": 30,
-      "cameraShakeMinFactor": 0.25,
-      "playerSpeed": 7,
-      "playerColor": "#0044cc",
-      "playerMetalness": 0.67,
-      "playerRoughness": 0,
-      "playerRadius": 0.4,
-      "playerLength": 1.2,
-      "playerMaxHealth": 100,
-      "playerHealth": 0,
-      "playerMaxArmor": 100,
-      "playerArmor": 0,
-      "playerInvincible": true,
-      "jumpEnabled": true,
-      "doubleJumpEnabled": true,
-      "jumpForce": 9.5,
-      "jumpGravity": 26,
-      "bulletTimeEnabled": true,
-      "bulletTimeDuration": 7.5,
-      "bulletTimeCooldown": 4,
-      "bulletTimeScale": 0.25,
-      "shieldVisible": false,
-      "shieldColor": "#1e7bff",
-      "shieldOpacity": 0.4,
-      "shieldRadius": 2.2,
-      "shieldHexSize": 0.05,
-      "shieldLineThickness": 0.01,
-      "shieldGlow": true,
-      "shieldLineBloom": 1,
-      "shieldBloomIntensity": 0,
-      "shieldBloomRadius": 2.01,
-      "shieldFresnelPower": 3,
-      "dashEnabled": true,
-      "dashSpeed": 28,
-      "dashDuration": 0.18,
-      "dashCooldown": 1.4,
-      "ambientIntensity": 0,
-      "sunIntensity": 5.5,
-      "fillIntensity": 4,
-      "rimIntensity": 6,
-      "sunAngleX": 16,
-      "sunAngleZ": 14,
-      "shadows": true,
-      "shadowQuality": "high",
-      "fogNear": 1,
-      "fogFar": 200,
-      "bgColor": "#142130",
-      "floorColor": "#0C1620",
-      "gridColor": "#000000",
-      "showFloor": true,
-      "showGrid": true,
-      "floorMode": "hybrid",
-      "buildAreaEnabled": true,
-      "buildAreaCenterX": 0,
-      "buildAreaCenterZ": 0,
-      "buildAreaWidth": 200,
-      "buildAreaDepth": 200,
-      "buildAreaAutoExpand": false,
-      "buildAreaAutoExpandMargin": 4,
-      "buildAreaBoundaryVisible": true,
-      "buildAreaBoundaryColor": "#ffffff",
-      "buildAreaBoundaryWalls": true,
-      "buildAreaBoundaryHeight": 2,
-      "buildAreaBoundaryOpacity": 0.28,
-      "buildAreaBoundaryCollision": true,
-      "showFps": true,
-      "hudVisible": true,
-      "hudFont": "michroma",
-      "hudNpcHealthBars": true,
-      "hudEnemyHealthBars": true,
-      "hudAllyHealthBars": true,
-      "hudNpcHealthBarRange": 60,
-      "reticleVisible": true,
-      "reticleType": "tr42",
-      "reticleColor": "#ffffff",
-      "reticleSize": 50,
-      "reticleThickness": 0.5,
-      "reticleWeight": 0.5,
-      "reticleOpacity": 0.5,
-      "reticleGlow": false,
-      "laserEnabled": true,
-      "laserBloom": true,
-      "laserBloomColor": "#ff1100",
-      "laserBloomIntensity": 0.55,
-      "laserProjectileSpeed": 80,
-      "laserRange": 42,
-      "laserFireRate": 5,
-      "enemyType": "rusher",
-      "enemyCount": 10,
-      "enemyHealth": 10,
-      "enemyInvincible": false,
-      "enemyBehavior": "rush",
-      "enemyMoveSpeed": 3,
-      "enemyDamage": 10,
-      "enemyPlacement": "random",
-      "enemyWeaponType": "rifle",
-      "allyType": "orbiter",
-      "allyCount": 10,
-      "allyHealth": 100,
-      "allyInvincible": false,
-      "allyFriendlyFire": false,
-      "allyBehavior": "keepDistance",
-      "allyMoveSpeed": 3,
-      "allyDamage": 10,
-      "allyPlacement": "random",
-      "allyWeaponType": "rifle",
-      "enemyDestructionEnabled": true,
-      "destructionEnemiesParticleCount": 50,
-      "destructionEnemiesParticleSize": 0.32,
-      "destructionEnemiesParticleSpeed": 0.6,
-      "destructionEnemiesParticleGlow": 24,
-      "destructionEnemiesColor": "#ff0000",
-      "destructionEnemiesPhysics": "gravity",
-      "destructionEnemiesDespawnTime": 5,
-      "destructionEnemiesParticleDespawnTime": 1,
-      "destructionEnemiesCorpseFadeTime": 1,
-      "destructionAlliesParticleCount": 40,
-      "destructionAlliesParticleSize": 0.32,
-      "destructionAlliesParticleSpeed": 1.25,
-      "destructionAlliesParticleGlow": 8,
-      "destructionAlliesColor": "#00cc44",
-      "destructionAlliesPhysics": "gravity",
-      "destructionAlliesDespawnTime": 3,
-      "destructionAlliesParticleDespawnTime": 1,
-      "destructionAlliesCorpseFadeTime": 1,
-      "enemyDestructionStandardCount": 10,
-      "enemyDestructionStandardSize": 0.25,
-      "enemyDestructionStandardSpeed": 1,
-      "enemyDestructionEliteCount": 100,
-      "enemyDestructionEliteSize": 0.5,
-      "enemyDestructionEliteSpeed": 1.75,
-      "enemyDestructionEliteGlow": 12,
-      "controllerEnabled": true,
-      "controllerMoveDeadzone": 0.12,
-      "controllerLookDeadzone": 0.1,
-      "controllerLookSensX": 0.045,
-      "controllerLookSensY": 0.036,
-      "controllerInvertY": false,
-      "controllerFireThreshold": 0.5,
-      "controllerVibration": true,
-      "tagEnabled": true,
-      "tagColor": "#ff2828",
-      "tagSize": 25,
-      "tagDwellTime": 0.6,
-      "tagThickness": 12,
-      "tagBloom": 0,
-      "tagShadow": 1,
-      "tagHeight": 30,
-      "placedObjects": [
-          {
-              "objectId": "placed_mpwiloj1_1",
-              "assetId": "sphere",
-              "x": -180.5,
-              "y": 0.5,
-              "z": 514.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwyzrqd_9",
-              "assetId": "tall_box",
-              "x": -361.5,
-              "y": 1,
-              "z": 1500.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwyzrqd_3",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwyzrqd_a",
-              "assetId": "tall_box",
-              "x": -361.5,
-              "y": 1,
-              "z": 1501.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwyzrqd_3",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwyzrqd_b",
-              "assetId": "tall_box",
-              "x": -361.5,
-              "y": 1,
-              "z": 1502.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwyzrqd_3",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwyzrqd_c",
-              "assetId": "tall_box",
-              "x": -361.5,
-              "y": 1,
-              "z": 1503.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwyzrqd_3",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwz9lbp_2b",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": 0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwz9lbp_b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwz9lbp_2c",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": 1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwz9lbp_b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwz9lbp_2d",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": 2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwz9lbp_b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwz9lbp_2e",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": 3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwz9lbp_b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwz9qhh_2f",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": 4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwz9qhh_c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwz9qhh_2g",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": 5.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwz9qhh_c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwz9qhh_2h",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": 6.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwz9qhh_c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwz9qhh_2i",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": 7.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwz9qhh_c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwz9ypk_2j",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": -3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwz9ypk_d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwz9ypk_2k",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": -2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwz9ypk_d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwz9ypk_2l",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": -1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwz9ypk_d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwz9ypk_2m",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": -0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwz9ypk_d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwza13n_2n",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": 8.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwza13n_e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwza13n_2o",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": 9.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwza13n_e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwza13n_2p",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": 10.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwza13n_e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwza13n_2q",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": 11.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwza13n_e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzadn7_2r",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": -3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzadn7_f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzadn7_2s",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": -2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzadn7_f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzadn7_2t",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": -1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzadn7_f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzadn7_2u",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": -0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzadn7_f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzaekd_2v",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": 0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzaekd_g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzaekd_2w",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": 1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzaekd_g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzaekd_2x",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": 2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzaekd_g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzaekd_2y",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": 3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzaekd_g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzafjx_2z",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": 4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzafjx_h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzafjx_30",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": 5.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzafjx_h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzafjx_31",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": 6.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzafjx_h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzafjx_32",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": 7.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzafjx_h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzahm7_33",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": 8.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzahm7_i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzahm7_34",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": 9.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzahm7_i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzahm7_35",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": 10.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzahm7_i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzahm7_36",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": 11.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzahm7_i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzai6e_37",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": 8.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzai6e_j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzai6e_38",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": 9.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzai6e_j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzai6e_39",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": 10.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzai6e_j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzai6e_3a",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": 11.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzai6e_j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzajdd_3b",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": 5.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzajdc_k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzajdd_3c",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": 6.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzajdc_k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzajdd_3d",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": 7.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzajdc_k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzamhd_3f",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": -3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzamhd_l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzamhd_3g",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": -2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzamhd_l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzamhd_3h",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": -1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzamhd_l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzamhd_3i",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": -0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzamhd_l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzaou3_3j",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": 0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzaou3_m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzaou3_3k",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": 1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzaou3_m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzaou3_3l",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": 2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzaou3_m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzaou3_3m",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": 3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzaou3_m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzapxu_3n",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": 4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzapxu_n",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb5fo_3r",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb5fo_o",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb5fo_3s",
-              "assetId": "tall_box",
-              "x": 2.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb5fo_o",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb5fo_3t",
-              "assetId": "tall_box",
-              "x": 3.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb5fo_o",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb5fo_3u",
-              "assetId": "tall_box",
-              "x": 4.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb5fo_o",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb6tv_3v",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb6tv_p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb6tv_3w",
-              "assetId": "tall_box",
-              "x": 2.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb6tv_p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb6tv_3x",
-              "assetId": "tall_box",
-              "x": 3.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb6tv_p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb6tv_3y",
-              "assetId": "tall_box",
-              "x": 4.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb6tv_p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb73g_3z",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb73g_q",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb73g_40",
-              "assetId": "tall_box",
-              "x": 2.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb73g_q",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb73g_41",
-              "assetId": "tall_box",
-              "x": 3.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb73g_q",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb73g_42",
-              "assetId": "tall_box",
-              "x": 4.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb73g_q",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb9k2_43",
-              "assetId": "tall_box",
-              "x": 5.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb9k1_r",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb9k2_44",
-              "assetId": "tall_box",
-              "x": 6.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb9k1_r",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb9k2_45",
-              "assetId": "tall_box",
-              "x": 7.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb9k1_r",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb9k2_46",
-              "assetId": "tall_box",
-              "x": 8.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb9k1_r",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb9s5_47",
-              "assetId": "tall_box",
-              "x": 5.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb9s5_s",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb9s5_48",
-              "assetId": "tall_box",
-              "x": 6.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb9s5_s",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb9s5_49",
-              "assetId": "tall_box",
-              "x": 7.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb9s5_s",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzb9s5_4a",
-              "assetId": "tall_box",
-              "x": 8.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzb9s5_s",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzba18_4b",
-              "assetId": "tall_box",
-              "x": 5.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzba18_t",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzba18_4c",
-              "assetId": "tall_box",
-              "x": 6.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzba18_t",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzba18_4d",
-              "assetId": "tall_box",
-              "x": 7.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzba18_t",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzba18_4e",
-              "assetId": "tall_box",
-              "x": 8.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzba18_t",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbbtw_4f",
-              "assetId": "tall_box",
-              "x": 9.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbbtw_u",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbbtw_4g",
-              "assetId": "tall_box",
-              "x": 10.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbbtw_u",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbbtx_4h",
-              "assetId": "tall_box",
-              "x": 11.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbbtw_u",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbbtx_4i",
-              "assetId": "tall_box",
-              "x": 12.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbbtw_u",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbc0b_4j",
-              "assetId": "tall_box",
-              "x": 9.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbc0b_v",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbc0b_4k",
-              "assetId": "tall_box",
-              "x": 10.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbc0b_v",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbc0b_4l",
-              "assetId": "tall_box",
-              "x": 11.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbc0b_v",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbc0b_4m",
-              "assetId": "tall_box",
-              "x": 12.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbc0b_v",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbc77_4n",
-              "assetId": "tall_box",
-              "x": 9.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbc77_w",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbc78_4o",
-              "assetId": "tall_box",
-              "x": 10.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbc77_w",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbc78_4p",
-              "assetId": "tall_box",
-              "x": 11.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbc77_w",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbc78_4q",
-              "assetId": "tall_box",
-              "x": 12.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbc77_w",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbgy6_4r",
-              "assetId": "tall_box",
-              "x": 13.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbgy6_x",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbgy6_4s",
-              "assetId": "tall_box",
-              "x": 14.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbgy6_x",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbgy6_4t",
-              "assetId": "tall_box",
-              "x": 15.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbgy6_x",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbgy6_4u",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbgy6_x",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbh52_4v",
-              "assetId": "tall_box",
-              "x": 13.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbh52_y",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbh53_4w",
-              "assetId": "tall_box",
-              "x": 14.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbh52_y",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbh53_4x",
-              "assetId": "tall_box",
-              "x": 15.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbh52_y",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbh53_4y",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbh52_y",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbhch_4z",
-              "assetId": "tall_box",
-              "x": 13.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbhch_z",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbhci_50",
-              "assetId": "tall_box",
-              "x": 14.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbhch_z",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbhci_51",
-              "assetId": "tall_box",
-              "x": 15.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbhch_z",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbhci_52",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbhch_z",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbszp_53",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": 8.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbszp_10",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbszp_54",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": 9.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbszp_10",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbszp_55",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": 10.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbszp_10",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbszp_56",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": 11.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbszp_10",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbtbu_57",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": 8.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbtbu_11",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbtbu_58",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": 9.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbtbu_11",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbtbu_59",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": 10.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbtbu_11",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbtbu_5a",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": 11.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbtbu_11",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbtj9_5b",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": 8.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbtj8_12",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbtj9_5c",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": 9.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbtj8_12",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbtj9_5d",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": 10.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbtj8_12",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbtj9_5e",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": 11.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbtj8_12",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbumn_5f",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": 4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbumn_13",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbumn_5g",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": 5.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbumn_13",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbumn_5h",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": 6.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbumn_13",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbumn_5i",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": 7.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbumn_13",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzburp_5j",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": 4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzburp_14",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzburp_5k",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": 5.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzburp_14",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzburp_5l",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": 6.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzburp_14",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzburq_5m",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": 7.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzburp_14",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbuxf_5n",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": 4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbuxf_15",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbuxg_5o",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": 5.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbuxf_15",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbuxg_5p",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": 6.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbuxf_15",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbuxg_5q",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": 7.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbuxf_15",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbvu4_5r",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": 0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbvu4_16",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbvu4_5s",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": 1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbvu4_16",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbvu4_5t",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": 2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbvu4_16",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbvu4_5u",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": 3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbvu4_16",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbw89_5v",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": 0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbw89_17",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbw89_5w",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": 1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbw89_17",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbw89_5x",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": 2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbw89_17",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbw89_5y",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": 3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbw89_17",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbwcz_5z",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": 0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbwcz_18",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbwcz_60",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": 1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbwcz_18",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbwcz_61",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": 2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbwcz_18",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbwcz_62",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": 3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbwcz_18",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbyul_63",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": -3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbyuk_19",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbyul_64",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": -2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbyuk_19",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbyul_65",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": -1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbyuk_19",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbyul_66",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": -0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbyuk_19",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbz0h_67",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": -3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbz0h_1a",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbz0h_68",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": -2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbz0h_1a",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbz0h_69",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": -1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbz0h_1a",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbz0h_6a",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": -0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbz0h_1a",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbz9w_6b",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": -3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbz9w_1b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbz9x_6c",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": -2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbz9w_1b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbz9x_6d",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": -1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbz9w_1b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzbz9x_6e",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": -0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzbz9w_1b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcaf9_6f",
-              "assetId": "tall_box",
-              "x": 13.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcaf9_1c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcafa_6g",
-              "assetId": "tall_box",
-              "x": 14.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcaf9_1c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcafa_6h",
-              "assetId": "tall_box",
-              "x": 15.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcaf9_1c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcafa_6i",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcaf9_1c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcbzd_6j",
-              "assetId": "tall_box",
-              "x": 9.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcbzd_1d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcbzd_6k",
-              "assetId": "tall_box",
-              "x": 10.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcbzd_1d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcbzd_6l",
-              "assetId": "tall_box",
-              "x": 11.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcbzd_1d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcbzd_6m",
-              "assetId": "tall_box",
-              "x": 12.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcbzd_1d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcdir_6n",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcdir_1e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcdis_6p",
-              "assetId": "tall_box",
-              "x": 3.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcdir_1e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcdis_6q",
-              "assetId": "tall_box",
-              "x": 4.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcdir_1e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcend_6r",
-              "assetId": "tall_box",
-              "x": 5.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcend_1f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcend_6s",
-              "assetId": "tall_box",
-              "x": 6.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcend_1f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcend_6t",
-              "assetId": "tall_box",
-              "x": 7.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcend_1f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcend_6u",
-              "assetId": "tall_box",
-              "x": 8.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcend_1f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcg8s_6v",
-              "assetId": "tall_box",
-              "x": 13.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcg8s_1g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcg8t_6w",
-              "assetId": "tall_box",
-              "x": 14.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcg8s_1g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcg8t_6x",
-              "assetId": "tall_box",
-              "x": 15.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcg8s_1g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcg8t_6y",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcg8s_1g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcggq_6z",
-              "assetId": "tall_box",
-              "x": 13.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcggp_1h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcggq_70",
-              "assetId": "tall_box",
-              "x": 14.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcggp_1h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcggq_71",
-              "assetId": "tall_box",
-              "x": 15.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcggp_1h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcggq_72",
-              "assetId": "tall_box",
-              "x": 16.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcggp_1h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzchno_73",
-              "assetId": "tall_box",
-              "x": 9.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzchnn_1i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzchno_74",
-              "assetId": "tall_box",
-              "x": 10.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzchnn_1i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzchno_75",
-              "assetId": "tall_box",
-              "x": 11.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzchnn_1i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzchno_76",
-              "assetId": "tall_box",
-              "x": 12.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzchnn_1i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzchsq_77",
-              "assetId": "tall_box",
-              "x": 9.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzchsp_1j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzchsq_78",
-              "assetId": "tall_box",
-              "x": 10.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzchsp_1j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzchsq_79",
-              "assetId": "tall_box",
-              "x": 11.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzchsp_1j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzchsq_7a",
-              "assetId": "tall_box",
-              "x": 12.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzchsp_1j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcivs_7b",
-              "assetId": "tall_box",
-              "x": 5.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcivs_1k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcivs_7c",
-              "assetId": "tall_box",
-              "x": 6.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcivs_1k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcivs_7d",
-              "assetId": "tall_box",
-              "x": 7.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcivs_1k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcivt_7e",
-              "assetId": "tall_box",
-              "x": 8.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcivs_1k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcj06_7f",
-              "assetId": "tall_box",
-              "x": 5.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcj06_1l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcj06_7g",
-              "assetId": "tall_box",
-              "x": 6.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcj06_1l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcj06_7h",
-              "assetId": "tall_box",
-              "x": 7.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcj06_1l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcj07_7i",
-              "assetId": "tall_box",
-              "x": 8.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcj06_1l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzck39_7j",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzck38_1m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzck39_7k",
-              "assetId": "tall_box",
-              "x": 2.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzck38_1m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzck39_7l",
-              "assetId": "tall_box",
-              "x": 3.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzck38_1m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzck39_7m",
-              "assetId": "tall_box",
-              "x": 4.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzck38_1m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzck8b_7n",
-              "assetId": "tall_box",
-              "x": 1.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzck8a_1n",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzck8b_7o",
-              "assetId": "tall_box",
-              "x": 2.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzck8a_1n",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzck8b_7p",
-              "assetId": "tall_box",
-              "x": 3.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzck8a_1n",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzck8b_7q",
-              "assetId": "tall_box",
-              "x": 4.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzck8a_1n",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzcqut_7s",
-              "assetId": "tall_box",
-              "x": 2.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzcqus_1o",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfm5v_7v",
-              "assetId": "tall_box",
-              "x": -6.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfm5v_1p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfm5v_7w",
-              "assetId": "tall_box",
-              "x": -5.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfm5v_1p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfm5v_7x",
-              "assetId": "tall_box",
-              "x": -4.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfm5v_1p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfm5v_7y",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfm5v_1p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfn58_7z",
-              "assetId": "tall_box",
-              "x": -6.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfn58_1q",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfn58_80",
-              "assetId": "tall_box",
-              "x": -5.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfn58_1q",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfn59_81",
-              "assetId": "tall_box",
-              "x": -4.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfn58_1q",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfn59_82",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfn58_1q",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfne0_83",
-              "assetId": "tall_box",
-              "x": -6.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfne0_1r",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfne0_84",
-              "assetId": "tall_box",
-              "x": -5.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfne0_1r",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfne0_85",
-              "assetId": "tall_box",
-              "x": -4.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfne0_1r",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfne1_86",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfne0_1r",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfo3y_87",
-              "assetId": "tall_box",
-              "x": -6.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfo3x_1s",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfo3y_88",
-              "assetId": "tall_box",
-              "x": -5.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfo3x_1s",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfo3y_89",
-              "assetId": "tall_box",
-              "x": -4.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfo3x_1s",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfo3z_8a",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfo3x_1s",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfp35_8b",
-              "assetId": "tall_box",
-              "x": -10.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfp34_1t",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfp35_8c",
-              "assetId": "tall_box",
-              "x": -9.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfp34_1t",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfp35_8d",
-              "assetId": "tall_box",
-              "x": -8.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfp34_1t",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfp35_8e",
-              "assetId": "tall_box",
-              "x": -7.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfp34_1t",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfpa1_8f",
-              "assetId": "tall_box",
-              "x": -10.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfpa1_1u",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfpa2_8g",
-              "assetId": "tall_box",
-              "x": -9.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfpa1_1u",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfpa2_8h",
-              "assetId": "tall_box",
-              "x": -8.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfpa1_1u",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfpa2_8i",
-              "assetId": "tall_box",
-              "x": -7.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfpa1_1u",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfpgg_8j",
-              "assetId": "tall_box",
-              "x": -10.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfpgf_1v",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfpgg_8k",
-              "assetId": "tall_box",
-              "x": -9.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfpgf_1v",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfpgg_8l",
-              "assetId": "tall_box",
-              "x": -8.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfpgf_1v",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfpgh_8m",
-              "assetId": "tall_box",
-              "x": -7.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfpgf_1v",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfppw_8n",
-              "assetId": "tall_box",
-              "x": -10.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfppv_1w",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfppw_8o",
-              "assetId": "tall_box",
-              "x": -9.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfppv_1w",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfppx_8p",
-              "assetId": "tall_box",
-              "x": -8.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfppv_1w",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfppx_8q",
-              "assetId": "tall_box",
-              "x": -7.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfppv_1w",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfr94_8r",
-              "assetId": "tall_box",
-              "x": -14.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfr94_1x",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfr94_8s",
-              "assetId": "tall_box",
-              "x": -13.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfr94_1x",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfr94_8t",
-              "assetId": "tall_box",
-              "x": -12.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfr94_1x",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfr94_8u",
-              "assetId": "tall_box",
-              "x": -11.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfr94_1x",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfreo_8v",
-              "assetId": "tall_box",
-              "x": -14.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfreo_1y",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfreo_8w",
-              "assetId": "tall_box",
-              "x": -13.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfreo_1y",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfrep_8x",
-              "assetId": "tall_box",
-              "x": -12.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfreo_1y",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfrep_8y",
-              "assetId": "tall_box",
-              "x": -11.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfreo_1y",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfrl9_8z",
-              "assetId": "tall_box",
-              "x": -14.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfrl8_1z",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfrl9_90",
-              "assetId": "tall_box",
-              "x": -13.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfrl8_1z",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfrl9_91",
-              "assetId": "tall_box",
-              "x": -12.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfrl8_1z",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfrla_92",
-              "assetId": "tall_box",
-              "x": -11.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfrl8_1z",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfrtc_93",
-              "assetId": "tall_box",
-              "x": -14.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfrtb_20",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfrtc_94",
-              "assetId": "tall_box",
-              "x": -13.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfrtb_20",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfrtd_95",
-              "assetId": "tall_box",
-              "x": -12.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfrtb_20",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfrtd_96",
-              "assetId": "tall_box",
-              "x": -11.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfrtb_20",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzft81_97",
-              "assetId": "tall_box",
-              "x": -18.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzft81_21",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzft81_98",
-              "assetId": "tall_box",
-              "x": -17.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzft81_21",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzft81_99",
-              "assetId": "tall_box",
-              "x": -16.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzft81_21",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzft81_9a",
-              "assetId": "tall_box",
-              "x": -15.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzft81_21",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzftd3_9b",
-              "assetId": "tall_box",
-              "x": -18.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzftd2_22",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzftd3_9c",
-              "assetId": "tall_box",
-              "x": -17.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzftd2_22",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzftd3_9d",
-              "assetId": "tall_box",
-              "x": -16.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzftd2_22",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzftd3_9e",
-              "assetId": "tall_box",
-              "x": -15.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzftd2_22",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzftit_9f",
-              "assetId": "tall_box",
-              "x": -18.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzftit_23",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzftit_9g",
-              "assetId": "tall_box",
-              "x": -17.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzftit_23",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzftit_9h",
-              "assetId": "tall_box",
-              "x": -16.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzftit_23",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzftiu_9i",
-              "assetId": "tall_box",
-              "x": -15.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzftit_23",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzftt9_9j",
-              "assetId": "tall_box",
-              "x": -18.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzftt9_24",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzftt9_9k",
-              "assetId": "tall_box",
-              "x": -17.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzftt9_24",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzftta_9l",
-              "assetId": "tall_box",
-              "x": -16.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzftt9_24",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzftta_9m",
-              "assetId": "tall_box",
-              "x": -15.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzftt9_24",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfy0o_9n",
-              "assetId": "tall_box",
-              "x": -22.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfy0o_25",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfy0o_9o",
-              "assetId": "tall_box",
-              "x": -21.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfy0o_25",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfy0o_9p",
-              "assetId": "tall_box",
-              "x": -20.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfy0o_25",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfy0o_9q",
-              "assetId": "tall_box",
-              "x": -19.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfy0o_25",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfy5w_9r",
-              "assetId": "tall_box",
-              "x": -22.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfy5w_26",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfy5w_9s",
-              "assetId": "tall_box",
-              "x": -21.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfy5w_26",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfy5w_9t",
-              "assetId": "tall_box",
-              "x": -20.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfy5w_26",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfy5w_9u",
-              "assetId": "tall_box",
-              "x": -19.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfy5w_26",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfybm_9v",
-              "assetId": "tall_box",
-              "x": -22.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfybm_27",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfybm_9w",
-              "assetId": "tall_box",
-              "x": -21.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfybm_27",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfybn_9x",
-              "assetId": "tall_box",
-              "x": -20.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfybm_27",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfybn_9y",
-              "assetId": "tall_box",
-              "x": -19.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfybm_27",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfyl2_9z",
-              "assetId": "tall_box",
-              "x": -22.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfyl1_28",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfyl2_a0",
-              "assetId": "tall_box",
-              "x": -21.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfyl1_28",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfyl3_a1",
-              "assetId": "tall_box",
-              "x": -20.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfyl1_28",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfyl3_a2",
-              "assetId": "tall_box",
-              "x": -19.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfyl1_28",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfzpb_a3",
-              "assetId": "tall_box",
-              "x": -26.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfzpa_29",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfzpb_a4",
-              "assetId": "tall_box",
-              "x": -25.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfzpa_29",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfzpb_a5",
-              "assetId": "tall_box",
-              "x": -24.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfzpa_29",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfzpb_a6",
-              "assetId": "tall_box",
-              "x": -23.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfzpa_29",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfztu_a7",
-              "assetId": "tall_box",
-              "x": -26.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfztu_2a",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfztv_a8",
-              "assetId": "tall_box",
-              "x": -25.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfztu_2a",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfztv_a9",
-              "assetId": "tall_box",
-              "x": -24.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfztu_2a",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfztv_aa",
-              "assetId": "tall_box",
-              "x": -23.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfztu_2a",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfzyk_ab",
-              "assetId": "tall_box",
-              "x": -26.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfzyk_2b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfzyl_ac",
-              "assetId": "tall_box",
-              "x": -25.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfzyk_2b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfzyl_ad",
-              "assetId": "tall_box",
-              "x": -24.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfzyk_2b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzfzyl_ae",
-              "assetId": "tall_box",
-              "x": -23.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzfzyk_2b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzg086_af",
-              "assetId": "tall_box",
-              "x": -26.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzg086_2c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzg087_ag",
-              "assetId": "tall_box",
-              "x": -25.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzg086_2c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzg087_ah",
-              "assetId": "tall_box",
-              "x": -24.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzg086_2c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzg088_ai",
-              "assetId": "tall_box",
-              "x": -23.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzg086_2c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgh8e_aj",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": -3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgh8e_2d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgh8e_ak",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": -2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgh8e_2d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgh8e_al",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": -1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgh8e_2d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgh8f_am",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": -0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgh8e_2d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzghql_an",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": -3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzghql_2e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzghql_ao",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": -2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzghql_2e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzghqm_ap",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": -1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzghql_2e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzghqm_aq",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": -0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzghql_2e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzghut_ar",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": -3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzghut_2f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzghut_as",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": -2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzghut_2f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzghuu_at",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": -1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzghut_2f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzghuu_au",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": -0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzghut_2f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzghzp_av",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": -3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzghzo_2g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzghzp_aw",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": -2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzghzo_2g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzghzq_ax",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": -1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzghzo_2g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzghzq_ay",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": -0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzghzo_2g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgiw1_az",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgiw1_2h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgiw1_b0",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgiw1_2h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgiw1_b1",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgiw1_2h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgiw1_b2",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgiw1_2h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgj0r_b3",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgj0q_2i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgj0r_b4",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgj0q_2i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgj0r_b5",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgj0q_2i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgj0r_b6",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgj0q_2i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgj4s_b7",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgj4s_2j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgj4t_b8",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgj4s_2j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgj4t_b9",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgj4s_2j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgj4u_ba",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgj4s_2j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgje2_bb",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgje1_2k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgje3_bc",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgje1_2k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgje3_bd",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgje1_2k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgje3_be",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgje1_2k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgkaw_bf",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgkaw_2l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgkaw_bg",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 5.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgkaw_2l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgkaw_bh",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 6.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgkaw_2l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgkaw_bi",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 7.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgkaw_2l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgkfy_bj",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgkfy_2m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgkfy_bk",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 5.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgkfy_2m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgkfz_bl",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 6.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgkfy_2m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgkfz_bm",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 7.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgkfy_2m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgkku_bn",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgkkt_2n",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgkku_bo",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 5.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgkkt_2n",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgkkv_bp",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 6.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgkkt_2n",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgkkv_bq",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 7.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgkkt_2n",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgkpe_br",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgkpd_2o",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgkpe_bs",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 5.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgkpd_2o",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgkpf_bt",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 6.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgkpd_2o",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgkpf_bu",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 7.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgkpd_2o",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzglmq_bv",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 8.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzglmq_2p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzglmq_bw",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 9.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzglmq_2p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzglmq_bx",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 10.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzglmq_2p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzglmq_by",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 11.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzglmq_2p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzglra_bz",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 8.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzglr9_2q",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzglra_c0",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 9.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzglr9_2q",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzglra_c1",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 10.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzglr9_2q",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzglrb_c2",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 11.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzglr9_2q",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzglvu_c3",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 8.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzglvt_2r",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzglvu_c4",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 9.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzglvt_2r",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzglvu_c5",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 10.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzglvt_2r",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzglvv_c6",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 11.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzglvt_2r",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgm5f_c7",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 8.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgm5f_2s",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgm5g_c8",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 9.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgm5f_2s",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgm5h_c9",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 10.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgm5f_2s",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgm5h_ca",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 11.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgm5f_2s",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgpuz_cb",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": -4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgpuz_2t",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgpuz_cc",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": -3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgpuz_2t",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgpv0_cd",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": -2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgpuz_2t",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgpv0_ce",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": -1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgpuz_2t",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgpzd_cf",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": -4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgpzd_2u",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgpzd_cg",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": -3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgpzd_2u",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgpze_ch",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": -2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgpzd_2u",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgpze_ci",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": -1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgpzd_2u",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgq3r_cj",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": -4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgq3q_2v",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgq3r_ck",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": -3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgq3q_2v",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgq3s_cl",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": -2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgq3q_2v",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgq3s_cm",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": -1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgq3q_2v",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgq7m_cn",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": -4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgq7m_2w",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgq7n_co",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": -3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgq7m_2w",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgq7o_cp",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": -2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgq7m_2w",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgq7o_cq",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": -1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgq7m_2w",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgqyq_cr",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": -0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgqyq_2x",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgqyq_cs",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgqyq_2x",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgqyr_ct",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgqyq_2x",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgqyr_cu",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgqyq_2x",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgr34_cv",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": -0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgr34_2y",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgr34_cw",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgr34_2y",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgr35_cx",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgr34_2y",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgr35_cy",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgr34_2y",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgr7o_cz",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": -0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgr7n_2z",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgr7o_d0",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgr7n_2z",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgr7p_d1",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgr7n_2z",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgr7p_d2",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgr7n_2z",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgrfl_d3",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": -0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgrfk_30",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgrfm_d4",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 0.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgrfk_30",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgrfm_d5",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 1.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgrfk_30",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgrfn_d6",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 2.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgrfk_30",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgshh_d7",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgshh_31",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgshh_d8",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgshh_31",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgshh_d9",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 5.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgshh_31",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgshh_da",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 6.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgshh_31",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgslv_db",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgslu_32",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgslv_dc",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgslu_32",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgslv_dd",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 5.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgslu_32",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgslw_de",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 6.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgslu_32",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgsq8_df",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgsq8_33",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgsq9_dg",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgsq8_33",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgsqa_dh",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 5.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgsq8_33",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgsqa_di",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 6.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgsq8_33",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgsum_dj",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 3.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgsum_34",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgsun_dk",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 4.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgsum_34",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgsun_dl",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 5.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgsum_34",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgsuo_dm",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 6.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgsum_34",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgu1k_dn",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 7.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgu1k_35",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgu1k_do",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 8.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgu1k_35",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgu1k_dp",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 9.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgu1k_35",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgu1k_dq",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 10.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgu1k_35",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgu5y_dr",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 7.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgu5x_36",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgu5y_ds",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 8.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgu5x_36",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgu5y_dt",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 9.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgu5x_36",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzgu5z_du",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 10.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzgu5x_36",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzguai_dv",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 7.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzguah_37",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzguai_dw",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 8.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzguah_37",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzguaj_dx",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 9.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzguah_37",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzguaj_dy",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 10.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzguah_37",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzguew_dz",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 7.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzguev_38",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzguew_e0",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 8.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzguev_38",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzguex_e1",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 9.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzguev_38",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzguex_e2",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 10.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzguev_38",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhctz_e3",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 11.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhcty_39",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhctz_e4",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhcty_39",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhctz_e5",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 13.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhcty_39",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhctz_e6",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 14.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhcty_39",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhcyd_e7",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 11.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhcyc_3a",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhcyd_e8",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhcyc_3a",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhcyd_e9",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 13.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhcyc_3a",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhcye_ea",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 14.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhcyc_3a",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhd2q_eb",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 11.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhd2q_3b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhd2r_ec",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhd2q_3b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhd2r_ed",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 13.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhd2q_3b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhd2s_ee",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 14.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhd2q_3b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhdb0_ef",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 11.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhdaz_3c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhdb0_eg",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 12.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhdaz_3c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhdb1_eh",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 13.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhdaz_3c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhdb2_ei",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 14.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhdaz_3c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhekg_ej",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 15.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhekg_3d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhekg_ek",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 16.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhekg_3d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhekh_el",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 17.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhekg_3d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhekh_em",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 18.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhekg_3d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhepc_en",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 15.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhepc_3e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhepd_eo",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 16.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhepc_3e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhepd_ep",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 17.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhepc_3e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhepd_eq",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 18.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhepc_3e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzheu2_er",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 15.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzheu2_3f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzheu3_es",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 16.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzheu2_3f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzheu4_et",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 17.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzheu2_3f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzheu4_eu",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 18.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzheu2_3f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhez4_ev",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 15.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhez4_3g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhez5_ew",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 16.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhez4_3g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhez6_ex",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 17.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhez4_3g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhez6_ey",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 18.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhez4_3g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhgut_ez",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 19.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhgut_3h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhgut_f0",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 20.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhgut_3h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhguu_f1",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 21.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhgut_3h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhguu_f2",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 22.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhgut_3h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhgzd_f3",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 19.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhgzd_3i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhgze_f4",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 20.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhgzd_3i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhgze_f5",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 21.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhgzd_3i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhgze_f6",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 22.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhgzd_3i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhh3r_f7",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 19.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhh3q_3j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhh3s_f8",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 20.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhh3q_3j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhh3s_f9",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 21.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhh3q_3j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhh3t_fa",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 22.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhh3q_3j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhh7t_fb",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 19.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhh7s_3k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhh7u_fc",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 20.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhh7s_3k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhh7u_fd",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 21.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhh7s_3k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhh7v_fe",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 22.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhh7s_3k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhjok_ff",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 12.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhjok_3l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhjok_fg",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 13.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhjok_3l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhjok_fh",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 14.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhjok_3l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhjok_fi",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 15.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhjok_3l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhjsx_fj",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 12.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhjsx_3m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhjsy_fk",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 13.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhjsx_3m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhjsy_fl",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 14.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhjsx_3m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhjsz_fm",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 15.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhjsx_3m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhjxh_fn",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 12.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhjxh_3n",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhjxi_fo",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 13.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhjxh_3n",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhjxj_fp",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 14.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhjxh_3n",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhjxj_fq",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 15.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhjxh_3n",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhk1v_fr",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 12.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhk1u_3o",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhk1w_fs",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 13.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhk1u_3o",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhk1x_ft",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 14.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhk1u_3o",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhk1x_fu",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 15.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhk1u_3o",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhkvc_fv",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 16.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhkvc_3p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhkvc_fw",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 17.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhkvc_3p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhkvc_fx",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 18.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhkvc_3p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhkvc_fy",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 19.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhkvc_3p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhkzw_fz",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 16.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhkzv_3q",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhkzw_g0",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 17.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhkzv_3q",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhkzx_g1",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 18.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhkzv_3q",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhkzx_g2",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 19.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhkzv_3q",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhl3x_g3",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 16.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhl3x_3r",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhl3y_g4",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 17.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhl3x_3r",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhl3z_g5",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 18.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhl3x_3r",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhl3z_g6",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 19.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhl3x_3r",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhlcj_g7",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 16.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhlci_3s",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhlck_g8",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 17.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhlci_3s",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhlcl_g9",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 18.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhlci_3s",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhlcm_ga",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 19.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhlci_3s",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhn1u_gb",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 20.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhn1u_3t",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhn1u_gc",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 21.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhn1u_3t",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhn1u_gd",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 22.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhn1u_3t",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhn1v_ge",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhn1u_3t",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhn6j_gf",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 20.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhn6j_3u",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhn6k_gg",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 21.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhn6j_3u",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhn6k_gh",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 22.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhn6j_3u",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhn6k_gi",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhn6j_3u",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhnar_gj",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 20.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhnaq_3v",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhnas_gk",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 21.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhnaq_3v",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhnas_gl",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 22.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhnaq_3v",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhnat_gm",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhnaq_3v",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhnf5_gn",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 20.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhnf5_3w",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhnf6_go",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 21.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhnf5_3w",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhnf7_gp",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 22.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhnf5_3w",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzhnf8_gq",
-              "assetId": "tall_box",
-              "x": -3.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 1.5707963267948966,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzhnf5_3w",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi4co_gr",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi4co_3x",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi4co_gs",
-              "assetId": "tall_box",
-              "x": -26.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi4co_3x",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi4co_gt",
-              "assetId": "tall_box",
-              "x": -25.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi4co_3x",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi4cp_gu",
-              "assetId": "tall_box",
-              "x": -24.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi4co_3x",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi4uj_gv",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi4ui_3y",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi4uj_gw",
-              "assetId": "tall_box",
-              "x": -26.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi4ui_3y",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi4uk_gx",
-              "assetId": "tall_box",
-              "x": -25.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi4ui_3y",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi4uk_gy",
-              "assetId": "tall_box",
-              "x": -24.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi4ui_3y",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi4yl_gz",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi4yk_3z",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi4yl_h0",
-              "assetId": "tall_box",
-              "x": -26.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi4yk_3z",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi4ym_h1",
-              "assetId": "tall_box",
-              "x": -25.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi4yk_3z",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi4ym_h2",
-              "assetId": "tall_box",
-              "x": -24.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi4yk_3z",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi586_h3",
-              "assetId": "tall_box",
-              "x": -27.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi585_40",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi587_h4",
-              "assetId": "tall_box",
-              "x": -26.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi585_40",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi588_h5",
-              "assetId": "tall_box",
-              "x": -25.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi585_40",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi589_h6",
-              "assetId": "tall_box",
-              "x": -24.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi585_40",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi60t_h7",
-              "assetId": "tall_box",
-              "x": -23.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi60s_41",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi60t_h8",
-              "assetId": "tall_box",
-              "x": -22.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi60s_41",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi60t_h9",
-              "assetId": "tall_box",
-              "x": -21.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi60s_41",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi60t_ha",
-              "assetId": "tall_box",
-              "x": -20.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi60s_41",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi65c_hb",
-              "assetId": "tall_box",
-              "x": -23.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi65c_42",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi65d_hc",
-              "assetId": "tall_box",
-              "x": -22.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi65c_42",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi65d_hd",
-              "assetId": "tall_box",
-              "x": -21.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi65c_42",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi65e_he",
-              "assetId": "tall_box",
-              "x": -20.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi65c_42",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi69e_hf",
-              "assetId": "tall_box",
-              "x": -23.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi69e_43",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi69f_hg",
-              "assetId": "tall_box",
-              "x": -22.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi69e_43",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi69g_hh",
-              "assetId": "tall_box",
-              "x": -21.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi69e_43",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi69g_hi",
-              "assetId": "tall_box",
-              "x": -20.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi69e_43",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi6ic_hj",
-              "assetId": "tall_box",
-              "x": -23.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi6ib_44",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi6id_hk",
-              "assetId": "tall_box",
-              "x": -22.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi6ib_44",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi6id_hl",
-              "assetId": "tall_box",
-              "x": -21.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi6ib_44",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi6ie_hm",
-              "assetId": "tall_box",
-              "x": -20.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi6ib_44",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi7qy_hn",
-              "assetId": "tall_box",
-              "x": -19.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi7qy_45",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi7qy_ho",
-              "assetId": "tall_box",
-              "x": -18.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi7qy_45",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi7qy_hp",
-              "assetId": "tall_box",
-              "x": -17.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi7qy_45",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi7qz_hq",
-              "assetId": "tall_box",
-              "x": -16.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi7qy_45",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi7vc_hr",
-              "assetId": "tall_box",
-              "x": -19.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi7vb_46",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi7vd_hs",
-              "assetId": "tall_box",
-              "x": -18.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi7vb_46",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi7vd_ht",
-              "assetId": "tall_box",
-              "x": -17.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi7vb_46",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi7ve_hu",
-              "assetId": "tall_box",
-              "x": -16.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi7vb_46",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi7zq_hv",
-              "assetId": "tall_box",
-              "x": -19.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi7zp_47",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi7zq_hw",
-              "assetId": "tall_box",
-              "x": -18.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi7zp_47",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi7zr_hx",
-              "assetId": "tall_box",
-              "x": -17.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi7zp_47",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi7zs_hy",
-              "assetId": "tall_box",
-              "x": -16.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi7zp_47",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi83s_hz",
-              "assetId": "tall_box",
-              "x": -19.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi83r_48",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi83t_i0",
-              "assetId": "tall_box",
-              "x": -18.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi83r_48",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi83u_i1",
-              "assetId": "tall_box",
-              "x": -17.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi83r_48",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi83v_i2",
-              "assetId": "tall_box",
-              "x": -16.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi83r_48",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi93z_i3",
-              "assetId": "tall_box",
-              "x": -15.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi93z_49",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi93z_i4",
-              "assetId": "tall_box",
-              "x": -14.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi93z_49",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi93z_i5",
-              "assetId": "tall_box",
-              "x": -13.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi93z_49",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi940_i6",
-              "assetId": "tall_box",
-              "x": -12.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi93z_49",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi98c_i7",
-              "assetId": "tall_box",
-              "x": -15.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi98c_4a",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi98d_i8",
-              "assetId": "tall_box",
-              "x": -14.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi98c_4a",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi98d_i9",
-              "assetId": "tall_box",
-              "x": -13.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi98c_4a",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi98e_ia",
-              "assetId": "tall_box",
-              "x": -12.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi98c_4a",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi9ct_ib",
-              "assetId": "tall_box",
-              "x": -15.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi9cs_4b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi9cu_ic",
-              "assetId": "tall_box",
-              "x": -14.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi9cs_4b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi9cu_id",
-              "assetId": "tall_box",
-              "x": -13.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi9cs_4b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi9cv_ie",
-              "assetId": "tall_box",
-              "x": -12.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi9cs_4b",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi9gv_if",
-              "assetId": "tall_box",
-              "x": -15.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi9gu_4c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi9gw_ig",
-              "assetId": "tall_box",
-              "x": -14.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi9gu_4c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi9gx_ih",
-              "assetId": "tall_box",
-              "x": -13.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi9gu_4c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzi9gy_ii",
-              "assetId": "tall_box",
-              "x": -12.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzi9gu_4c",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzib4n_ij",
-              "assetId": "tall_box",
-              "x": -11.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzib4n_4d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzib4o_ik",
-              "assetId": "tall_box",
-              "x": -10.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzib4n_4d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzib4o_il",
-              "assetId": "tall_box",
-              "x": -9.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzib4n_4d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzib4o_im",
-              "assetId": "tall_box",
-              "x": -8.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzib4n_4d",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzib93_in",
-              "assetId": "tall_box",
-              "x": -11.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzib92_4e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzib93_io",
-              "assetId": "tall_box",
-              "x": -10.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzib92_4e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzib94_ip",
-              "assetId": "tall_box",
-              "x": -9.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzib92_4e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzib94_iq",
-              "assetId": "tall_box",
-              "x": -8.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzib92_4e",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzibdf_ir",
-              "assetId": "tall_box",
-              "x": -11.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzibde_4f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzibdg_is",
-              "assetId": "tall_box",
-              "x": -10.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzibde_4f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzibdg_it",
-              "assetId": "tall_box",
-              "x": -9.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzibde_4f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzibdh_iu",
-              "assetId": "tall_box",
-              "x": -8.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzibde_4f",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzibhs_iv",
-              "assetId": "tall_box",
-              "x": -11.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzibhr_4g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzibht_iw",
-              "assetId": "tall_box",
-              "x": -10.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzibhr_4g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzibhu_ix",
-              "assetId": "tall_box",
-              "x": -9.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzibhr_4g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzibhu_iy",
-              "assetId": "tall_box",
-              "x": -8.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzibhr_4g",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzicjt_iz",
-              "assetId": "tall_box",
-              "x": -7.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzicjs_4h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzicjt_j0",
-              "assetId": "tall_box",
-              "x": -6.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzicjs_4h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzicjt_j1",
-              "assetId": "tall_box",
-              "x": -5.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzicjs_4h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzicjt_j2",
-              "assetId": "tall_box",
-              "x": -4.5,
-              "y": 1,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzicjs_4h",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzicoj_j3",
-              "assetId": "tall_box",
-              "x": -7.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzicoh_4i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzicok_j4",
-              "assetId": "tall_box",
-              "x": -6.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzicoh_4i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzicok_j5",
-              "assetId": "tall_box",
-              "x": -5.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzicoh_4i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzicol_j6",
-              "assetId": "tall_box",
-              "x": -4.5,
-              "y": 3,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzicoh_4i",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzicsi_j7",
-              "assetId": "tall_box",
-              "x": -7.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzicsh_4j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzicsj_j8",
-              "assetId": "tall_box",
-              "x": -6.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzicsh_4j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzicsj_j9",
-              "assetId": "tall_box",
-              "x": -5.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzicsh_4j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzicsk_ja",
-              "assetId": "tall_box",
-              "x": -4.5,
-              "y": 5,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzicsh_4j",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzicwu_jb",
-              "assetId": "tall_box",
-              "x": -7.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzicwt_4k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzicwv_jc",
-              "assetId": "tall_box",
-              "x": -6.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzicwt_4k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzicww_jd",
-              "assetId": "tall_box",
-              "x": -5.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzicwt_4k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzicwx_je",
-              "assetId": "tall_box",
-              "x": -4.5,
-              "y": 7,
-              "z": 23.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzicwt_4k",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjsfg_jf",
-              "assetId": "tall_box",
-              "x": 50.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjsfg_4l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjsfh_jg",
-              "assetId": "tall_box",
-              "x": 51.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjsfg_4l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjsfh_jh",
-              "assetId": "tall_box",
-              "x": 52.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjsfg_4l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjsfh_ji",
-              "assetId": "tall_box",
-              "x": 53.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjsfg_4l",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjtk2_jj",
-              "assetId": "tall_box",
-              "x": 54.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjtk1_4m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjtk2_jk",
-              "assetId": "tall_box",
-              "x": 55.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjtk1_4m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjtk2_jl",
-              "assetId": "tall_box",
-              "x": 56.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjtk1_4m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjtk2_jm",
-              "assetId": "tall_box",
-              "x": 57.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjtk1_4m",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjvh4_jn",
-              "assetId": "tall_box",
-              "x": 58.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjvh3_4n",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjvh4_jo",
-              "assetId": "tall_box",
-              "x": 59.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjvh3_4n",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjvh4_jp",
-              "assetId": "tall_box",
-              "x": 60.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjvh3_4n",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjvh4_jq",
-              "assetId": "tall_box",
-              "x": 61.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjvh3_4n",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjwmv_jr",
-              "assetId": "tall_box",
-              "x": 62.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjwmv_4o",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjwmw_js",
-              "assetId": "tall_box",
-              "x": 63.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjwmv_4o",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjwmw_jt",
-              "assetId": "tall_box",
-              "x": 64.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjwmv_4o",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjwmw_ju",
-              "assetId": "tall_box",
-              "x": 65.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjwmv_4o",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjxj2_jv",
-              "assetId": "tall_box",
-              "x": 66.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjxj1_4p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjxj2_jw",
-              "assetId": "tall_box",
-              "x": 67.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjxj1_4p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjxj2_jx",
-              "assetId": "tall_box",
-              "x": 68.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjxj1_4p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          },
-          {
-              "objectId": "placed_mpwzjxj2_jy",
-              "assetId": "tall_box",
-              "x": 69.5,
-              "y": 1,
-              "z": -30.5,
-              "ry": 0,
-              "scaleX": 1,
-              "scaleY": 1,
-              "scaleZ": 1,
-              "groupId": "prefab_mpwzjxj1_4p",
-              "prefabId": "prefab_crate_wall_4x2",
-              "color": "#445566"
-          }
-      ],
-      "placerSelectedAsset": "prefab_crate_wall_4x2",
-      "radarEnabled": true,
-      "radarRadius": 90,
-      "radarRange": 60,
-      "radarBgColor": "#0a1628",
-      "radarEnemyColor": "#ff3030",
-      "radarOpacity": 0.82,
-      "radarTaggedColor": "#FF3030",
-      "soundMuted": false,
-      "soundMusicVolume": 0.4,
-      "soundSfxVolume": 1,
-      "soundSfx_shoot": 1,
-      "soundSfx_dash": 1,
-      "soundSfx_player_hit": 1,
-      "soundSfx_standard_hit": 1,
-      "soundSfx_elite_hit": 1,
-      "soundSfx_explode": 1,
-      "soundSfx_coin": 1,
-      "soundSfx_heal": 1,
-      "soundSfx_levelup": 1,
-      "soundSfx_gameover": 1,
-      "soundSfx_victory": 1,
-      "soundSfx_ambience": 1,
-      "enemyDestructionParticleCount": 40,
-      "enemyDestructionParticleSize": 0.32,
-      "enemyDestructionParticleSpeed": 1.25,
-      "enemyDestructionParticleGlow": 8,
-      "enemyDestructionPhysics": true,
-      "destructionRusherParticleCount": 50,
-      "destructionRusherParticleSize": 0.32,
-      "destructionRusherParticleSpeed": 0.6,
-      "destructionRusherParticleGlow": 24,
-      "destructionRusherColor": "#ff0000",
-      "destructionRusherPhysics": "gravity",
-      "destructionRusherDespawnTime": 5,
-      "destructionRusherCorpseFadeTime": 1,
-      "destructionOrbiterParticleCount": 40,
-      "destructionOrbiterParticleSize": 0.32,
-      "destructionOrbiterParticleSpeed": 1.25,
-      "destructionOrbiterParticleGlow": 8,
-      "destructionOrbiterColor": "#00cc44",
-      "destructionOrbiterPhysics": "gravity",
-      "destructionOrbiterDespawnTime": 3,
-      "destructionOrbiterCorpseFadeTime": 1,
-      "destructionTankerParticleCount": 40,
-      "destructionTankerParticleSize": 0.32,
-      "destructionTankerParticleSpeed": 1.25,
-      "destructionTankerParticleGlow": 8,
-      "destructionTankerColor": "#2b2b2b",
-      "destructionTankerPhysics": "gravity",
-      "destructionTankerDespawnTime": 3,
-      "destructionTankerCorpseFadeTime": 1,
-      "destructionSniperParticleCount": 40,
-      "destructionSniperParticleSize": 0.32,
-      "destructionSniperParticleSpeed": 1.25,
-      "destructionSniperParticleGlow": 8,
-      "destructionSniperColor": "#9b30ff",
-      "destructionSniperPhysics": "gravity",
-      "destructionSniperDespawnTime": 3,
-      "destructionSniperCorpseFadeTime": 1,
-      "destructionTeleporterParticleCount": 40,
-      "destructionTeleporterParticleSize": 0.32,
-      "destructionTeleporterParticleSpeed": 1.25,
-      "destructionTeleporterParticleGlow": 8,
-      "destructionTeleporterColor": "#e0e0e0",
-      "destructionTeleporterPhysics": "gravity",
-      "destructionTeleporterDespawnTime": 3,
-      "destructionTeleporterCorpseFadeTime": 1,
-      "destructionShieldedParticleCount": 40,
-      "destructionShieldedParticleSize": 0.32,
-      "destructionShieldedParticleSpeed": 1.25,
-      "destructionShieldedParticleGlow": 8,
-      "destructionShieldedColor": "#4aa3ff",
-      "destructionShieldedPhysics": "gravity",
-      "destructionShieldedDespawnTime": 3,
-      "destructionShieldedCorpseFadeTime": 1,
-      "destructionSplitterParticleCount": 100,
-      "destructionSplitterParticleSize": 0.5,
-      "destructionSplitterParticleSpeed": 1.75,
-      "destructionSplitterParticleGlow": 12,
-      "destructionSplitterColor": "#80fb37",
-      "destructionSplitterPhysics": "gravity",
-      "destructionSplitterDespawnTime": 3,
-      "destructionSplitterCorpseFadeTime": 1,
-      "destructionBossParticleCount": 100,
-      "destructionBossParticleSize": 0.5,
-      "destructionBossParticleSpeed": 1.75,
-      "destructionBossParticleGlow": 12,
-      "destructionBossColor": "#111111",
-      "destructionBossPhysics": "gravity",
-      "destructionBossDespawnTime": 3,
-      "destructionBossCorpseFadeTime": 1,
-      "destructionDestructibleParticleCount": 40,
-      "destructionDestructibleParticleSize": 0.25,
-      "destructionDestructibleParticleSpeed": 6,
-      "destructionDestructibleParticleGlow": 8,
-      "destructionDestructibleColor": "#ffffff",
-      "destructionDestructiblePhysics": "gravity",
-      "placerObjectColor": "#445566",
-      "placedAssetShadows": false,
-      "placerScaleX": 2,
-      "placerScaleY": 1.5,
-      "placerScaleZ": 1,
-      "placerRotationDeg": 0,
-      "placerTransformModalX": 22,
-      "placerTransformModalY": 22,
-      "editorModeEnabled": false,
-      "editorPlacementTarget": "asset",
-      "editorMoveSpeed": 15,
-      "editorSprintMultiplier": 2.25,
-      "editorPrecisionMultiplier": 0.28,
-      "editorFlyMode": true,
-      "editorEyeHeight": 1.7,
-      "editorFov": 70,
-      "editorMouseSensitivityX": 0.003,
-      "editorMouseSensitivityY": 0.0024,
-      "editorCameraX": 40.48972202963538,
-      "editorCameraY": 10.930499999821192,
-      "editorCameraZ": -39.45350409879743,
-      "editorYaw": 4.601444078461341,
-      "editorPitch": -0.4707999999999992,
-      "editorPlacedNpcs": [],
-      "soundSfx_jump": 1,
-      "soundSfx_enemy_grunt": 1,
-      "soundSfx_object_explode": 1,
-      "soundSfx_bullet_time_slow": 1,
-      "soundSfx_bullet_time_heart": 1,
-      "destructionDestructibleShockwaveSpeed": 40,
-      "destructionDestructibleShockwaveColor": "#ffffff",
-      "destructionDestructibleShockwaveFadeTime": 0.12,
-      "destructionDestructibleShockwaveDelay": 0,
-      "destructionDestructibleShockwaveTransparency": 0.1,
-      "destructionDestructibleSplashDamage": 100,
-      "destructionDestructibleSplashRadius": 4,
-      "destructionDestructibleSplashFalloff": 1,
-      "destructionDestructibleSplashMinFactor": 0.15,
-      "soundProximityEnabled": true,
-      "soundProximityRange": 100,
-      "soundProximityFalloff": 2,
-      "soundProximityMinFactor": 0.1,
-      "enemyAwarenessRange": 40,
-      "allyAwarenessRange": 50,
-      "destructionRusherParticleDespawnTime": 1,
-      "destructionOrbiterParticleDespawnTime": 1,
-      "destructionTankerParticleDespawnTime": 1,
-      "destructionSniperParticleDespawnTime": 1,
-      "destructionTeleporterParticleDespawnTime": 1,
-      "destructionShieldedParticleDespawnTime": 1,
-      "destructionSplitterParticleDespawnTime": 1,
-      "destructionBossParticleDespawnTime": 1,
-      "destructionDestructibleParticleDespawnTime": 1,
-      "overallBloomIntensity": 1.8,
-      "playerWeaponType": "rifle",
-      "weaponInfiniteAmmo": true,
-      "weaponPistolMagazineSize": 12,
-      "weaponPistolTotalAmmo": 60,
-      "weaponRifleMagazineSize": 30,
-      "weaponRifleTotalAmmo": 180,
-      "weaponShotgunMagazineSize": 8,
-      "weaponShotgunTotalAmmo": 40,
-      "weaponSniperMagazineSize": 5,
-      "weaponSniperTotalAmmo": 25,
-      "weaponGrenadeTotalAmmo": 10,
-      "weaponRocketClipCapacity": 1,
-      "weaponRocketTotalAmmo": 8,
-      "weaponPistolDamage": 24,
-      "weaponPistolRange": 55,
-      "weaponPistolSpread": 0.01,
-      "weaponPistolFireRate": 3.6,
-      "weaponPistolProjectileSpeed": 250,
-      "weaponPistolProjectileSize": 0.1,
-      "weaponPistolProjectileColor": "#FF1100",
-      "weaponPistolProjectileBloom": false,
-      "weaponPistolProjectileLength": 6,
-      "weaponPistolProjectileBloomIntensity": 3,
-      "weaponPistolProjectileBloomSize": 2,
-      "weaponPistolReticleType": "dot",
-      "weaponPistolReticleSize": 50,
-      "weaponPistolReticleWeight": 0.5,
-      "weaponRifleDamage": 34,
-      "weaponRifleRange": 42,
-      "weaponRifleSpread": 0.01,
-      "weaponRifleFireRate": 15,
-      "weaponRifleProjectileSpeed": 300,
-      "weaponRifleProjectileSize": 0.05,
-      "weaponRifleProjectileColor": "#ff1100",
-      "weaponRifleProjectileBloom": true,
-      "weaponRifleProjectileLength": 6,
-      "weaponRifleProjectileBloomIntensity": 3,
-      "weaponRifleProjectileBloomSize": 2,
-      "weaponRifleReticleType": "tr42",
-      "weaponRifleReticleSize": 50,
-      "weaponRifleReticleWeight": 0.5,
-      "weaponShotgunDamage": 12,
-      "weaponShotgunRange": 28,
-      "weaponShotgunSpread": 0.16,
-      "weaponShotgunFireRate": 1.15,
-      "weaponShotgunPellets": 8,
-      "weaponShotgunProjectileSpeed": 250,
-      "weaponShotgunProjectileSize": 0.05,
-      "weaponShotgunProjectileColor": "#ff0000",
-      "weaponShotgunProjectileBloom": true,
-      "weaponShotgunProjectileLength": 6,
-      "weaponShotgunProjectileBloomIntensity": 1,
-      "weaponShotgunProjectileBloomSize": 1,
-      "weaponShotgunReticleType": "shotgun",
-      "weaponShotgunReticleSize": 50,
-      "weaponShotgunReticleWeight": 2,
-      "weaponSniperDamage": 120,
-      "weaponSniperRange": 180,
-      "weaponSniperSpread": 0.002,
-      "weaponSniperFireRate": 0.65,
-      "weaponSniperProjectileSpeed": 130,
-      "weaponSniperProjectileSize": 0.24,
-      "weaponSniperProjectileColor": "#d975ff",
-      "weaponSniperProjectileBloom": true,
-      "weaponSniperProjectileLength": 0.56,
-      "weaponSniperProjectileBloomIntensity": 1,
-      "weaponSniperProjectileBloomSize": 1,
-      "weaponSniperReticleType": "cross",
-      "weaponSniperReticleSize": 24,
-      "weaponSniperReticleWeight": 2,
-      "weaponGrenadeDamage": 95,
-      "weaponGrenadeRange": 60,
-      "weaponGrenadeSpread": 0.01,
-      "weaponGrenadeFireRate": 0.72,
-      "weaponGrenadeProjectileSpeed": 16,
-      "weaponGrenadeProjectileSize": 0.25,
-      "weaponGrenadeProjectileColor": "#429a5c",
-      "weaponGrenadeProjectileBloom": false,
-      "weaponGrenadeProjectileLength": 0.27,
-      "weaponGrenadeProjectileBloomIntensity": 1,
-      "weaponGrenadeProjectileBloomSize": 1,
-      "weaponGrenadeRadius": 5,
-      "weaponGrenadeReticleType": "dot",
-      "weaponGrenadeReticleSize": 24,
-      "weaponGrenadeReticleWeight": 2,
-      "weaponRocketDamage": 130,
-      "weaponRocketRange": 95,
-      "weaponRocketSpread": 0.004,
-      "weaponRocketFireRate": 0.68,
-      "weaponRocketProjectileSpeed": 75,
-      "weaponRocketProjectileSize": 0.3,
-      "weaponRocketProjectileColor": "#000000",
-      "weaponRocketProjectileBloom": true,
-      "weaponRocketProjectileLength": 2,
-      "weaponRocketProjectileBloomIntensity": 3,
-      "weaponRocketProjectileBloomSize": 1,
-      "weaponRocketRadius": 6,
-      "weaponRocketReticleType": "rocket_launcher",
-      "weaponRocketReticleSize": 75,
-      "weaponRocketReticleWeight": 0.5,
-      "weaponPistolProjectileBloomColor": "#FF1100",
-      "weaponPistolReticleOpacity": 0.5,
-      "weaponRifleProjectileBloomColor": "#ff1100",
-      "weaponRifleReticleOpacity": 0.5,
-      "weaponShotgunProjectileBloomColor": "#d8dde6",
-      "weaponShotgunReticleOpacity": 1,
-      "weaponSniperProjectileBloomColor": "#d975ff",
-      "weaponSniperReticleOpacity": 0.5,
-      "weaponGrenadeProjectileBloomColor": "#ff8844",
-      "weaponGrenadeReticleOpacity": 1,
-      "weaponRocketProjectileBloomColor": "#ffffff",
-      "weaponRocketReticleOpacity": 0.5,
-      "weaponGrenadeShockwaveSpeed": 40,
-      "weaponGrenadeShockwaveColor": "#ffffff",
-      "weaponGrenadeShockwaveFadeTime": 0.12,
-      "weaponGrenadeShockwaveDelay": 0,
-      "weaponGrenadeShockwaveTransparency": 0.1,
-      "hudBulletTimeIndicator": true,
-      "hudBulletTimeIndicatorSize": 41,
-      "hudBulletTimeReadyOpacity": 1,
-      "hudBulletTimeEmptyOpacity": 1,
-      "hudBulletTimeActiveIcon": true,
-      "hudBulletTimeActiveIconSize": 68,
-      "hudBulletTimeActiveIconOpacity": 0.5,
-      "weaponGrenadeShockwaveSplashDamage": 100,
-      "weaponGrenadeShockwaveSplashRadius": 4,
-      "weaponGrenadeShockwaveSplashFalloff": 1,
-      "weaponGrenadeShockwaveSplashMinFactor": 0.15,
-      "weaponRocketShockwaveSpeed": 40,
-      "weaponRocketShockwaveColor": "#ffffff",
-      "weaponRocketShockwaveFadeTime": 0.12,
-      "weaponRocketShockwaveDelay": 0,
-      "weaponRocketShockwaveTransparency": 0.1,
-      "weaponRocketShockwaveSplashDamage": 100,
-      "weaponRocketShockwaveSplashRadius": 4,
-      "weaponRocketShockwaveSplashFalloff": 1,
-      "weaponRocketShockwaveSplashMinFactor": 0.15,
-      "weaponGrenadeShockwaveParticleCount": 40,
-      "weaponGrenadeShockwaveParticleSize": 0.25,
-      "weaponGrenadeShockwaveParticleSpeed": 6,
-      "weaponGrenadeShockwaveParticleGlow": 8,
-      "weaponGrenadeShockwaveParticleDespawnTime": 1,
-      "weaponGrenadeShockwaveParticleColor": "#ffffff",
-      "weaponGrenadeShockwaveParticlePhysics": "gravity",
-      "weaponRocketShockwaveParticleCount": 40,
-      "weaponRocketShockwaveParticleSize": 0.25,
-      "weaponRocketShockwaveParticleSpeed": 6,
-      "weaponRocketShockwaveParticleGlow": 8,
-      "weaponRocketShockwaveParticleDespawnTime": 1,
-      "weaponRocketShockwaveParticleColor": "#ffffff",
-      "weaponRocketShockwaveParticlePhysics": "gravity",
-      "weaponPistolReloadTime": 1,
-      "weaponRifleReloadTime": 1.5,
-      "weaponShotgunReloadTime": 1.6,
-      "weaponSniperReloadTime": 2,
-      "weaponRocketReloadTime": 2.4,
-      "soundSfx_reload": 1,
-      "weaponPistolOffsetX": 0,
-      "weaponPistolOffsetY": 0,
-      "weaponPistolRecoil": 0.15,
-      "weaponRifleOffsetX": 0,
-      "weaponRifleOffsetY": 0,
-      "weaponRifleRecoil": 0.5,
-      "weaponShotgunOffsetX": 0,
-      "weaponShotgunOffsetY": 0,
-      "weaponShotgunRecoil": 0,
-      "weaponSniperOffsetX": 0,
-      "weaponSniperOffsetY": 0,
-      "weaponSniperRecoil": 0,
-      "weaponGrenadeOffsetX": 0,
-      "weaponGrenadeOffsetY": 0,
-      "weaponRocketOffsetX": 0,
-      "weaponRocketOffsetY": 0,
-      "weaponRocketRecoil": 0,
-      "soundSfx_empty": 1,
-      "reticleKillConfirmEnabled": true,
-      "reticleKillConfirmColor": "#ffffff",
-      "reticleKillConfirmSize": 50,
-      "reticleKillConfirmOpacity": 0.5,
-      "weaponRifleTracers": false,
-      "reticleHitMarkerSize": 54,
-      "reticleHitMarkerWeight": 0.5,
-      "reticleHitMarkerOpacity": 1,
-      "reticleHitMarkerColor": "#ffffff",
-      "reticleHitMarkerDuration": 190,
-      "reticleKillConfirmDuration": 200,
-      "soundSfx_pistol_reload": 1,
-      "enemyAwarenessVisible": true,
-      "enemyAwarenessColor": "#ff3030",
-      "enemyAwarenessOpacity": 0.18,
-      "allyAwarenessVisible": true,
-      "allyAwarenessColor": "#ff0000",
-      "allyAwarenessOpacity": 0.48,
-      "reticleHitMarkerEnabled": true,
-      "enemyAwarenessOutlineColor": "#000000",
-      "allyAwarenessOutlineColor": "#ffffff",
-      "enemyAccuracy": 60,
-      "allyAccuracy": 60,
-      "enemyAwarenessFillTransparent": true,
-      "allyAwarenessFillTransparent": true,
-      "landscapeEditorModeEnabled": false,
-      "landscapeEditorCloneOffsetX": 1,
-      "landscapeEditorCloneOffsetZ": 1,
-      "landscapeEditorSelectionColor": "#445566",
-      "landscapeEditorSelectionScaleX": 1,
-      "landscapeEditorSelectionScaleY": 1,
-      "landscapeEditorSelectionScaleZ": 1,
-      "landscapeEditorSelectionRotationDeg": 0,
-      "landscapeEditorPrefabName": "Saved Structure",
-      "landscapeEditorSceneName": "Scene 1",
-      "landscapeEditorSelectedSceneId": "",
-      "savedPrefabs": [],
-      "savedScenes": [],
-      "playerSpawnEnabled": false,
-      "playerSpawnX": 0,
-      "playerSpawnY": 0,
-      "playerSpawnZ": 0,
-      "playerSpawnYaw": 3.141592653589793,
-      "editorPlayerSpawnYaw": 3.141592653589793
-  } },
-  { key: 'g38', label: 'G38', path: './presets/g38.json', data: {
+  { key: 'g53', label: 'G53', path: './presets/g53.json', data: {
     "cameraMode": "third2",
     "isoCamD": 12,
     "thirdDist": 5,
@@ -9477,7 +59,7 @@ const PRESET_SETTINGS = [
     "third2BodyFrameHeight": 1.35,
     "third2BodyScreenY": 0.45,
     "third2MinEyeHeight": 0.15,
-    "thirdAzimuth": 2.550629385640093,
+    "thirdAzimuth": 0,
     "thirdLookAhead": 3.8,
     "thirdSmoothPos": 10,
     "thirdSmoothLook": 12,
@@ -9489,7 +71,7 @@ const PRESET_SETTINGS = [
     "aimSmooth": 10,
     "thirdMouseSensitivityX": 0.003,
     "thirdMouseSensitivityY": 0.0024,
-    "thirdPitch": -0.040399999999998285,
+    "thirdPitch": -0.11353156709671092,
     "thirdOffsetMode": "parallel",
     "thirdOffsetX": 1.25,
     "thirdOffsetY": -0.25,
@@ -9508,18 +90,23 @@ const PRESET_SETTINGS = [
     "playerRadius": 0.4,
     "playerLength": 1.2,
     "playerMaxHealth": 100,
-    "playerHealth": 0,
+    "playerHealth": 65,
     "playerMaxArmor": 100,
     "playerArmor": 0,
-    "playerInvincible": true,
+    "playerInvincible": false,
     "jumpEnabled": true,
     "doubleJumpEnabled": true,
+    "doubleJumpAirJumps": 1,
+    "doubleJumpForceMultiplier": 1,
+    "doubleJumpResetVelocity": true,
     "jumpForce": 9.5,
     "jumpGravity": 26,
     "bulletTimeEnabled": true,
-    "bulletTimeDuration": 7.5,
-    "bulletTimeCooldown": 4,
+    "bulletTimeDuration": 5,
+    "bulletTimeCooldown": 5,
     "bulletTimeScale": 0.25,
+    "bulletTimeReplenishRate": 0.1,
+    "bulletTimeKillGain": 0.5,
     "shieldVisible": false,
     "shieldColor": "#1e7bff",
     "shieldOpacity": 0.4,
@@ -9534,7 +121,7 @@ const PRESET_SETTINGS = [
     "dashEnabled": true,
     "dashSpeed": 28,
     "dashDuration": 0.18,
-    "dashCooldown": 1.4,
+    "dashCooldown": 3,
     "ambientIntensity": 0,
     "sunIntensity": 5.5,
     "fillIntensity": 4,
@@ -9565,16 +152,24 @@ const PRESET_SETTINGS = [
     "buildAreaBoundaryOpacity": 0.28,
     "buildAreaBoundaryCollision": true,
     "showFps": true,
+    "fpsCounterSize": 48,
     "hudVisible": true,
+    "hudLayout": "hud2",
     "hudFont": "michroma",
     "hudNpcHealthBars": true,
     "hudEnemyHealthBars": true,
     "hudAllyHealthBars": true,
     "hudNpcHealthBarRange": 60,
+    "hudWeaponAmmoVisible": true,
+    "hudWeaponAmmoScale": 1,
+    "hudWeaponAmmoOpacity": 1,
+    "hudWeaponAmmoBgOpacity": 0.36,
+    "hudWeaponAmmoOffsetX": 0,
+    "hudWeaponAmmoOffsetY": 0,
     "reticleVisible": true,
     "reticleType": "tr42",
     "reticleColor": "#ffffff",
-    "reticleSize": 50,
+    "reticleSize": 75,
     "reticleThickness": 0.5,
     "reticleWeight": 0.5,
     "reticleOpacity": 0.5,
@@ -9586,22 +181,22 @@ const PRESET_SETTINGS = [
     "laserProjectileSpeed": 80,
     "laserRange": 42,
     "laserFireRate": 5,
-    "enemyType": "rusher",
-    "enemyCount": 10,
-    "enemyHealth": 10,
+    "enemyType": "sniper",
+    "enemyCount": 15,
+    "enemyHealth": 100,
     "enemyInvincible": false,
-    "enemyBehavior": "rush",
-    "enemyMoveSpeed": 2.2,
-    "enemyDamage": 10,
+    "enemyBehavior": "keepDistance",
+    "enemyMoveSpeed": 6,
+    "enemyDamage": 20,
     "enemyPlacement": "random",
-    "enemyWeaponType": "pistol",
+    "enemyWeaponType": "shotgun",
     "allyType": "orbiter",
     "allyCount": 10,
     "allyHealth": 100,
     "allyInvincible": false,
     "allyFriendlyFire": false,
     "allyBehavior": "keepDistance",
-    "allyMoveSpeed": 2.2,
+    "allyMoveSpeed": 3,
     "allyDamage": 10,
     "allyPlacement": "random",
     "allyWeaponType": "rifle",
@@ -9636,10 +231,10 @@ const PRESET_SETTINGS = [
     "controllerLookDeadzone": 0.1,
     "controllerLookSensX": 0.045,
     "controllerLookSensY": 0.036,
-    "controllerInvertY": false,
+    "controllerInvertY": true,
     "controllerFireThreshold": 0.5,
     "controllerVibration": true,
-    "tagEnabled": true,
+    "tagEnabled": false,
     "tagColor": "#ff2828",
     "tagSize": 25,
     "tagDwellTime": 0.6,
@@ -18523,6 +9118,7 @@ const PRESET_SETTINGS = [
     "soundSfx_shoot": 1,
     "soundSfx_dash": 1,
     "soundSfx_player_hit": 1,
+    "soundSfx_player_death": 1,
     "soundSfx_standard_hit": 1,
     "soundSfx_elite_hit": 1,
     "soundSfx_explode": 1,
@@ -18615,7 +9211,7 @@ const PRESET_SETTINGS = [
     "placerRotationDeg": 0,
     "placerTransformModalX": 22,
     "placerTransformModalY": 22,
-    "editorModeEnabled": true,
+    "editorModeEnabled": false,
     "editorPlacementTarget": "asset",
     "editorMoveSpeed": 15,
     "editorSprintMultiplier": 2.25,
@@ -18625,12 +9221,18 @@ const PRESET_SETTINGS = [
     "editorFov": 70,
     "editorMouseSensitivityX": 0.003,
     "editorMouseSensitivityY": 0.0024,
-    "editorCameraX": 40.48972202963538,
-    "editorCameraY": 10.930499999821192,
-    "editorCameraZ": -39.45350409879743,
-    "editorYaw": 4.601444078461338,
-    "editorPitch": -0.4707999999999998,
+    "editorCameraX": -1.2356679200159255,
+    "editorCameraY": 11.026832711805062,
+    "editorCameraZ": 82.58700963443923,
+    "editorYaw": 0,
+    "editorPitch": -0.5636000000000024,
     "editorPlacedNpcs": [],
+    "enemySpawnEnabled": false,
+    "enemySpawnX": 0.5,
+    "enemySpawnY": 0,
+    "enemySpawnZ": 8.5,
+    "enemySpawnYaw": 0,
+    "editorEnemySpawnYaw": 0,
     "soundSfx_jump": 1,
     "soundSfx_enemy_grunt": 1,
     "soundSfx_object_explode": 1,
@@ -18649,7 +9251,7 @@ const PRESET_SETTINGS = [
     "soundProximityRange": 100,
     "soundProximityFalloff": 2,
     "soundProximityMinFactor": 0.1,
-    "enemyAwarenessRange": 40,
+    "enemyAwarenessRange": 75,
     "allyAwarenessRange": 50,
     "destructionRusherParticleDespawnTime": 1,
     "destructionOrbiterParticleDespawnTime": 1,
@@ -18662,7 +9264,7 @@ const PRESET_SETTINGS = [
     "destructionDestructibleParticleDespawnTime": 1,
     "overallBloomIntensity": 1.8,
     "playerWeaponType": "rifle",
-    "weaponInfiniteAmmo": true,
+    "weaponInfiniteAmmo": false,
     "weaponPistolMagazineSize": 12,
     "weaponPistolTotalAmmo": 60,
     "weaponRifleMagazineSize": 30,
@@ -18675,7 +9277,7 @@ const PRESET_SETTINGS = [
     "weaponRocketClipCapacity": 1,
     "weaponRocketTotalAmmo": 8,
     "weaponPistolDamage": 24,
-    "weaponPistolRange": 55,
+    "weaponPistolRange": 60,
     "weaponPistolSpread": 0.01,
     "weaponPistolFireRate": 3.6,
     "weaponPistolProjectileSpeed": 250,
@@ -18688,8 +9290,8 @@ const PRESET_SETTINGS = [
     "weaponPistolReticleType": "dot",
     "weaponPistolReticleSize": 50,
     "weaponPistolReticleWeight": 0.5,
-    "weaponRifleDamage": 34,
-    "weaponRifleRange": 42,
+    "weaponRifleDamage": 25,
+    "weaponRifleRange": 100,
     "weaponRifleSpread": 0.01,
     "weaponRifleFireRate": 15,
     "weaponRifleProjectileSpeed": 300,
@@ -18700,32 +9302,32 @@ const PRESET_SETTINGS = [
     "weaponRifleProjectileBloomIntensity": 3,
     "weaponRifleProjectileBloomSize": 2,
     "weaponRifleReticleType": "tr42",
-    "weaponRifleReticleSize": 50,
+    "weaponRifleReticleSize": 75,
     "weaponRifleReticleWeight": 0.5,
-    "weaponShotgunDamage": 12,
-    "weaponShotgunRange": 28,
-    "weaponShotgunSpread": 0.16,
+    "weaponShotgunDamage": 45,
+    "weaponShotgunRange": 50,
+    "weaponShotgunSpread": 0.08,
     "weaponShotgunFireRate": 1.15,
     "weaponShotgunPellets": 8,
-    "weaponShotgunProjectileSpeed": 250,
-    "weaponShotgunProjectileSize": 0.05,
-    "weaponShotgunProjectileColor": "#ff0000",
+    "weaponShotgunProjectileSpeed": 400,
+    "weaponShotgunProjectileSize": 0.07,
+    "weaponShotgunProjectileColor": "#ffff00",
     "weaponShotgunProjectileBloom": true,
     "weaponShotgunProjectileLength": 6,
     "weaponShotgunProjectileBloomIntensity": 1,
     "weaponShotgunProjectileBloomSize": 1,
     "weaponShotgunReticleType": "shotgun",
-    "weaponShotgunReticleSize": 50,
-    "weaponShotgunReticleWeight": 2,
-    "weaponSniperDamage": 120,
-    "weaponSniperRange": 180,
-    "weaponSniperSpread": 0.002,
+    "weaponShotgunReticleSize": 96,
+    "weaponShotgunReticleWeight": 0.5,
+    "weaponSniperDamage": 200,
+    "weaponSniperRange": 300,
+    "weaponSniperSpread": 0,
     "weaponSniperFireRate": 0.65,
-    "weaponSniperProjectileSpeed": 130,
-    "weaponSniperProjectileSize": 0.24,
-    "weaponSniperProjectileColor": "#d975ff",
+    "weaponSniperProjectileSpeed": 500,
+    "weaponSniperProjectileSize": 0.05,
+    "weaponSniperProjectileColor": "#ffff00",
     "weaponSniperProjectileBloom": true,
-    "weaponSniperProjectileLength": 0.56,
+    "weaponSniperProjectileLength": 2,
     "weaponSniperProjectileBloomIntensity": 1,
     "weaponSniperProjectileBloomSize": 1,
     "weaponSniperReticleType": "cross",
@@ -18746,7 +9348,7 @@ const PRESET_SETTINGS = [
     "weaponGrenadeReticleType": "dot",
     "weaponGrenadeReticleSize": 24,
     "weaponGrenadeReticleWeight": 2,
-    "weaponRocketDamage": 130,
+    "weaponRocketDamage": 400,
     "weaponRocketRange": 95,
     "weaponRocketSpread": 0.004,
     "weaponRocketFireRate": 0.68,
@@ -18757,7 +9359,7 @@ const PRESET_SETTINGS = [
     "weaponRocketProjectileLength": 2,
     "weaponRocketProjectileBloomIntensity": 3,
     "weaponRocketProjectileBloomSize": 1,
-    "weaponRocketRadius": 6,
+    "weaponRocketRadius": 12,
     "weaponRocketReticleType": "rocket_launcher",
     "weaponRocketReticleSize": 75,
     "weaponRocketReticleWeight": 0.5,
@@ -18765,9 +9367,9 @@ const PRESET_SETTINGS = [
     "weaponPistolReticleOpacity": 0.5,
     "weaponRifleProjectileBloomColor": "#ff1100",
     "weaponRifleReticleOpacity": 0.5,
-    "weaponShotgunProjectileBloomColor": "#d8dde6",
-    "weaponShotgunReticleOpacity": 1,
-    "weaponSniperProjectileBloomColor": "#d975ff",
+    "weaponShotgunProjectileBloomColor": "#ff0000",
+    "weaponShotgunReticleOpacity": 0.5,
+    "weaponSniperProjectileBloomColor": "#ff0000",
     "weaponSniperReticleOpacity": 0.5,
     "weaponGrenadeProjectileBloomColor": "#ff8844",
     "weaponGrenadeReticleOpacity": 1,
@@ -18794,7 +9396,7 @@ const PRESET_SETTINGS = [
     "weaponRocketShockwaveFadeTime": 0.12,
     "weaponRocketShockwaveDelay": 0,
     "weaponRocketShockwaveTransparency": 0.1,
-    "weaponRocketShockwaveSplashDamage": 100,
+    "weaponRocketShockwaveSplashDamage": 200,
     "weaponRocketShockwaveSplashRadius": 4,
     "weaponRocketShockwaveSplashFalloff": 1,
     "weaponRocketShockwaveSplashMinFactor": 0.15,
@@ -18829,7 +9431,7 @@ const PRESET_SETTINGS = [
     "weaponShotgunRecoil": 0,
     "weaponSniperOffsetX": 0,
     "weaponSniperOffsetY": 0,
-    "weaponSniperRecoil": 0,
+    "weaponSniperRecoil": 1,
     "weaponGrenadeOffsetX": 0,
     "weaponGrenadeOffsetY": 0,
     "weaponRocketOffsetX": 0,
@@ -18848,35 +9450,215 @@ const PRESET_SETTINGS = [
     "reticleHitMarkerDuration": 190,
     "reticleKillConfirmDuration": 200,
     "soundSfx_pistol_reload": 1,
-    "enemyAwarenessVisible": true,
+    "enemyAwarenessVisible": false,
     "enemyAwarenessColor": "#ff3030",
     "enemyAwarenessOpacity": 0.18,
-    "allyAwarenessVisible": true,
+    "allyAwarenessVisible": false,
     "allyAwarenessColor": "#ff0000",
     "allyAwarenessOpacity": 0.48,
     "reticleHitMarkerEnabled": true,
     "enemyAwarenessOutlineColor": "#000000",
     "allyAwarenessOutlineColor": "#ffffff",
-    "enemyAccuracy": 50,
-    "allyAccuracy": 50,
-    "enemyAwarenessFillTransparent": true,
-    "allyAwarenessFillTransparent": true,
-    "playerSpawnEnabled": false,
-    "playerSpawnX": 0,
+    "enemyAccuracy": 85,
+    "allyAccuracy": 85,
+    "enemyAwarenessFillTransparent": false,
+    "allyAwarenessFillTransparent": false,
+    "landscapeEditorModeEnabled": false,
+    "landscapeEditorCloneOffsetX": 1,
+    "landscapeEditorCloneOffsetZ": 1,
+    "landscapeEditorSelectionColor": "#445566",
+    "landscapeEditorSelectionScaleX": 1,
+    "landscapeEditorSelectionScaleY": 1,
+    "landscapeEditorSelectionScaleZ": 1,
+    "landscapeEditorSelectionRotationDeg": 0,
+    "landscapeEditorPrefabName": "Saved Structure",
+    "landscapeEditorSceneName": "Scene 1",
+    "landscapeEditorSelectedSceneId": "",
+    "savedPrefabs": [],
+    "savedScenes": [],
+    "playerSpawnEnabled": true,
+    "playerSpawnX": -10.5,
     "playerSpawnY": 0,
-    "playerSpawnZ": 0,
-    "playerSpawnYaw": 3.141592653589793,
-    "editorPlayerSpawnYaw": 3.141592653589793
+    "playerSpawnZ": 70.5,
+    "playerSpawnYaw": 0,
+    "editorPlayerSpawnYaw": 0,
+    "playerCorpseFadeTime": 3,
+    "killScreenEnabled": true,
+    "killScreenDuration": 10,
+    "killScreenSaturation": 0,
+    "killScreenText": "FAGGOT!",
+    "killScreenTextSize": 144,
+    "killScreenTextColor": "#ff0000",
+    "killScreenTextOpacity": 1,
+    "killScreenWorldScale": 0.2,
+    "soundSfx_bullet_time_end": 1,
+    "killScreenFont": "rodinDb",
+    "killScreenTextOffsetX": 0,
+    "killScreenTextOffsetY": -250,
+    "controllerMapCross": "jump",
+    "controllerMapCircle": "dash",
+    "controllerMapSquare": "reload",
+    "controllerMapTriangle": "none",
+    "controllerMapL1": "bulletTime",
+    "controllerMapL2": "ads",
+    "controllerMapR1": "none",
+    "controllerMapR2": "fire",
+    "controllerMapShare": "none",
+    "controllerMapOptions": "toggleSidebar",
+    "controllerMapL3": "none",
+    "controllerMapR3": "none",
+    "controllerMapDpadUp": "none",
+    "controllerMapDpadDown": "none",
+    "controllerMapDpadLeft": "changeWeaponPrev",
+    "controllerMapDpadRight": "changeWeaponNext",
+    "enemyGroup": "1",
+    "enemyGroupConfigs": [
+        {
+            "type": "sniper",
+            "count": 15,
+            "health": 100,
+            "invincible": false,
+            "behavior": "keepDistance",
+            "moveSpeed": 6,
+            "damage": 20,
+            "accuracy": 85,
+            "placement": "random",
+            "weaponType": "shotgun",
+            "awarenessRange": 75,
+            "awarenessVisible": false,
+            "awarenessColor": "#ff3030",
+            "awarenessOutlineColor": "#000000",
+            "awarenessOpacity": 0.18,
+            "awarenessFillTransparent": false,
+            "group": "1"
+        },
+        {
+            "type": "sniper",
+            "count": 15,
+            "health": 100,
+            "invincible": false,
+            "behavior": "keepDistance",
+            "moveSpeed": 6,
+            "damage": 20,
+            "accuracy": 85,
+            "placement": "random",
+            "weaponType": "shotgun",
+            "awarenessRange": 75,
+            "awarenessVisible": false,
+            "awarenessColor": "#ff3030",
+            "awarenessOutlineColor": "#000000",
+            "awarenessOpacity": 0.18,
+            "awarenessFillTransparent": false,
+            "group": "2"
+        },
+        {
+            "type": "sniper",
+            "count": 15,
+            "health": 100,
+            "invincible": false,
+            "behavior": "keepDistance",
+            "moveSpeed": 6,
+            "damage": 20,
+            "accuracy": 85,
+            "placement": "random",
+            "weaponType": "shotgun",
+            "awarenessRange": 75,
+            "awarenessVisible": false,
+            "awarenessColor": "#ff3030",
+            "awarenessOutlineColor": "#000000",
+            "awarenessOpacity": 0.18,
+            "awarenessFillTransparent": false,
+            "group": "3"
+        }
+    ],
+    "allyGroup": "1",
+    "allyGroupConfigs": [
+        {
+            "type": "orbiter",
+            "count": 10,
+            "health": 100,
+            "invincible": false,
+            "friendlyFire": false,
+            "behavior": "keepDistance",
+            "moveSpeed": 3,
+            "damage": 10,
+            "accuracy": 85,
+            "placement": "random",
+            "weaponType": "rifle",
+            "awarenessRange": 50,
+            "awarenessVisible": false,
+            "awarenessColor": "#ff0000",
+            "awarenessOutlineColor": "#ffffff",
+            "awarenessOpacity": 0.48,
+            "awarenessFillTransparent": false,
+            "group": "1"
+        },
+        {
+            "type": "orbiter",
+            "count": 10,
+            "health": 100,
+            "invincible": false,
+            "friendlyFire": false,
+            "behavior": "keepDistance",
+            "moveSpeed": 3,
+            "damage": 10,
+            "accuracy": 85,
+            "placement": "random",
+            "weaponType": "rifle",
+            "awarenessRange": 50,
+            "awarenessVisible": false,
+            "awarenessColor": "#ff0000",
+            "awarenessOutlineColor": "#ffffff",
+            "awarenessOpacity": 0.48,
+            "awarenessFillTransparent": false,
+            "group": "2"
+        },
+        {
+            "type": "orbiter",
+            "count": 10,
+            "health": 100,
+            "invincible": false,
+            "friendlyFire": false,
+            "behavior": "keepDistance",
+            "moveSpeed": 3,
+            "damage": 10,
+            "accuracy": 85,
+            "placement": "random",
+            "weaponType": "rifle",
+            "awarenessRange": 50,
+            "awarenessVisible": false,
+            "awarenessColor": "#ff0000",
+            "awarenessOutlineColor": "#ffffff",
+            "awarenessOpacity": 0.48,
+            "awarenessFillTransparent": false,
+            "group": "3"
+        }
+    ],
+    "enemySpawnPoints": [],
+    "allySpawnPoints": [],
+    "allySpawnEnabled": false,
+    "allySpawnX": -0.5,
+    "allySpawnY": 0,
+    "allySpawnZ": 8.5,
+    "allySpawnYaw": 0,
+    "editorAllySpawnYaw": 0,
+    "editorEnemySpawnPoint": 1,
+    "editorEnemySpawnGroup": "1",
+    "editorAllySpawnPoint": 1,
+    "editorAllySpawnGroup": "1"
 } },
 ];
 
-
-
 const ICON_ENEMIES = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor" aria-hidden="true"><path d="M292-132v-152q-36-15-65.5-39T176-378q-21-31-32.5-67T132-520q0-136 97.42-222 97.41-86 250.5-86Q633-828 730.5-742T828-520q0 39-11.5 75T784-378q-21 31-50.5 55T668-283.82V-132H292Zm28-28h62v-56h56v56h84v-56h56v56h62v-142q36-12 65.5-33.5t50.65-50.05q21.15-28.54 32.5-63Q800-483 800-520q0-125-88.5-202.5T480-800q-143 0-231.5 77.5T160-520q0 37 11.35 71.45 11.35 34.46 32.5 63Q225-357 254.5-335.5 284-314 320-302v142Zm110-200h100l-50-100-50 100Zm-89.82-100q24.82 0 42.32-17.68 17.5-17.67 17.5-42.5 0-24.82-17.68-42.32-17.67-17.5-42.5-17.5-24.82 0-42.32 17.68-17.5 17.67-17.5 42.5 0 24.82 17.68 42.32 17.67 17.5 42.5 17.5Zm280 0q24.82 0 42.32-17.68 17.5-17.67 17.5-42.5 0-24.82-17.68-42.32-17.67-17.5-42.5-17.5-24.82 0-42.32 17.68-17.5 17.67-17.5 42.5 0 24.82 17.68 42.32 17.67 17.5 42.5 17.5ZM480-160Z"/></svg>`;
 
-
 const ICON_DESTRUCTION = `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M361.24-112Q258-112 185-184.68 112-257.35 112-360q0-105 75.5-176.5T369-608q8 0 16.5.5T402-606l23-41q9-17 27-21.5t35 4.5l25 14 5-8q20-34 57-44t71 10l12 7-14 24-12-7q-24-14-51-7t-40 31l-4 8 25 14q17 9 21.5 27t-4.5 35l-24 42q23 38 39 78.5t16 85.5q0 102-72.26 172-72.27 70-175.5 70Zm-.24-27q92 0 156-64.5T581-359q0-31-8.5-61T547-477l-26-41 29-51q5-8 2.5-18T542-602l-63-36q-8-5-18-2t-15 11l-29 50h-48q-94 0-161.5 63T140-361q0 92 64.5 157T361-139Zm387-475v-28h68v28h-68ZM586-788v-68h28v68h-28Zm162 40-19-19 48-49 19 20-48 48ZM361-359Z"/></svg>`;
+
 const ICON_ABILITIES = `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="m642-477-79 128q-5 8-15.5 7T535-353l-32-131-301 302q-4 4-9.5 4.5T182-182q-5-5-5-10t5-10l302-302-130-32q-10-2-11.5-12t6.5-15l128-79-11-150q-1-10 7.5-15t16.5 2l115 97 139-57q9-4 16.5 3.5T764-745l-56 139 97 115q7 8 2.5 17t-14.5 8l-151-11ZM183-734q-5-5-5-11t5-11l21-21q5-5 11-5t11 5l21 21q5 5 5 11t-5 11l-21 21q-5 5-11 5t-11-5l-21-21Zm372 344 72-116 136 10-88-105 51-126-126 51-105-88 10 136-115 72 132 33 33 133Zm179 207-21-21q-5-5-5-11t5-11l21-21q5-5 11-5t11 5l21 21q5 5 5 11t-5 11l-21 21q-5 5-11 5t-11-5ZM577-577Z"/></svg>`;
+
+const HUD_LAYOUT_OPTIONS = [
+  ['hud1', 'HUD 1'],
+  ['hud2', 'HUD 2'],
+];
 
 const HUD_FONT_OPTIONS = [
   ['system', 'System Default'],
@@ -18988,14 +9770,6 @@ const ENEMY_BEHAVIOR_OPTIONS = [
 const ENEMY_PLACEMENT_OPTIONS = [
   ['random', 'Random'],
   ['grouped', 'Grouped'],
-];
-
-const ENEMY_WEAPON_OPTIONS = [
-  ['contact', 'Contact'],
-  ['none', 'None'],
-  ['projectile', 'Projectile'],
-  ['laser', 'Laser'],
-  ['sniper', 'Sniper'],
 ];
 
 const PLAYER_WEAPON_OPTIONS = [
@@ -19186,6 +9960,169 @@ const ALLY_JSON_KEYS = [
   'allyAwarenessFillTransparent',
   'allyAccuracy',
 ];
+
+
+const NPC_GROUP_OPTIONS = [
+  ['1', 'Group 1'],
+  ['2', 'Group 2'],
+  ['3', 'Group 3'],
+];
+
+const NPC_SPAWN_POINT_OPTIONS = [
+  ['1', 'Spawn Point 1'],
+  ['2', 'Spawn Point 2'],
+  ['3', 'Spawn Point 3'],
+  ['4', 'Spawn Point 4'],
+  ['5', 'Spawn Point 5'],
+  ['6', 'Spawn Point 6'],
+];
+
+const ENEMY_GROUP_FIELDS = [
+  'type', 'count', 'health', 'invincible', 'behavior', 'moveSpeed', 'damage', 'accuracy', 'placement', 'weaponType',
+  'awarenessRange', 'awarenessVisible', 'awarenessColor', 'awarenessOutlineColor', 'awarenessOpacity', 'awarenessFillTransparent',
+];
+
+const ALLY_GROUP_FIELDS = [
+  'type', 'count', 'health', 'invincible', 'friendlyFire', 'behavior', 'moveSpeed', 'damage', 'accuracy', 'placement', 'weaponType',
+  'awarenessRange', 'awarenessVisible', 'awarenessColor', 'awarenessOutlineColor', 'awarenessOpacity', 'awarenessFillTransparent',
+];
+
+function capitalizeField(field) {
+  return `${field.charAt(0).toUpperCase()}${field.slice(1)}`;
+}
+
+function npcFieldKey(team, field) {
+  return `${team}${capitalizeField(field)}`;
+}
+
+function npcGroupFields(team) {
+  return team === 'ally' ? ALLY_GROUP_FIELDS : ENEMY_GROUP_FIELDS;
+}
+
+function npcGroupParamKey(team) {
+  return `${team}Group`;
+}
+
+function npcGroupConfigsKey(team) {
+  return `${team}GroupConfigs`;
+}
+
+function normalizeNpcGroupId(value) {
+  const text = String(value ?? '1');
+  return ['1', '2', '3'].includes(text) ? text : '1';
+}
+
+function normalizeSpawnPointId(value) {
+  const numeric = Math.round(Number(value));
+  return Math.min(6, Math.max(1, Number.isFinite(numeric) ? numeric : 1));
+}
+
+function snapshotNpcGroupFields(team) {
+  const out = { group: normalizeNpcGroupId(state.params[npcGroupParamKey(team)]) };
+  npcGroupFields(team).forEach(field => {
+    const key = npcFieldKey(team, field);
+    if (Object.prototype.hasOwnProperty.call(state.params, key)) out[field] = cloneData(state.params[key]);
+  });
+  return out;
+}
+
+function ensureNpcGroupConfigs(team) {
+  const key = npcGroupConfigsKey(team);
+  const fields = npcGroupFields(team);
+  const existing = Array.isArray(state.params[key]) ? state.params[key] : [];
+  const byGroup = new Map();
+  existing.forEach(item => {
+    const group = normalizeNpcGroupId(item?.group);
+    const clean = { group };
+    fields.forEach(field => {
+      if (Object.prototype.hasOwnProperty.call(item || {}, field)) clean[field] = cloneData(item[field]);
+    });
+    byGroup.set(group, clean);
+  });
+  const base = snapshotNpcGroupFields(team);
+  state.params[key] = ['1', '2', '3'].map(group => ({ ...base, ...(byGroup.get(group) || {}), group }));
+  return state.params[key];
+}
+
+function saveNpcGroupConfig(team, group = state.params[npcGroupParamKey(team)]) {
+  const groupId = normalizeNpcGroupId(group);
+  const configs = ensureNpcGroupConfigs(team);
+  const next = snapshotNpcGroupFields(team);
+  next.group = groupId;
+  const idx = configs.findIndex(item => normalizeNpcGroupId(item?.group) === groupId);
+  if (idx >= 0) configs[idx] = next;
+  else configs.push(next);
+  state.params[npcGroupConfigsKey(team)] = configs;
+  return next;
+}
+
+function applyNpcGroupConfigToControls(team, group = state.params[npcGroupParamKey(team)]) {
+  const groupId = normalizeNpcGroupId(group);
+  const configs = ensureNpcGroupConfigs(team);
+  const config = configs.find(item => normalizeNpcGroupId(item?.group) === groupId) || configs[0] || {};
+  npcGroupFields(team).forEach(field => {
+    if (!Object.prototype.hasOwnProperty.call(config, field)) return;
+    state.params[npcFieldKey(team, field)] = cloneData(config[field]);
+  });
+  state.params[npcGroupParamKey(team)] = groupId;
+}
+
+function groupSelect(team) {
+  const key = npcGroupParamKey(team);
+  state.params[key] = normalizeNpcGroupId(state.params[key]);
+  ensureNpcGroupConfigs(team);
+  const sel = document.createElement('select');
+  sel.dataset.paramKey = key;
+  sel.className = 'sb-select';
+  NPC_GROUP_OPTIONS.forEach(([value, label]) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    opt.selected = state.params[key] === value;
+    sel.appendChild(opt);
+  });
+  let previous = state.params[key];
+  sel.addEventListener('change', () => {
+    saveNpcGroupConfig(team, previous);
+    state.params[key] = normalizeNpcGroupId(sel.value);
+    applyNpcGroupConfigToControls(team, state.params[key]);
+    previous = state.params[key];
+    state.activePreset = 'custom';
+    applyAllParams();
+    rebuildPanel();
+  });
+  return row('Group', sel);
+}
+
+function npcGroupSaveHandler(team, onChange) {
+  return value => {
+    saveNpcGroupConfig(team);
+    onChange?.(value);
+  };
+}
+
+function applyAllWeaponVisualSettings() {
+  applyPlayerWeaponSettings();
+  applyNpcWeaponSettings();
+}
+
+function teamSpawnParamPrefix(team) {
+  return team === 'ally' ? 'Ally' : 'Enemy';
+}
+
+function spawnPointSelect(label, key, onChange) {
+  return select(label, key, NPC_SPAWN_POINT_OPTIONS, value => {
+    state.params[key] = normalizeSpawnPointId(value);
+    onChange?.(state.params[key]);
+  });
+}
+
+function spawnGroupSelect(label, key, onChange) {
+  return select(label, key, NPC_GROUP_OPTIONS, value => {
+    state.params[key] = normalizeNpcGroupId(value);
+    onChange?.(state.params[key]);
+  });
+}
 
 
 // ── DOM helpers ────────────────────────────────────────────────────────────────
@@ -19636,6 +10573,7 @@ function buildPlayer(body) {
   body.appendChild(slider({
     key: 'playerSpeed', label: 'Speed', min: 1, max: 25, step: 0.5, dec: 1,
   }));
+  body.appendChild(slider({ key: 'playerCorpseFadeTime', label: 'Corpse Fade Time', min: 0.1, max: 10, step: 0.1, dec: 1 }));
   body.appendChild(colorPicker('Color', 'playerColor', v => {
     playerMat.color.set(v);
     playerBaseColor.copy(playerMat.color);
@@ -19665,11 +10603,6 @@ function buildPlayer(body) {
   body.appendChild(slider({ key: 'jumpForce', label: 'Jump Force', min: 2, max: 24, step: 0.5, dec: 1 }));
   body.appendChild(slider({ key: 'jumpGravity', label: 'Gravity', min: 5, max: 80, step: 1, dec: 0 }));
 
-  body.appendChild(subhdr('Dash'));
-  body.appendChild(toggle('Dash Enabled', 'dashEnabled'));
-  body.appendChild(slider({ key: 'dashSpeed',    label: 'Speed',    min: 5,    max: 60,  step: 1,    dec: 0 }));
-  body.appendChild(slider({ key: 'dashDuration', label: 'Duration', min: 0.05, max: 0.5, step: 0.01, dec: 2 }));
-  body.appendChild(slider({ key: 'dashCooldown', label: 'Cooldown', min: 0.1,  max: 5,   step: 0.1,  dec: 1 }));
 }
 
 
@@ -19737,6 +10670,8 @@ function buildLighting(body) {
 }
 
 function buildScene(body) {
+  body.appendChild(toggle('Show Floor', 'showFloor', v => { setFloorVisible(v); applyFloorSettings(); }));
+  body.appendChild(toggle('Show Grid',  'showGrid',  v => { setGridVisible(v); applyFloorSettings(); }));
   body.appendChild(colorPicker('Background', 'bgColor', v => {
     scene.background = new THREE.Color(v);
     if (scene.fog) scene.fog.color.set(v);
@@ -19751,8 +10686,6 @@ function buildScene(body) {
   }));
   body.appendChild(colorPicker('Floor Color', 'floorColor', v => { setFloorColor(v); applyFloorSettings(); }));
   body.appendChild(colorPicker('Grid Color',  'gridColor',  v => { setGridColor(v); applyFloorSettings(); }));
-  body.appendChild(toggle('Show Floor', 'showFloor', v => { setFloorVisible(v); applyFloorSettings(); }));
-  body.appendChild(toggle('Show Grid',  'showGrid',  v => { setGridVisible(v); applyFloorSettings(); }));
 
   body.appendChild(subhdr('Build Area'));
   body.appendChild(select('Floor Mode', 'floorMode', [
@@ -19781,17 +10714,15 @@ function buildScene(body) {
   body.appendChild(slider({ key: 'buildAreaBoundaryHeight', label: 'Wall Height', min: 0.25, max: 12, step: 0.25, dec: 2, onChange: () => applyFloorSettings({ force: true }) }));
   body.appendChild(slider({ key: 'buildAreaBoundaryOpacity', label: 'Wall Opacity', min: 0, max: 1, step: 0.05, dec: 2, onChange: () => applyFloorSettings({ force: true }) }));
   body.appendChild(toggle('Boundary Collision', 'buildAreaBoundaryCollision', () => applyFloorSettings({ force: true })));
-
-  body.appendChild(subhdr('Debug'));
-  body.appendChild(toggle('Show FPS', 'showFps', () => applyHudSettings()));
 }
 
 
 function buildHUD(body) {
   body.appendChild(toggle('HUD Enabled', 'hudVisible', () => applyHudSettings()));
-  body.appendChild(select('Font', 'hudFont', HUD_FONT_OPTIONS, () => applyHudSettings()));
   body.appendChild(toggle('Enemy Health Bars', 'hudEnemyHealthBars', () => applyHudSettings()));
   body.appendChild(toggle('Ally Health Bars', 'hudAllyHealthBars', () => applyHudSettings()));
+  body.appendChild(select('Layout', 'hudLayout', HUD_LAYOUT_OPTIONS, () => applyHudSettings()));
+  body.appendChild(select('Font', 'hudFont', HUD_FONT_OPTIONS, () => applyHudSettings()));
   body.appendChild(slider({ key: 'hudNpcHealthBarRange', label: 'Health Bar Range', min: 0, max: 200, step: 1, dec: 0, onChange: () => applyHudSettings() }));
   body.appendChild(toggle('Bullet Time Indicator', 'hudBulletTimeIndicator', () => applyHudSettings()));
   body.appendChild(slider({ key: 'hudBulletTimeIndicatorSize', label: 'BT Icon Size', min: 8, max: 64, step: 1, dec: 0, onChange: () => applyHudSettings() }));
@@ -19800,6 +10731,28 @@ function buildHUD(body) {
   body.appendChild(toggle('BT Active Icon', 'hudBulletTimeActiveIcon', () => applyHudSettings()));
   body.appendChild(slider({ key: 'hudBulletTimeActiveIconSize', label: 'BT Active Size', min: 12, max: 128, step: 1, dec: 0, onChange: () => applyHudSettings() }));
   body.appendChild(slider({ key: 'hudBulletTimeActiveIconOpacity', label: 'BT Active Opacity', min: 0, max: 1, step: 0.05, dec: 2, onChange: () => applyHudSettings() }));
+
+  body.appendChild(subhdr('Weapon Ammo'));
+  body.appendChild(toggle('Ammo HUD', 'hudWeaponAmmoVisible', () => syncWeaponAmmoHud()));
+  body.appendChild(slider({ key: 'hudWeaponAmmoScale', label: 'Scale', min: 0.5, max: 2, step: 0.05, dec: 2, onChange: () => syncWeaponAmmoHud() }));
+  body.appendChild(slider({ key: 'hudWeaponAmmoOpacity', label: 'Opacity', min: 0, max: 1, step: 0.05, dec: 2, onChange: () => syncWeaponAmmoHud() }));
+  body.appendChild(slider({ key: 'hudWeaponAmmoBgOpacity', label: 'BG Opacity', min: 0, max: 1, step: 0.05, dec: 2, onChange: () => syncWeaponAmmoHud() }));
+  body.appendChild(slider({ key: 'hudWeaponAmmoOffsetX', label: 'Offset X', min: -400, max: 400, step: 1, dec: 0, onChange: () => syncWeaponAmmoHud() }));
+  body.appendChild(slider({ key: 'hudWeaponAmmoOffsetY', label: 'Offset Y', min: -300, max: 300, step: 1, dec: 0, onChange: () => syncWeaponAmmoHud() }));
+
+
+  body.appendChild(subhdr('Kill Screen'));
+  body.appendChild(toggle('Kill Screen HUD', 'killScreenEnabled', () => applyHudSettings()));
+  body.appendChild(slider({ key: 'killScreenDuration', label: 'Duration', min: 0.1, max: 30, step: 0.1, dec: 1 }));
+  body.appendChild(slider({ key: 'killScreenSaturation', label: 'Screen Saturation', min: 0, max: 1, step: 0.01, dec: 2, onChange: () => applyHudSettings() }));
+  body.appendChild(textInputRow('Text', 'killScreenText', () => applyHudSettings()));
+  body.appendChild(select('Text Font', 'killScreenFont', HUD_FONT_OPTIONS, () => applyHudSettings()));
+  body.appendChild(slider({ key: 'killScreenTextSize', label: 'Text Size', min: 12, max: 160, step: 1, dec: 0, onChange: () => applyHudSettings() }));
+  body.appendChild(colorPicker('Text Color', 'killScreenTextColor', () => applyHudSettings()));
+  body.appendChild(slider({ key: 'killScreenTextOpacity', label: 'Text Opacity', min: 0, max: 1, step: 0.05, dec: 2, onChange: () => applyHudSettings() }));
+  body.appendChild(slider({ key: 'killScreenTextOffsetX', label: 'Text Offset X', min: -600, max: 600, step: 1, dec: 0, onChange: () => applyHudSettings() }));
+  body.appendChild(slider({ key: 'killScreenTextOffsetY', label: 'Text Offset Y', min: -400, max: 400, step: 1, dec: 0, onChange: () => applyHudSettings() }));
+  body.appendChild(slider({ key: 'killScreenWorldScale', label: 'World Scale', min: 0.05, max: 1, step: 0.01, dec: 2 }));
 
   body.appendChild(subhdr('Enemy Tag'));
   body.appendChild(toggle('Tag Enabled', 'tagEnabled', () => applyTagSettings()));
@@ -19819,6 +10772,10 @@ function buildHUD(body) {
   body.appendChild(colorPicker('Enemy Dot', 'radarEnemyColor'));
   body.appendChild(colorPicker('Tagged Icon', 'radarTaggedColor'));
   body.appendChild(slider({ key: 'radarOpacity', label: 'Opacity', min: 0, max: 1, step: 0.05, dec: 2 }));
+
+  body.appendChild(subhdr('Debug'));
+  body.appendChild(toggle('Show FPS', 'showFps', () => applyHudSettings()));
+  body.appendChild(slider({ key: 'fpsCounterSize', label: 'FPS Size', min: 8, max: 48, step: 1, dec: 0, onChange: () => applyHudSettings() }));
 }
 
 function pickParamSubset(keys) {
@@ -19875,33 +10832,38 @@ function buildScopedJsonControls(body, label, keys, filename) {
 }
 
 function buildEnemies(body) {
-  buildScopedJsonControls(body, 'Enemies', ENEMY_JSON_KEYS, 'enemies.json');
-  body.appendChild(select('Enemy Type', 'enemyType', ENEMY_TYPE_OPTIONS));
-  body.appendChild(slider({ key: 'enemyCount', label: 'Number of Enemies', min: 0, max: 50, step: 1, dec: 0 }));
-  body.appendChild(slider({ key: 'enemyHealth', label: 'Health Amount', min: 1, max: 1000, step: 1, dec: 0 }));
-  body.appendChild(toggle('Enemy Invincible', 'enemyInvincible'));
-  body.appendChild(select('Behavior', 'enemyBehavior', ENEMY_BEHAVIOR_OPTIONS));
-  body.appendChild(slider({ key: 'enemyMoveSpeed', label: 'Movement Speed', min: 0, max: 12, step: 0.1, dec: 1 }));
-  body.appendChild(slider({ key: 'enemyDamage', label: 'Damage Amount', min: 0, max: 250, step: 1, dec: 0 }));
-  body.appendChild(slider({ key: 'enemyAccuracy', label: 'Accuracy', min: 0, max: 100, step: 1, dec: 0 }));
-  body.appendChild(select('Placement', 'enemyPlacement', ENEMY_PLACEMENT_OPTIONS));
-  body.appendChild(select('Weapon Type', 'enemyWeaponType', NPC_WEAPON_OPTIONS));
-  body.appendChild(subhdr('Enemy Awareness Range'));
-  body.appendChild(slider({ key: 'enemyAwarenessRange', label: 'Enemy Awareness Range', min: 1, max: 200, step: 1, dec: 0 }));
-  body.appendChild(toggle('Show Enemy Awareness', 'enemyAwarenessVisible'));
-  body.appendChild(colorPicker('Enemy Awareness Color', 'enemyAwarenessColor'));
-  body.appendChild(toggle('Transparent Enemy Awareness Fill', 'enemyAwarenessFillTransparent'));
-  body.appendChild(colorPicker('Enemy Awareness Outline Color', 'enemyAwarenessOutlineColor'));
-  body.appendChild(slider({ key: 'enemyAwarenessOpacity', label: 'Enemy Awareness Opacity', min: 0, max: 1, step: 0.01, dec: 2 }));
-
-  body.appendChild(btn('Spawn / Apply Enemies', 'sb-btn-accent', () => {
+  body.appendChild(groupSelect('enemy'));
+  const syncEnemyGroup = npcGroupSaveHandler('enemy');
+  const syncEnemyWeapon = npcGroupSaveHandler('enemy', () => applyNpcWeaponSettings());
+  const actionRow = document.createElement('div');
+  actionRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 8px;';
+  actionRow.appendChild(btn('Spawn / Apply Enemies', 'sb-btn-accent', () => {
+    saveNpcGroupConfig('enemy');
     const count = spawnEnemiesFromSettings();
     notify(`${count} enemies spawned ✓`);
   }));
-  body.appendChild(btn('Clear Enemies', 'sb-btn-muted', () => {
+  actionRow.appendChild(btn('Clear Enemies', 'sb-btn-muted', () => {
     clearEnemies();
     notify('Enemies cleared ✓');
   }));
+  body.appendChild(actionRow);
+  body.appendChild(toggle('Enemy Invincibility', 'enemyInvincible', syncEnemyGroup));
+  body.appendChild(select('Enemy Type', 'enemyType', ENEMY_TYPE_OPTIONS, syncEnemyGroup));
+  body.appendChild(slider({ key: 'enemyCount', label: 'Number of Enemies', min: 0, max: 50, step: 1, dec: 0, onChange: syncEnemyGroup }));
+  body.appendChild(slider({ key: 'enemyHealth', label: 'Health Amount', min: 1, max: 1000, step: 1, dec: 0, onChange: syncEnemyGroup }));
+  body.appendChild(select('Behavior', 'enemyBehavior', ENEMY_BEHAVIOR_OPTIONS, syncEnemyGroup));
+  body.appendChild(slider({ key: 'enemyMoveSpeed', label: 'Movement Speed', min: 0, max: 12, step: 0.1, dec: 1, onChange: syncEnemyGroup }));
+  body.appendChild(slider({ key: 'enemyDamage', label: 'Damage Amount', min: 0, max: 250, step: 1, dec: 0, onChange: syncEnemyGroup }));
+  body.appendChild(slider({ key: 'enemyAccuracy', label: 'Accuracy', min: 0, max: 100, step: 1, dec: 0, onChange: syncEnemyGroup }));
+  body.appendChild(select('Placement', 'enemyPlacement', ENEMY_PLACEMENT_OPTIONS, syncEnemyGroup));
+  body.appendChild(select('Weapon Type', 'enemyWeaponType', NPC_WEAPON_OPTIONS, syncEnemyWeapon));
+  body.appendChild(subhdr('Enemy Awareness Range'));
+  body.appendChild(slider({ key: 'enemyAwarenessRange', label: 'Enemy Awareness Range', min: 1, max: 200, step: 1, dec: 0, onChange: syncEnemyGroup }));
+  body.appendChild(toggle('Show Enemy Awareness', 'enemyAwarenessVisible', syncEnemyGroup));
+  body.appendChild(colorPicker('Enemy Awareness Color', 'enemyAwarenessColor', syncEnemyGroup));
+  body.appendChild(toggle('Transparent Enemy Awareness Fill', 'enemyAwarenessFillTransparent', syncEnemyGroup));
+  body.appendChild(colorPicker('Enemy Awareness Outline Color', 'enemyAwarenessOutlineColor', syncEnemyGroup));
+  body.appendChild(slider({ key: 'enemyAwarenessOpacity', label: 'Enemy Awareness Opacity', min: 0, max: 1, step: 0.01, dec: 2, onChange: syncEnemyGroup }));
 }
 
 const DESTRUCTION_CONTROL_GROUPS = [
@@ -19952,14 +10914,30 @@ function buildDestruction(body) {
 }
 
 function buildAbilities(body) {
-  body.appendChild(subhdr('Bullet Time'));
-  body.appendChild(toggle('Bullet Time Enabled', 'bulletTimeEnabled'));
-  body.appendChild(slider({ key: 'bulletTimeDuration', label: 'Duration', min: 0.1, max: 30, step: 0.1, dec: 1 }));
-  body.appendChild(slider({ key: 'bulletTimeCooldown', label: 'Cooldown', min: 0, max: 120, step: 0.5, dec: 1 }));
-  body.appendChild(slider({ key: 'bulletTimeScale', label: 'World Scale', min: 0.05, max: 1, step: 0.05, dec: 2 }));
+  body.appendChild(createManualSubsection('Bullet Time', bulletBody => {
+    bulletBody.appendChild(toggle('Bullet Time Enabled', 'bulletTimeEnabled'));
+    bulletBody.appendChild(slider({ key: 'bulletTimeDuration', label: 'Total Amount', min: 0.1, max: 30, step: 0.1, dec: 1 }));
+    bulletBody.appendChild(slider({ key: 'bulletTimeReplenishRate', label: 'Replenish / Sec', min: 0, max: 10, step: 0.1, dec: 1 }));
+    bulletBody.appendChild(slider({ key: 'bulletTimeKillGain', label: 'Earn Per Kill', min: 0, max: 30, step: 0.1, dec: 1 }));
+    bulletBody.appendChild(slider({ key: 'bulletTimeCooldown', label: 'Cooldown', min: 0, max: 120, step: 0.5, dec: 1 }));
+    bulletBody.appendChild(slider({ key: 'bulletTimeScale', label: 'World Scale', min: 0.05, max: 1, step: 0.05, dec: 2 }));
+  }, true));
 
-  body.appendChild(subhdr('Movement'));
-  body.appendChild(toggle('Double Jump', 'doubleJumpEnabled'));
+  body.appendChild(createManualSubsection('Dash', dashBody => {
+    dashBody.appendChild(toggle('Dash Enabled', 'dashEnabled'));
+    dashBody.appendChild(slider({ key: 'dashSpeed',    label: 'Speed',    min: 5,    max: 60,  step: 1,    dec: 0 }));
+    dashBody.appendChild(slider({ key: 'dashDuration', label: 'Duration', min: 0.05, max: 0.5, step: 0.01, dec: 2 }));
+    dashBody.appendChild(slider({ key: 'dashCooldown', label: 'Cooldown', min: 0.1,  max: 5,   step: 0.1,  dec: 1 }));
+  }));
+
+  body.appendChild(createManualSubsection('Double Jump', jumpBody => {
+    jumpBody.appendChild(toggle('Double Jump Enabled', 'doubleJumpEnabled'));
+    jumpBody.appendChild(slider({ key: 'doubleJumpAirJumps', label: 'Extra Jumps', min: 0, max: 5, step: 1, dec: 0 }));
+    jumpBody.appendChild(slider({ key: 'doubleJumpForceMultiplier', label: 'Force Mult.', min: 0.1, max: 2, step: 0.05, dec: 2 }));
+    jumpBody.appendChild(toggle('Reset Vertical Speed', 'doubleJumpResetVelocity'));
+  }));
+
+  body.appendChild(createManualSubsection('Shield', shieldBody => buildShield(shieldBody)));
 }
 
 function createManualSubsection(title, buildFn, open = false) {
@@ -20111,8 +11089,8 @@ function buildWeaponControls(body, spec) {
   if (reloadKey) {
     body.appendChild(slider({ key: reloadKey, label: 'Reload Time', min: 0, max: 10, step: 0.1, dec: 1 }));
   }
-  body.appendChild(slider({ key: weaponOffsetXKey(spec), label: 'Offset X', min: -2, max: 2, step: 0.01, dec: 2, onChange: () => applyPlayerWeaponSettings() }));
-  body.appendChild(slider({ key: weaponOffsetYKey(spec), label: 'Offset Y', min: -2, max: 2, step: 0.01, dec: 2, onChange: () => applyPlayerWeaponSettings() }));
+  body.appendChild(slider({ key: weaponOffsetXKey(spec), label: 'Offset X', min: -2, max: 2, step: 0.01, dec: 2, onChange: () => applyAllWeaponVisualSettings() }));
+  body.appendChild(slider({ key: weaponOffsetYKey(spec), label: 'Offset Y', min: -2, max: 2, step: 0.01, dec: 2, onChange: () => applyAllWeaponVisualSettings() }));
   const recoilKey = weaponRecoilKey(spec);
   if (recoilKey) {
     body.appendChild(slider({ key: recoilKey, label: 'Recoil', min: 0, max: 1, step: 0.01, dec: 2 }));
@@ -20133,9 +11111,9 @@ function buildWeaponControls(body, spec) {
   body.appendChild(slider({ key: weaponReticleOpacityKey(spec), label: 'Reticle Opacity', min: 0.05, max: 1, step: 0.05, dec: 2, onChange: syncActiveReticle }));
   body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileSpeed'), label: 'Projectile Speed', min: 1, max: 500, step: 1, dec: 0 }));
   if (spec.type === 'rifle') body.appendChild(toggle('Tracers', 'weaponRifleTracers'));
-  body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileSize'), label: 'Projectile Size', min: 0.05, max: 2, step: 0.01, dec: 2 }));
-  body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileLength'), label: 'Projectile Length', min: 0.05, max: 8, step: 0.01, dec: 2 }));
-  body.appendChild(colorPicker('Projectile Color', weaponKey(prefix, 'ProjectileColor')));
+  body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileSize'), label: 'Projectile Size', min: 0.05, max: 2, step: 0.01, dec: 2, onChange: () => applyAllWeaponVisualSettings() }));
+  body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileLength'), label: 'Projectile Length', min: 0.05, max: 8, step: 0.01, dec: 2, onChange: () => applyAllWeaponVisualSettings() }));
+  body.appendChild(colorPicker('Projectile Color', weaponKey(prefix, 'ProjectileColor'), () => applyAllWeaponVisualSettings()));
   body.appendChild(toggle('Projectile Bloom', weaponKey(prefix, 'ProjectileBloom')));
   body.appendChild(colorPicker('Bloom Color', weaponKey(prefix, 'ProjectileBloomColor')));
   body.appendChild(slider({ key: weaponKey(prefix, 'ProjectileBloomIntensity'), label: 'Bloom Intensity', min: 0, max: 3, step: 0.05, dec: 2 }));
@@ -20173,7 +11151,7 @@ function buildWeapons(body) {
     infiniteAmmoToggle.classList.add('sb-toggle-spaced');
     currentBody.appendChild(infiniteAmmoToggle);
     currentBody.appendChild(select('Player Weapon', 'playerWeaponType', PLAYER_WEAPON_OPTIONS, () => {
-      applyPlayerWeaponSettings();
+      applyAllWeaponVisualSettings();
       syncReticleToCurrentWeapon();
       applyReticleSettings();
       syncWeaponAmmoHud();
@@ -20235,7 +11213,7 @@ function getAmbienceEl() {
   if (!_ambienceEl) {
     _ambienceEl = registerManagedAudio(new Audio('./assets/storm.mp3'));
     _ambienceEl.loop = true;
-    _ambienceEl.volume = Math.max(0, Math.min(1, Number(state.params.soundSfx_ambience) ?? 0.5));
+    setManagedAudioVolume(_ambienceEl, Math.max(0, Math.min(1, Number(state.params.soundSfx_ambience) ?? 0.5)));
   }
   return _ambienceEl;
 }
@@ -20276,9 +11254,11 @@ function buildSound(body) {
     ['Dash',           'soundSfx_dash'],
     ['Jump',           'soundSfx_jump'],
     ['Player Hit',     'soundSfx_player_hit'],
+    ['Player Death',   'soundSfx_player_death'],
     ['Enemy Grunt',    'soundSfx_enemy_grunt'],
     ['Bullet Time Slow', 'soundSfx_bullet_time_slow'],
     ['Bullet Time Heart', 'soundSfx_bullet_time_heart'],
+    ['Bullet Time End', 'soundSfx_bullet_time_end'],
     ['Standard Hit',   'soundSfx_standard_hit'],
     ['Elite Hit',    'soundSfx_elite_hit'],
     ['Explode',      'soundSfx_explode'],
@@ -20301,7 +11281,7 @@ function buildSound(body) {
     min: 0, max: 1, step: 0.05, dec: 2,
     onChange: (v) => {
       const el = getAmbienceEl();
-      el.volume = Math.max(0, Math.min(1, v));
+      setManagedAudioVolume(el, Math.max(0, Math.min(1, v)));
       if (v > 0 && el.paused && !state.params.soundMuted) {
         playAmbienceIfAllowed();
       } else if (v <= 0) {
@@ -20316,6 +11296,58 @@ function buildSound(body) {
   if (canStartAudioPlaybackFromUserActivation()) playAmbienceIfAllowed();
 }
 
+
+
+const CONTROLLER_ACTION_OPTIONS = [
+  ['none', 'None'],
+  ['jump', 'Jump'],
+  ['dash', 'Dash'],
+  ['reload', 'Reload'],
+  ['ads', 'ADS'],
+  ['bulletTime', 'Bullet Time'],
+  ['fire', 'Fire'],
+  ['changeWeaponPrev', 'Change Weapon ←'],
+  ['changeWeaponNext', 'Change Weapon →'],
+  ['toggleSidebar', 'Toggle Sidebar'],
+];
+
+const CONTROLLER_MAPPING_CONTROLS = [
+  ['Cross', 'controllerMapCross'],
+  ['Circle', 'controllerMapCircle'],
+  ['Square', 'controllerMapSquare'],
+  ['Triangle', 'controllerMapTriangle'],
+  ['L1', 'controllerMapL1'],
+  ['L2', 'controllerMapL2'],
+  ['R1', 'controllerMapR1'],
+  ['R2', 'controllerMapR2'],
+  ['Share', 'controllerMapShare'],
+  ['Options', 'controllerMapOptions'],
+  ['L3', 'controllerMapL3'],
+  ['R3', 'controllerMapR3'],
+  ['D-Pad Up', 'controllerMapDpadUp'],
+  ['D-Pad Down', 'controllerMapDpadDown'],
+  ['D-Pad Left', 'controllerMapDpadLeft'],
+  ['D-Pad Right', 'controllerMapDpadRight'],
+];
+
+const CONTROLLER_MAPPING_DEFAULTS = {
+  controllerMapCross: 'jump',
+  controllerMapCircle: 'dash',
+  controllerMapSquare: 'reload',
+  controllerMapTriangle: 'none',
+  controllerMapL1: 'bulletTime',
+  controllerMapL2: 'ads',
+  controllerMapR1: 'none',
+  controllerMapR2: 'fire',
+  controllerMapShare: 'none',
+  controllerMapOptions: 'toggleSidebar',
+  controllerMapL3: 'none',
+  controllerMapR3: 'none',
+  controllerMapDpadUp: 'none',
+  controllerMapDpadDown: 'none',
+  controllerMapDpadLeft: 'changeWeaponPrev',
+  controllerMapDpadRight: 'changeWeaponNext',
+};
 
 function buildController(body) {
   // Live status indicator that updates every 2 seconds without rebuilding the panel.
@@ -20355,73 +11387,47 @@ function buildController(body) {
   body.appendChild(toggle('Vibration', 'controllerVibration'));
 
   body.appendChild(subhdr('Mappings'));
-  const mappings = [
-    [null,           'Left Stick',   'Movement'],
-    [null,           'Right Stick',  'Camera Look'],
-    [null,           'R2 / R1',      'Fire Laser'],
-    ['<svg xmlns="http://www.w3.org/2000/svg" height="28px" viewBox="0 -960 960 960" width="28px" fill="currentColor"><path d="m336-316 144-144 144 144 20-20-144-144 144-144-20-20-144 144-144-144-20 20 144 144-144 144 20 20Zm144.17 184q-72.17 0-135.73-27.39-63.56-27.39-110.57-74.35-47.02-46.96-74.44-110.43Q132-407.65 132-479.83q0-72.17 27.39-135.73 27.39-63.56 74.35-110.57 46.96-47.02 110.43-74.44Q407.65-828 479.83-828q72.17 0 135.73 27.39 63.56 27.39 110.57 74.35 47.02 46.96 74.44 110.43Q828-552.35 828-480.17q0 72.17-27.39 135.73-27.39 63.56-74.35 110.57-46.96 47.02-110.43 74.44Q552.35-132 480.17-132Zm-.17-28q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/></svg>', null,      'Jump'],
-    ['<svg xmlns="http://www.w3.org/2000/svg" height="28px" viewBox="0 -960 960 960" width="28px" fill="currentColor"><path d="M479.88-345q-55.88 0-95.38-39.32-39.5-39.33-39.5-95.5Q345-536 384.32-575q39.33-39 95.5-39Q536-614 575-574.88q39 39.12 39 95t-39.12 95.38q-39.12 39.5-95 39.5ZM344.5-159q-63.5-27-111-74.5T159-344.41q-27-63.4-27-135.5 0-72.09 27-135.59T233.5-726q47.5-47 110.91-74.5 63.4-27.5 135.5-27.5 72.09 0 135.65 27.39t110.57 74.35q47.02 46.96 74.44 110.43Q828-552.35 828-480.17q0 72.17-27.5 135.67Q773-281 726-233.5T615.59-159q-63.4 27-135.5 27-72.09 0-135.59-27Zm135-1q133.5 0 227-93T800-479.5q0-133.5-93.5-227T480-800q-134 0-227 93.5T160-480q0 134 93 227t226.5 93Zm.5-320Zm115 115.5Q642-412 642-480t-47-115q-47-47-115-47t-115.5 47Q317-548 317-480t47.5 115.5Q412-317 480-317t115-47.5Z"/></svg>', null, 'Dash'],
-    [null,           'L1 / L2',      'Bullet Time'],
-    ['<svg xmlns="http://www.w3.org/2000/svg" height="28px" viewBox="0 -960 960 960" width="28px" fill="currentColor"><path d="M336-336h288v-288H336v288Zm28-28v-232h232v232H364Zm-19.5 205q-63.5-27-111-74.5t-74.5-111Q132-408 132-480t27-135.5Q186-679 233.5-726t111-74.5Q408-828 480-828t135.5 27.5Q679-773 726-726t74.5 110.5Q828-552 828-480t-27.5 135.5Q773-281 726-233.5T615.5-159Q552-132 480-132t-135.5-27Zm135.5-1q133 0 226.5-93T800-480q0-133-93.5-226.5T480-800q-134 0-227 93.5T160-480q0 134 93 227t227 93Zm0-320Z"/></svg>', null, '—'],
-    ['<svg xmlns="http://www.w3.org/2000/svg" height="28px" viewBox="0 -960 960 960" width="28px" fill="currentColor"><path d="M297-373h365L480-676 297-373Zm50-28 133-220 132 220H347Zm-2.5 242q-63.5-27-111-74.5t-74.5-111Q132-408 132-480t27-135.5Q186-679 233.5-726t111-74.5Q408-828 480-828t135.5 27.5Q679-773 726-726t74.5 110.5Q828-552 828-480t-27.5 135.5Q773-281 726-233.5T615.5-159Q552-132 480-132t-135.5-27Zm135.5-1q133 0 226.5-93T800-480q0-133-93.5-226.5T480-800q-134 0-227 93.5T160-480q0 134 93 227t227 93Zm0-320Z"/></svg>', null, '—'],
-    [null,           'Options',      'Toggle Sidebar'],
-  ];
-  const MUTED = 'var(--sb-muted, #6e7681)';
-  mappings.forEach(([iconHtml, btnText, action]) => {
-    const r = document.createElement('div');
-    r.className = 'sb-row';
-    const l = document.createElement('label');
-    l.className = 'sb-label';
-    l.style.color = MUTED;
-    if (iconHtml) {
-      const iconSpan = document.createElement('span');
-      iconSpan.innerHTML = iconHtml;
-      iconSpan.style.cssText = 'display:inline-flex;align-items:center;vertical-align:middle;margin-right:4px;color:' + MUTED;
-      l.appendChild(iconSpan);
-    } else if (btnText) {
-      l.appendChild(document.createTextNode(btnText));
-    }
-    const v = document.createElement('span');
-    v.className = 'sb-value';
-    v.style.color = MUTED;
-    v.style.fontSize = '11px';
-    v.textContent = action;
-    r.appendChild(l);
-    r.appendChild(v);
-    body.appendChild(r);
+  body.appendChild(smallInfo('Choose the action assigned to each controller button. Sticks remain fixed to movement and camera look.'));
+  CONTROLLER_MAPPING_CONTROLS.forEach(([label, key]) => {
+    body.appendChild(select(label, key, CONTROLLER_ACTION_OPTIONS));
   });
 }
 
 
 function buildAllies(body) {
-  buildScopedJsonControls(body, 'Allies', ALLY_JSON_KEYS, 'allies.json');
-  body.appendChild(select('Ally Type', 'allyType', ENEMY_TYPE_OPTIONS));
-  body.appendChild(slider({ key: 'allyCount', label: 'Number of Allies', min: 0, max: 50, step: 1, dec: 0 }));
-  body.appendChild(slider({ key: 'allyHealth', label: 'Health Amount', min: 1, max: 1000, step: 1, dec: 0 }));
-  body.appendChild(toggle('Ally Invincible', 'allyInvincible'));
-  body.appendChild(toggle('Friendly Fire', 'allyFriendlyFire'));
-  body.appendChild(select('Behavior', 'allyBehavior', ENEMY_BEHAVIOR_OPTIONS));
-  body.appendChild(slider({ key: 'allyMoveSpeed', label: 'Movement Speed', min: 0, max: 12, step: 0.1, dec: 1 }));
-  body.appendChild(slider({ key: 'allyDamage', label: 'Damage Amount', min: 0, max: 250, step: 1, dec: 0 }));
-  body.appendChild(slider({ key: 'allyAccuracy', label: 'Accuracy', min: 0, max: 100, step: 1, dec: 0 }));
-  body.appendChild(select('Placement', 'allyPlacement', ENEMY_PLACEMENT_OPTIONS));
-  body.appendChild(select('Weapon Type', 'allyWeaponType', NPC_WEAPON_OPTIONS));
-  body.appendChild(subhdr('Ally Awareness Range'));
-  body.appendChild(slider({ key: 'allyAwarenessRange', label: 'Ally Awareness Range', min: 1, max: 200, step: 1, dec: 0 }));
-  body.appendChild(toggle('Show Ally Awareness', 'allyAwarenessVisible'));
-  body.appendChild(colorPicker('Ally Awareness Color', 'allyAwarenessColor'));
-  body.appendChild(toggle('Transparent Ally Awareness Fill', 'allyAwarenessFillTransparent'));
-  body.appendChild(colorPicker('Ally Awareness Outline Color', 'allyAwarenessOutlineColor'));
-  body.appendChild(slider({ key: 'allyAwarenessOpacity', label: 'Ally Awareness Opacity', min: 0, max: 1, step: 0.01, dec: 2 }));
-
-  body.appendChild(btn('Spawn / Apply Allies', 'sb-btn-accent', () => {
+  body.appendChild(groupSelect('ally'));
+  const syncAllyGroup = npcGroupSaveHandler('ally');
+  const syncAllyWeapon = npcGroupSaveHandler('ally', () => applyNpcWeaponSettings());
+  const actionRow = document.createElement('div');
+  actionRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 8px;';
+  actionRow.appendChild(btn('Spawn / Apply Allies', 'sb-btn-accent', () => {
+    saveNpcGroupConfig('ally');
     const count = spawnAlliesFromSettings();
     notify(`${count} allies spawned ✓`);
   }));
-  body.appendChild(btn('Clear Allies', 'sb-btn-muted', () => {
+  actionRow.appendChild(btn('Clear Allies', 'sb-btn-muted', () => {
     clearAllies();
     notify('Allies cleared ✓');
   }));
+  body.appendChild(actionRow);
+  body.appendChild(toggle('Ally Invincibility', 'allyInvincible', syncAllyGroup));
+  body.appendChild(toggle('Friendly Fire', 'allyFriendlyFire', syncAllyGroup));
+  body.appendChild(select('Ally Type', 'allyType', ENEMY_TYPE_OPTIONS, syncAllyGroup));
+  body.appendChild(slider({ key: 'allyCount', label: 'Number of Allies', min: 0, max: 50, step: 1, dec: 0, onChange: syncAllyGroup }));
+  body.appendChild(slider({ key: 'allyHealth', label: 'Health Amount', min: 1, max: 1000, step: 1, dec: 0, onChange: syncAllyGroup }));
+  body.appendChild(select('Behavior', 'allyBehavior', ENEMY_BEHAVIOR_OPTIONS, syncAllyGroup));
+  body.appendChild(slider({ key: 'allyMoveSpeed', label: 'Movement Speed', min: 0, max: 12, step: 0.1, dec: 1, onChange: syncAllyGroup }));
+  body.appendChild(slider({ key: 'allyDamage', label: 'Damage Amount', min: 0, max: 250, step: 1, dec: 0, onChange: syncAllyGroup }));
+  body.appendChild(slider({ key: 'allyAccuracy', label: 'Accuracy', min: 0, max: 100, step: 1, dec: 0, onChange: syncAllyGroup }));
+  body.appendChild(select('Placement', 'allyPlacement', ENEMY_PLACEMENT_OPTIONS, syncAllyGroup));
+  body.appendChild(select('Weapon Type', 'allyWeaponType', NPC_WEAPON_OPTIONS, syncAllyWeapon));
+  body.appendChild(subhdr('Ally Awareness Range'));
+  body.appendChild(slider({ key: 'allyAwarenessRange', label: 'Ally Awareness Range', min: 1, max: 200, step: 1, dec: 0, onChange: syncAllyGroup }));
+  body.appendChild(toggle('Show Ally Awareness', 'allyAwarenessVisible', syncAllyGroup));
+  body.appendChild(colorPicker('Ally Awareness Color', 'allyAwarenessColor', syncAllyGroup));
+  body.appendChild(toggle('Transparent Ally Awareness Fill', 'allyAwarenessFillTransparent', syncAllyGroup));
+  body.appendChild(colorPicker('Ally Awareness Outline Color', 'allyAwarenessOutlineColor', syncAllyGroup));
+  body.appendChild(slider({ key: 'allyAwarenessOpacity', label: 'Ally Awareness Opacity', min: 0, max: 1, step: 0.01, dec: 2, onChange: syncAllyGroup }));
 }
 
 
@@ -20457,10 +11463,61 @@ function landscapeEditorEnabledChanged(value) {
     setEditorModeEnabled(true);
   } else if (state.params.editorModeEnabled === true && state.params.editorPlacementTarget === 'asset') {
     state.params.editorModeEnabled = false;
+    state.activeSlot = 0;
+    state.primaryFire = false;
+    state.secondaryFire = false;
+    state.isAiming = false;
     setEditorModeEnabled(false);
+  } else if (!value) {
+    state.activeSlot = 0;
+    state.primaryFire = false;
+    state.secondaryFire = false;
   }
   applyAllParams();
 }
+
+function buildTeamSpawnControls(body, team) {
+  const title = team === 'ally' ? 'Ally Spawn' : 'Enemy Spawn';
+  const selectedPointKey = team === 'ally' ? 'editorAllySpawnPoint' : 'editorEnemySpawnPoint';
+  const selectedGroupKey = team === 'ally' ? 'editorAllySpawnGroup' : 'editorEnemySpawnGroup';
+  const clearFn = team === 'ally' ? clearAllySpawn : clearEnemySpawn;
+  const refreshFn = team === 'ally' ? refreshAllySpawnMarker : refreshEnemySpawnMarker;
+  const spawnFn = team === 'ally' ? spawnAlliesFromSettings : spawnEnemiesFromSettings;
+
+  body.appendChild(subhdr(title));
+  body.appendChild(smallInfo(`Choose ${title} as the placement target, select a group and spawn point number, aim at the grid, left-click to place/move it, and use Q/E to rotate the facing arrow. Spawn / Apply uses the selected group settings and all placed ${team} spawn points.`));
+  body.appendChild(spawnGroupSelect('Spawn Group', selectedGroupKey, () => {
+    state.activePreset = 'custom';
+    refreshFn();
+  }));
+  body.appendChild(spawnPointSelect('Spawn Point', selectedPointKey, () => {
+    state.activePreset = 'custom';
+    refreshFn();
+  }));
+  const spawnButtons = document.createElement('div');
+  spawnButtons.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 10px;';
+  spawnButtons.appendChild(btn(`Spawn ${team === 'ally' ? 'Allies' : 'Enemies'} Here`, 'sb-btn-accent', () => {
+    saveNpcGroupConfig(team);
+    const count = spawnFn();
+    notify(`Spawned ${count} ${team === 'ally' ? 'allies' : 'enemies'} ✓`);
+  }));
+  spawnButtons.appendChild(btn('Clear Selected', 'sb-btn-muted', () => {
+    clearFn(normalizeSpawnPointId(state.params[selectedPointKey]));
+    applyAllParams();
+    rebuildPanel();
+    notify(`${title} ${normalizeSpawnPointId(state.params[selectedPointKey])} cleared ✓`);
+  }));
+  body.appendChild(spawnButtons);
+}
+
+function buildEnemySpawnControls(body) {
+  buildTeamSpawnControls(body, 'enemy');
+}
+
+function buildAllySpawnControls(body) {
+  buildTeamSpawnControls(body, 'ally');
+}
+
 
 function selectedSceneOptions() {
   const scenes = Array.isArray(state.params.savedScenes) ? state.params.savedScenes : [];
@@ -20471,6 +11528,10 @@ function selectedSceneOptions() {
 const SCENE_KEYS = [
   'placedObjects', 'editorPlacedNpcs',
   'playerSpawnEnabled', 'playerSpawnX', 'playerSpawnY', 'playerSpawnZ', 'playerSpawnYaw', 'editorPlayerSpawnYaw',
+  'enemySpawnEnabled', 'enemySpawnX', 'enemySpawnY', 'enemySpawnZ', 'enemySpawnYaw', 'editorEnemySpawnYaw',
+  'enemySpawnPoints', 'editorEnemySpawnPoint', 'editorEnemySpawnGroup',
+  'allySpawnEnabled', 'allySpawnX', 'allySpawnY', 'allySpawnZ', 'allySpawnYaw', 'editorAllySpawnYaw',
+  'allySpawnPoints', 'editorAllySpawnPoint', 'editorAllySpawnGroup',
   'floorMode', 'buildAreaEnabled', 'buildAreaCenterX', 'buildAreaCenterZ', 'buildAreaWidth', 'buildAreaDepth',
   'buildAreaAutoExpand', 'buildAreaAutoExpandMargin', 'buildAreaBoundaryVisible', 'buildAreaBoundaryColor',
   'buildAreaBoundaryWalls', 'buildAreaBoundaryHeight', 'buildAreaBoundaryOpacity', 'buildAreaBoundaryCollision',
@@ -20553,6 +11614,8 @@ function buildLandscapeEditor(body) {
     ['enemy', 'Enemy NPC'],
     ['ally', 'Ally NPC'],
     ['playerSpawn', 'Player Spawn'],
+    ['enemySpawn', 'Enemy Spawn'],
+    ['allySpawn', 'Ally Spawn'],
   ], value => {
     state.params.editorPlacementTarget = value;
     if (state.params.landscapeEditorModeEnabled) {
@@ -20680,6 +11743,9 @@ function buildLandscapeEditor(body) {
   }));
   body.appendChild(spawnButtons);
 
+  buildEnemySpawnControls(body);
+  buildAllySpawnControls(body);
+
   body.appendChild(subhdr('Saved Scenes'));
   buildSceneSaveLoadControls(body);
 
@@ -20759,6 +11825,8 @@ function buildAssets(body) {
     ['enemy', 'Enemy NPC'],
     ['ally', 'Ally NPC'],
     ['playerSpawn', 'Player Spawn'],
+    ['enemySpawn', 'Enemy Spawn'],
+    ['allySpawn', 'Ally Spawn'],
   ], applyAllParams));
   body.appendChild(toggle('Fly Mode', 'editorFlyMode', applyAllParams));
   body.appendChild(slider({ key: 'editorMoveSpeed', label: 'Move Speed', min: 0.1, max: 40, step: 0.1, dec: 1, onChange: applyAllParams }));
@@ -20792,6 +11860,9 @@ function buildAssets(body) {
     notify('Player spawn cleared ✓');
   }));
   body.appendChild(spawnButtons);
+
+  buildEnemySpawnControls(body);
+  buildAllySpawnControls(body);
 
   body.appendChild(subhdr('Object Placer'));
 
@@ -20854,7 +11925,7 @@ function buildAssets(body) {
 
 function buildScenes(body) {
   body.appendChild(subhdr('Saved Player Scenes'));
-  body.appendChild(smallInfo('Save the current playable layout, then load it later from player mode or Landscape Editor. Scene data includes placed assets, editor-placed NPCs, player spawn point, and build-area settings.'));
+  body.appendChild(smallInfo('Save the current playable layout, then load it later from player mode or Landscape Editor. Scene data includes placed assets, editor-placed NPCs, player/enemy spawn points, and build-area settings.'));
   buildSceneSaveLoadControls(body);
 }
 
@@ -20904,6 +11975,7 @@ function buildExportImport(container) {
           applyParamObject(JSON.parse(e.target.result));
           state.activePreset = 'custom';
           applyAllParams();
+          placePlayerAtActiveSpawn();
           rebuildPanel();
           notify('Imported ✓');
         } catch { notify('⚠ Invalid JSON'); }
@@ -20915,8 +11987,9 @@ function buildExportImport(container) {
 
   wrap.appendChild(btn('↩ Reset Defaults', 'sb-btn-muted', () => {
     applyParamObject(defaultParams);
-    state.activePreset = 'g40';
+    state.activePreset = 'g53';
     applyAllParams();
+    placePlayerAtActiveSpawn();
     rebuildPanel();
     notify('Reset ✓');
   }));
@@ -20964,6 +12037,11 @@ function applyParamObject(params) {
   if (!Array.isArray(state.params.savedPrefabs)) state.params.savedPrefabs = [];
   if (!Array.isArray(state.params.savedScenes)) state.params.savedScenes = [];
   resetAllWeaponAmmo();
+  resetBulletTimeAmount();
+}
+
+function placePlayerAtActiveSpawn() {
+  if (state.params.playerSpawnEnabled === true) teleportPlayerToSpawn();
 }
 
 function applyPreset(key) {
@@ -20978,6 +12056,7 @@ function applyPreset(key) {
   applyParamObject(preset.data);
   state.activePreset = preset.key;
   applyAllParams();
+  placePlayerAtActiveSpawn();
   rebuildPanel();
   notify(`${preset.label} loaded ✓`);
 }
@@ -21132,6 +12211,8 @@ function syncHudStatus() {
 
 function applyHudSettings() {
   const p = state.params;
+  const hudLayout = p.hudLayout === 'hud2' ? 'hud2' : 'hud1';
+  document.body.dataset.hudLayout = hudLayout;
   syncHudStatus();
   const hudFont = HUD_FONT_STYLES[p.hudFont] || HUD_FONT_STYLES.system;
   // Apply font CSS vars on <html> so #pause-overlay and any other HUD element
@@ -21153,7 +12234,11 @@ function applyHudSettings() {
   if (instructionsEl) instructionsEl.style.display = p.hudVisible ? '' : 'none';
 
   const fpsEl = document.getElementById('fps-overlay');
-  if (fpsEl) fpsEl.style.display = p.hudVisible && p.showFps ? '' : 'none';
+  if (fpsEl) {
+    fpsEl.style.display = p.showFps ? '' : 'none';
+    const fpsCounterSize = Math.min(48, Math.max(8, Number(p.fpsCounterSize) || 11));
+    fpsEl.style.setProperty('--fps-counter-size', `${fpsCounterSize}px`);
+  }
 
   const btIndicatorEl = document.getElementById('bullet-time-indicator');
   if (btIndicatorEl) {
@@ -21185,7 +12270,64 @@ function applyHudSettings() {
     }
   });
 
+
+  const killScreenEl = document.getElementById('kill-screen-overlay');
+  const killScreenTextEl = document.querySelector('[data-kill-screen-text]');
+  const killScreenEnabled = p.killScreenEnabled !== false;
+  const killScreenActive = document.body?.dataset?.playerDead === 'true'
+    && document.body?.dataset?.killScreenActive !== 'false'
+    && killScreenEnabled;
+  const rawKillScreenSaturation = Number(p.killScreenSaturation);
+  const rawKillScreenTextSize = Number(p.killScreenTextSize);
+  const rawKillScreenTextOpacity = Number(p.killScreenTextOpacity);
+  const rawKillScreenTextOffsetX = Number(p.killScreenTextOffsetX);
+  const rawKillScreenTextOffsetY = Number(p.killScreenTextOffsetY);
+  const killScreenSaturation = Math.min(1, Math.max(0, Number.isFinite(rawKillScreenSaturation) ? rawKillScreenSaturation : 0.15));
+  const killScreenTextSize = Math.min(160, Math.max(12, Number.isFinite(rawKillScreenTextSize) ? rawKillScreenTextSize : 42));
+  const killScreenTextColor = /^#[0-9a-f]{6}$/i.test(String(p.killScreenTextColor || '')) ? p.killScreenTextColor : '#ffffff';
+  const killScreenTextOpacity = Math.min(1, Math.max(0, Number.isFinite(rawKillScreenTextOpacity) ? rawKillScreenTextOpacity : 0.9));
+  const killScreenTextOffsetX = Math.min(600, Math.max(-600, Number.isFinite(rawKillScreenTextOffsetX) ? rawKillScreenTextOffsetX : 0));
+  const killScreenTextOffsetY = Math.min(400, Math.max(-400, Number.isFinite(rawKillScreenTextOffsetY) ? rawKillScreenTextOffsetY : 0));
+  const killScreenFontKey = HUD_FONT_STYLES[p.killScreenFont] ? p.killScreenFont : 'michroma';
+  const killScreenFont = HUD_FONT_STYLES[killScreenFontKey] || HUD_FONT_STYLES.system;
+  document.documentElement.style.setProperty('--kill-screen-saturation', String(killScreenSaturation));
+  document.body?.style?.setProperty('--kill-screen-saturation', String(killScreenSaturation));
+  document.querySelectorAll('.game-renderer, .label-renderer').forEach(el => {
+    el.style.setProperty('filter', killScreenActive ? `saturate(${killScreenSaturation})` : '', killScreenActive ? 'important' : '');
+  });
+  if (killScreenEl) {
+    killScreenEl.classList.toggle('kill-screen-enabled', killScreenEnabled);
+    killScreenEl.dataset.killScreenActive = killScreenActive ? 'true' : 'false';
+    killScreenEl.setAttribute('aria-hidden', killScreenActive ? 'false' : 'true');
+    killScreenEl.style.setProperty('--kill-screen-saturation', String(killScreenSaturation));
+    killScreenEl.style.setProperty('--kill-screen-text-size', `${killScreenTextSize}px`);
+    killScreenEl.style.setProperty('--kill-screen-text-color', killScreenTextColor);
+    killScreenEl.style.setProperty('--kill-screen-text-opacity', String(killScreenTextOpacity));
+    killScreenEl.style.setProperty('--kill-screen-text-offset-x', `${killScreenTextOffsetX}px`);
+    killScreenEl.style.setProperty('--kill-screen-text-offset-y', `${killScreenTextOffsetY}px`);
+    killScreenEl.dataset.killScreenFont = killScreenFontKey;
+    killScreenEl.style.fontFamily = killScreenFont.family;
+    killScreenEl.style.fontWeight = String(killScreenFont.weight || 800);
+    killScreenEl.style.fontStretch = killScreenFont.stretch || 'normal';
+    killScreenEl.style.letterSpacing = killScreenFont.letterSpacing || '0.18em';
+    killScreenEl.style.setProperty('display', killScreenActive ? 'flex' : 'none', 'important');
+    killScreenEl.style.setProperty('visibility', killScreenActive ? 'visible' : 'hidden', 'important');
+    killScreenEl.style.setProperty('opacity', killScreenActive ? '1' : '0', 'important');
+  }
+  if (killScreenTextEl) {
+    killScreenTextEl.textContent = String(p.killScreenText ?? 'PLAYER KILLED');
+    killScreenTextEl.style.setProperty('display', killScreenActive ? 'block' : 'none', 'important');
+    killScreenTextEl.style.setProperty('visibility', killScreenActive ? 'visible' : 'hidden', 'important');
+    killScreenTextEl.style.setProperty('opacity', String(killScreenTextOpacity), 'important');
+    killScreenTextEl.style.setProperty('transform', `translate(${killScreenTextOffsetX}px, ${killScreenTextOffsetY}px)`, 'important');
+    killScreenTextEl.style.fontFamily = killScreenFont.family;
+    killScreenTextEl.style.fontWeight = String(killScreenFont.weight || 800);
+    killScreenTextEl.style.fontStretch = killScreenFont.stretch || 'normal';
+    killScreenTextEl.style.letterSpacing = killScreenFont.letterSpacing || '0.18em';
+  }
+
   applyReticleSettings();
+  syncWeaponAmmoHud();
 }
 
 const SHADOW_QUALITY = {
@@ -21224,7 +12366,7 @@ function applyAllParams() {
   applyPlayerMaterial();
   rebuildPlayerGeo();
   applyShieldSettings();
-  applyPlayerWeaponSettings();
+  applyAllWeaponVisualSettings();
   ambientLight.intensity = p.ambientIntensity;
   sunLight.intensity     = p.sunIntensity;
   fillLight.intensity    = p.fillIntensity;
@@ -21247,7 +12389,7 @@ function applyAllParams() {
   p.placerTransformModalX = modalCoord(p.placerTransformModalX);
   p.placerTransformModalY = modalCoord(p.placerTransformModalY);
   p.editorModeEnabled = p.editorModeEnabled === true;
-  p.editorPlacementTarget = ['asset', 'enemy', 'ally', 'playerSpawn'].includes(p.editorPlacementTarget) ? p.editorPlacementTarget : 'asset';
+  p.editorPlacementTarget = ['asset', 'enemy', 'ally', 'playerSpawn', 'enemySpawn', 'allySpawn'].includes(p.editorPlacementTarget) ? p.editorPlacementTarget : 'asset';
   p.editorMoveSpeed = Math.min(80, Math.max(0.1, Number(p.editorMoveSpeed) || 7));
   p.editorSprintMultiplier = Math.min(8, Math.max(1, Number(p.editorSprintMultiplier) || 2.25));
   p.editorPrecisionMultiplier = Math.min(1, Math.max(0.05, Number(p.editorPrecisionMultiplier) || 0.28));
@@ -21271,6 +12413,45 @@ function applyAllParams() {
   p.playerSpawnY = Math.max(0, Number.isFinite(Number(p.playerSpawnY)) ? Number(p.playerSpawnY) : 0);
   p.playerSpawnZ = Number.isFinite(Number(p.playerSpawnZ)) ? Number(p.playerSpawnZ) : 0;
   p.playerSpawnYaw = snapSpawnYaw(Number.isFinite(Number(p.playerSpawnYaw)) ? Number(p.playerSpawnYaw) : p.editorPlayerSpawnYaw);
+  p.editorEnemySpawnYaw = snapSpawnYaw(Number.isFinite(Number(p.editorEnemySpawnYaw)) ? Number(p.editorEnemySpawnYaw) : p.editorYaw);
+  p.enemySpawnEnabled = p.enemySpawnEnabled === true;
+  p.enemySpawnX = Number.isFinite(Number(p.enemySpawnX)) ? Number(p.enemySpawnX) : 0;
+  p.enemySpawnY = Math.max(0, Number.isFinite(Number(p.enemySpawnY)) ? Number(p.enemySpawnY) : 0);
+  p.enemySpawnZ = Number.isFinite(Number(p.enemySpawnZ)) ? Number(p.enemySpawnZ) : 8;
+  p.enemySpawnYaw = snapSpawnYaw(Number.isFinite(Number(p.enemySpawnYaw)) ? Number(p.enemySpawnYaw) : p.editorEnemySpawnYaw);
+  p.allySpawnEnabled = p.allySpawnEnabled === true;
+  p.allySpawnX = Number.isFinite(Number(p.allySpawnX)) ? Number(p.allySpawnX) : 0;
+  p.allySpawnY = Math.max(0, Number.isFinite(Number(p.allySpawnY)) ? Number(p.allySpawnY) : 0);
+  p.allySpawnZ = Number.isFinite(Number(p.allySpawnZ)) ? Number(p.allySpawnZ) : 8;
+  p.allySpawnYaw = snapSpawnYaw(Number.isFinite(Number(p.allySpawnYaw)) ? Number(p.allySpawnYaw) : p.editorAllySpawnYaw);
+  p.enemyGroup = normalizeNpcGroupId(p.enemyGroup);
+  p.allyGroup = normalizeNpcGroupId(p.allyGroup);
+  p.editorEnemySpawnPoint = normalizeSpawnPointId(p.editorEnemySpawnPoint);
+  p.editorAllySpawnPoint = normalizeSpawnPointId(p.editorAllySpawnPoint);
+  p.editorEnemySpawnGroup = normalizeNpcGroupId(p.editorEnemySpawnGroup);
+  p.editorAllySpawnGroup = normalizeNpcGroupId(p.editorAllySpawnGroup);
+  ensureNpcGroupConfigs('enemy');
+  ensureNpcGroupConfigs('ally');
+  function normalizeSpawnPointList(team) {
+    const key = `${team}SpawnPoints`;
+    const source = Array.isArray(p[key]) ? p[key] : [];
+    const byId = new Map();
+    source.forEach(item => {
+      const id = normalizeSpawnPointId(item?.id);
+      byId.set(id, {
+        id,
+        group: normalizeNpcGroupId(item?.group),
+        x: Number.isFinite(Number(item?.x)) ? Number(item.x) : 0,
+        y: Math.max(0, Number.isFinite(Number(item?.y)) ? Number(item.y) : 0),
+        z: Number.isFinite(Number(item?.z)) ? Number(item.z) : 8,
+        yaw: snapSpawnYaw(Number.isFinite(Number(item?.yaw)) ? Number(item.yaw) : 0),
+        enabled: item?.enabled !== false,
+      });
+    });
+    p[key] = [...byId.values()].sort((a, b) => a.id - b.id);
+  }
+  normalizeSpawnPointList('enemy');
+  normalizeSpawnPointList('ally');
   if (!Array.isArray(p.editorPlacedNpcs)) p.editorPlacedNpcs = [];
   p.placedAssetShadows = p.placedAssetShadows === true;
   p.landscapeEditorModeEnabled = p.landscapeEditorModeEnabled === true;
@@ -21299,12 +12480,40 @@ function applyAllParams() {
   if (!('reticleHitMarkerDuration' in p)) p.reticleHitMarkerDuration = 190;
   if (!('reticleKillConfirmDuration' in p)) p.reticleKillConfirmDuration = 320;
   if (!('soundSfx_enemy_grunt' in p)) p.soundSfx_enemy_grunt = 1;
+  if (!('soundSfx_player_death' in p)) p.soundSfx_player_death = 1;
+  p.soundSfx_player_death = clampSetting(p.soundSfx_player_death, 0, 1, 1);
   if (!('soundSfx_object_explode' in p)) p.soundSfx_object_explode = p.soundSfx_explode ?? 1;
+
+  if (!('soundSfx_bullet_time_end' in p)) p.soundSfx_bullet_time_end = 1;
+  p.soundSfx_bullet_time_end = clampSetting(p.soundSfx_bullet_time_end, 0, 1, 1);
+  p.playerCorpseFadeTime = clampSetting(p.playerCorpseFadeTime, 0.1, 10, 3);
+  p.killScreenEnabled = p.killScreenEnabled !== false;
+  p.killScreenDuration = clampSetting(p.killScreenDuration, 0.1, 30, 3);
+  p.killScreenSaturation = clampSetting(p.killScreenSaturation, 0, 1, 0.15);
+  p.killScreenText = String(p.killScreenText ?? 'PLAYER KILLED').slice(0, 80);
+  if (!HUD_FONT_STYLES[p.killScreenFont]) p.killScreenFont = 'michroma';
+  p.killScreenTextSize = clampSetting(p.killScreenTextSize, 12, 160, 42);
+  p.killScreenTextColor = hexSetting(p.killScreenTextColor, '#ffffff');
+  p.killScreenTextOpacity = clampSetting(p.killScreenTextOpacity, 0, 1, 0.9);
+  p.killScreenTextOffsetX = clampSetting(p.killScreenTextOffsetX, -600, 600, 0);
+  p.killScreenTextOffsetY = clampSetting(p.killScreenTextOffsetY, -400, 400, 0);
+  p.killScreenWorldScale = clampSetting(p.killScreenWorldScale, 0.05, 1, 0.25);
   if (!('soundProximityEnabled' in p)) p.soundProximityEnabled = true;
-  const clampSetting = (value, min, max, fallback) => {
+  if (!('doubleJumpAirJumps' in p)) p.doubleJumpAirJumps = 1;
+  if (!('doubleJumpForceMultiplier' in p)) p.doubleJumpForceMultiplier = 1;
+  if (!('doubleJumpResetVelocity' in p)) p.doubleJumpResetVelocity = true;
+  if (!('hudLayout' in p)) p.hudLayout = 'hud1';
+  p.fpsCounterSize = clampSetting(p.fpsCounterSize, 8, 48, 11);
+  if (!('hudWeaponAmmoVisible' in p)) p.hudWeaponAmmoVisible = true;
+  if (!('hudWeaponAmmoScale' in p)) p.hudWeaponAmmoScale = 1;
+  if (!('hudWeaponAmmoOpacity' in p)) p.hudWeaponAmmoOpacity = 1;
+  if (!('hudWeaponAmmoBgOpacity' in p)) p.hudWeaponAmmoBgOpacity = 0.36;
+  if (!('hudWeaponAmmoOffsetX' in p)) p.hudWeaponAmmoOffsetX = 0;
+  if (!('hudWeaponAmmoOffsetY' in p)) p.hudWeaponAmmoOffsetY = 0;
+  function clampSetting(value, min, max, fallback) {
     const numeric = Number(value);
     return Math.min(max, Math.max(min, Number.isFinite(numeric) ? numeric : fallback));
-  };
+  }
   const normalizeChoice = (value, options, fallback) => (
     options.some(([key]) => key === value) ? value : fallback
   );
@@ -21314,11 +12523,28 @@ function applyAllParams() {
     if (value === 'projectile') return 'pistol';
     return normalizeChoice(value, NPC_WEAPON_OPTIONS, 'rifle');
   };
+  p.hudLayout = normalizeChoice(p.hudLayout, HUD_LAYOUT_OPTIONS, 'hud1');
   p.playerWeaponType = normalizeChoice(p.playerWeaponType, PLAYER_WEAPON_OPTIONS, 'rifle');
   p.weaponInfiniteAmmo = p.weaponInfiniteAmmo === true;
+  p.doubleJumpEnabled = p.doubleJumpEnabled === true;
+  p.doubleJumpAirJumps = Math.round(clampSetting(p.doubleJumpAirJumps, 0, 5, 1));
+  p.doubleJumpForceMultiplier = clampSetting(p.doubleJumpForceMultiplier, 0.1, 2, 1);
+  p.doubleJumpResetVelocity = p.doubleJumpResetVelocity !== false;
+  p.hudWeaponAmmoVisible = p.hudWeaponAmmoVisible !== false;
+  p.hudWeaponAmmoScale = clampSetting(p.hudWeaponAmmoScale, 0.5, 2, 1);
+  p.hudWeaponAmmoOpacity = clampSetting(p.hudWeaponAmmoOpacity, 0, 1, 1);
+  p.hudWeaponAmmoBgOpacity = clampSetting(p.hudWeaponAmmoBgOpacity, 0, 1, 0.36);
+  p.hudWeaponAmmoOffsetX = Math.round(clampSetting(p.hudWeaponAmmoOffsetX, -400, 400, 0));
+  p.hudWeaponAmmoOffsetY = Math.round(clampSetting(p.hudWeaponAmmoOffsetY, -300, 300, 0));
   p.weaponRifleTracers = p.weaponRifleTracers !== false;
-  const hexSetting = (value, fallback) => (/^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : fallback);
+  function hexSetting(value, fallback) {
+    return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : fallback;
+  }
   const boolSetting = (value, fallback = false) => (value === true || value === false ? value : fallback);
+  const normalizeControllerAction = (value, fallback) => normalizeChoice(value, CONTROLLER_ACTION_OPTIONS, fallback);
+  Object.entries(CONTROLLER_MAPPING_DEFAULTS).forEach(([key, fallback]) => {
+    p[key] = normalizeControllerAction(p[key], fallback);
+  });
   const weaponDefaults = {
     Pistol: { damage: 24, range: 55, spread: 0.01, fireRate: 3.6, speed: 70, size: 0.28, length: 0.65, bloomIntensity: 1, bloomSize: 1, color: '#d8dde6', bloomColor: '#d8dde6', bloom: false, reticle: 'dot', reticleSize: 24, reticleWeight: 2, reticleOpacity: 1 },
     Rifle: { damage: 34, range: Number(p.laserRange) || 42, spread: 0.003, fireRate: Number(p.laserFireRate) || 5, speed: Number(p.laserProjectileSpeed) || 80, size: 0.36, length: 0.84, bloomIntensity: 1, bloomSize: 1, color: p.laserBloomColor || '#ff1100', bloomColor: p.laserBloomColor || '#ff1100', bloom: p.laserBloom !== false, reticle: 'triSpoke', reticleSize: 24, reticleWeight: 2, reticleOpacity: 1 },
@@ -21372,7 +12598,7 @@ function applyAllParams() {
     p[`${key}SplashMinFactor`] = clampSetting(p[`${key}SplashMinFactor`], 0, 1, Number(p.destructionDestructibleSplashMinFactor) || 0.15);
   });
   syncReticleToCurrentWeapon();
-  applyPlayerWeaponSettings();
+  applyAllWeaponVisualSettings();
   syncWeaponAmmoHud();
   p.allyType = normalizeChoice(p.allyType, ENEMY_TYPE_OPTIONS, 'rusher');
   p.allyCount = Math.round(clampSetting(p.allyCount, 0, 50, 0));
@@ -21479,6 +12705,8 @@ function applyAllParams() {
   rebuildPlacedObjects();
   applyEditorSettings();
   refreshPlayerSpawnMarker();
+  refreshEnemySpawnMarker();
+  refreshAllySpawnMarker();
   rebuildEditorPlacedNpcs();
 }
 
@@ -21490,21 +12718,20 @@ function rebuildPanel() {
   body.innerHTML = '';
 
   const sectionDefs = [
+    [ICON_SCENE, 'World', buildScene],
+    [ICON_LIGHT, 'Lighting', buildLighting],
     [ICON_CAMERA, 'Camera', buildCamera],
     [ICON_PLAYER, 'Player', buildPlayer],
     [ICON_ABILITIES, 'Abilities', buildAbilities],
-    [ICON_SHIELD, 'Shield', buildShield],
-    [ICON_LIGHT, 'Lighting', buildLighting],
-    [ICON_SCENE, 'World', buildScene],
-    [ICON_HUD, 'HUD', buildHUD],
+    [ICON_WEAPONS, 'Weapons', buildWeapons],
     [ICON_ALLIES, 'Allies', buildAllies],
     [ICON_ENEMIES, 'Enemies', buildEnemies],
+    [ICON_HUD, 'HUD', buildHUD],
     [ICON_DESTRUCTION, 'Destruction', buildDestruction],
-    [ICON_WEAPONS, 'Weapons', buildWeapons],
-    [ICON_SOUND, 'Sound', buildSound],
-    [ICON_CONTROLLER, 'Controller', buildController],
     [ICON_LANDSCAPE, 'Landscape Editor', buildLandscapeEditor],
     [ICON_ASSETS, 'Assets', buildAssets],
+    [ICON_SOUND, 'Sound', buildSound],
+    [ICON_CONTROLLER, 'Controller', buildController],
     [ICON_SCENARIOS, 'Scenes', buildScenes],
   ];
 
@@ -21515,8 +12742,8 @@ function rebuildPanel() {
   // Required gameplay-test sections. This failsafe keeps these controls visible
   // even if a future edit accidentally removes them from the main section list.
   const requiredSections = [
-    [ICON_ABILITIES, 'Abilities', buildAbilities, 'Shield'],
-    [ICON_DESTRUCTION, 'Destruction', buildDestruction, 'Weapons'],
+    [ICON_ABILITIES, 'Abilities', buildAbilities, 'Weapons'],
+    [ICON_DESTRUCTION, 'Destruction', buildDestruction, 'Landscape Editor'],
   ];
 
   requiredSections.forEach(([icon, title, buildFn, beforeTitle]) => {
@@ -21627,7 +12854,6 @@ function syncPauseToSidebar() {
   if (state.paused) {
     pauseManagedAudio();
   } else {
-    if (state.params.editorModeEnabled !== true) teleportPlayerToSpawn();
     resumeManagedAudio();
     if (state.params.soundSfx_ambience > 0 && !state.params.soundMuted) {
       playAmbienceIfAllowed();
@@ -21654,7 +12880,7 @@ export function initPanel() {
       <button class="sb-close" id="sb-close-btn" title="Minimize sidebar" aria-label="Minimize sidebar">◀</button>
     </div>
     <div id="sb-body" class="sb-body"></div>
-    <div class="sb-footer-logo" aria-hidden="true"><img class="sb-logo" src="./assets/white.png" alt=""></div>
+    <div class="sb-footer-logo" aria-hidden="true"><img class="sb-logo" src="./assets/white.svg" alt=""></div>
   `;
   document.getElementById('sb-close-btn')?.addEventListener('click', togglePanel);
 
@@ -21974,6 +13200,7 @@ export function initPanel() {
     applyParamObject(startPreset.data);
   }
   applyAllParams();
+  placePlayerAtActiveSpawn();
   rebuildPanel();
   updatePanelChrome();
   syncPauseToSidebar();
