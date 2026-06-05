@@ -23,7 +23,7 @@ import {
 } from '../placer.js';
 import { registerManagedAudio, applyBulletTimeAudioPitch, setManagedAudioVolume, pauseManagedAudio, resumeManagedAudio } from '../audio.js';
 import { resetWeaponAmmo, resetAllWeaponAmmo, syncWeaponAmmoHud } from '../weapons.js';
-import { setEditorModeEnabled, applyEditorSettings, teleportPlayerToSpawn, clearPlayerSpawn, refreshPlayerSpawnMarker } from '../editor.js';
+import { setEditorModeEnabled, applyEditorSettings, teleportPlayerToSpawn, clearPlayerSpawn, refreshPlayerSpawnMarker, clearEnemySpawn, refreshEnemySpawnMarker } from '../editor.js';
 
 const sidebar = document.getElementById('sidebar');
 
@@ -9227,6 +9227,12 @@ const PRESET_SETTINGS = [
       "editorYaw": 0,
       "editorPitch": -0.5636000000000024,
       "editorPlacedNpcs": [],
+      "enemySpawnEnabled": false,
+      "enemySpawnX": 0.5,
+      "enemySpawnY": 0,
+      "enemySpawnZ": 8.5,
+      "enemySpawnYaw": 0,
+      "editorEnemySpawnYaw": 0,
       "soundSfx_jump": 1,
       "soundSfx_enemy_grunt": 1,
       "soundSfx_object_explode": 1,
@@ -11174,6 +11180,33 @@ function landscapeEditorEnabledChanged(value) {
   applyAllParams();
 }
 
+function buildEnemySpawnControls(body) {
+  body.appendChild(subhdr('Enemy Spawn'));
+  body.appendChild(smallInfo('Choose Enemy Spawn as the placement target, aim at the grid, left-click to place/move it, and use Q/E to rotate the facing arrow. Spawn / Apply Enemies will use this point with the exact Enemies section settings.'));
+  body.appendChild(toggle('Use Enemy Spawn', 'enemySpawnEnabled', value => {
+    state.activePreset = 'custom';
+    if (!value) clearEnemySpawn();
+    applyAllParams();
+  }));
+  const enemySpawnButtons = document.createElement('div');
+  enemySpawnButtons.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 10px;';
+  enemySpawnButtons.appendChild(btn('Spawn Enemies Here', 'sb-btn-accent', () => {
+    if (state.params.enemySpawnEnabled !== true) {
+      notify('No enemy spawn set');
+      return;
+    }
+    const count = spawnEnemiesFromSettings();
+    notify(`Spawned ${count} enem${count === 1 ? 'y' : 'ies'} ✓`);
+  }));
+  enemySpawnButtons.appendChild(btn('Clear Spawn', 'sb-btn-muted', () => {
+    clearEnemySpawn();
+    applyAllParams();
+    rebuildPanel();
+    notify('Enemy spawn cleared ✓');
+  }));
+  body.appendChild(enemySpawnButtons);
+}
+
 function selectedSceneOptions() {
   const scenes = Array.isArray(state.params.savedScenes) ? state.params.savedScenes : [];
   if (!scenes.length) return [['', 'No saved scenes']];
@@ -11183,6 +11216,7 @@ function selectedSceneOptions() {
 const SCENE_KEYS = [
   'placedObjects', 'editorPlacedNpcs',
   'playerSpawnEnabled', 'playerSpawnX', 'playerSpawnY', 'playerSpawnZ', 'playerSpawnYaw', 'editorPlayerSpawnYaw',
+  'enemySpawnEnabled', 'enemySpawnX', 'enemySpawnY', 'enemySpawnZ', 'enemySpawnYaw', 'editorEnemySpawnYaw',
   'floorMode', 'buildAreaEnabled', 'buildAreaCenterX', 'buildAreaCenterZ', 'buildAreaWidth', 'buildAreaDepth',
   'buildAreaAutoExpand', 'buildAreaAutoExpandMargin', 'buildAreaBoundaryVisible', 'buildAreaBoundaryColor',
   'buildAreaBoundaryWalls', 'buildAreaBoundaryHeight', 'buildAreaBoundaryOpacity', 'buildAreaBoundaryCollision',
@@ -11265,6 +11299,7 @@ function buildLandscapeEditor(body) {
     ['enemy', 'Enemy NPC'],
     ['ally', 'Ally NPC'],
     ['playerSpawn', 'Player Spawn'],
+    ['enemySpawn', 'Enemy Spawn'],
   ], value => {
     state.params.editorPlacementTarget = value;
     if (state.params.landscapeEditorModeEnabled) {
@@ -11392,6 +11427,8 @@ function buildLandscapeEditor(body) {
   }));
   body.appendChild(spawnButtons);
 
+  buildEnemySpawnControls(body);
+
   body.appendChild(subhdr('Saved Scenes'));
   buildSceneSaveLoadControls(body);
 
@@ -11471,6 +11508,7 @@ function buildAssets(body) {
     ['enemy', 'Enemy NPC'],
     ['ally', 'Ally NPC'],
     ['playerSpawn', 'Player Spawn'],
+    ['enemySpawn', 'Enemy Spawn'],
   ], applyAllParams));
   body.appendChild(toggle('Fly Mode', 'editorFlyMode', applyAllParams));
   body.appendChild(slider({ key: 'editorMoveSpeed', label: 'Move Speed', min: 0.1, max: 40, step: 0.1, dec: 1, onChange: applyAllParams }));
@@ -11504,6 +11542,8 @@ function buildAssets(body) {
     notify('Player spawn cleared ✓');
   }));
   body.appendChild(spawnButtons);
+
+  buildEnemySpawnControls(body);
 
   body.appendChild(subhdr('Object Placer'));
 
@@ -11566,7 +11606,7 @@ function buildAssets(body) {
 
 function buildScenes(body) {
   body.appendChild(subhdr('Saved Player Scenes'));
-  body.appendChild(smallInfo('Save the current playable layout, then load it later from player mode or Landscape Editor. Scene data includes placed assets, editor-placed NPCs, player spawn point, and build-area settings.'));
+  body.appendChild(smallInfo('Save the current playable layout, then load it later from player mode or Landscape Editor. Scene data includes placed assets, editor-placed NPCs, player/enemy spawn points, and build-area settings.'));
   buildSceneSaveLoadControls(body);
 }
 
@@ -12030,7 +12070,7 @@ function applyAllParams() {
   p.placerTransformModalX = modalCoord(p.placerTransformModalX);
   p.placerTransformModalY = modalCoord(p.placerTransformModalY);
   p.editorModeEnabled = p.editorModeEnabled === true;
-  p.editorPlacementTarget = ['asset', 'enemy', 'ally', 'playerSpawn'].includes(p.editorPlacementTarget) ? p.editorPlacementTarget : 'asset';
+  p.editorPlacementTarget = ['asset', 'enemy', 'ally', 'playerSpawn', 'enemySpawn'].includes(p.editorPlacementTarget) ? p.editorPlacementTarget : 'asset';
   p.editorMoveSpeed = Math.min(80, Math.max(0.1, Number(p.editorMoveSpeed) || 7));
   p.editorSprintMultiplier = Math.min(8, Math.max(1, Number(p.editorSprintMultiplier) || 2.25));
   p.editorPrecisionMultiplier = Math.min(1, Math.max(0.05, Number(p.editorPrecisionMultiplier) || 0.28));
@@ -12054,6 +12094,12 @@ function applyAllParams() {
   p.playerSpawnY = Math.max(0, Number.isFinite(Number(p.playerSpawnY)) ? Number(p.playerSpawnY) : 0);
   p.playerSpawnZ = Number.isFinite(Number(p.playerSpawnZ)) ? Number(p.playerSpawnZ) : 0;
   p.playerSpawnYaw = snapSpawnYaw(Number.isFinite(Number(p.playerSpawnYaw)) ? Number(p.playerSpawnYaw) : p.editorPlayerSpawnYaw);
+  p.editorEnemySpawnYaw = snapSpawnYaw(Number.isFinite(Number(p.editorEnemySpawnYaw)) ? Number(p.editorEnemySpawnYaw) : p.editorYaw);
+  p.enemySpawnEnabled = p.enemySpawnEnabled === true;
+  p.enemySpawnX = Number.isFinite(Number(p.enemySpawnX)) ? Number(p.enemySpawnX) : 0;
+  p.enemySpawnY = Math.max(0, Number.isFinite(Number(p.enemySpawnY)) ? Number(p.enemySpawnY) : 0);
+  p.enemySpawnZ = Number.isFinite(Number(p.enemySpawnZ)) ? Number(p.enemySpawnZ) : 8;
+  p.enemySpawnYaw = snapSpawnYaw(Number.isFinite(Number(p.enemySpawnYaw)) ? Number(p.enemySpawnYaw) : p.editorEnemySpawnYaw);
   if (!Array.isArray(p.editorPlacedNpcs)) p.editorPlacedNpcs = [];
   p.placedAssetShadows = p.placedAssetShadows === true;
   p.landscapeEditorModeEnabled = p.landscapeEditorModeEnabled === true;
@@ -12307,6 +12353,7 @@ function applyAllParams() {
   rebuildPlacedObjects();
   applyEditorSettings();
   refreshPlayerSpawnMarker();
+  refreshEnemySpawnMarker();
   rebuildEditorPlacedNpcs();
 }
 

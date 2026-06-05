@@ -1293,12 +1293,19 @@ function disposeEnemyBullet(bullet) {
 
 function getSpawnPosition(index, count, options = {}) {
   const placement = options.placement || state.params.enemyPlacement || 'random';
-  const origin = playerGroup.position;
+  const origin = options.origin || playerGroup.position;
   const existingPositions = options.existingPositions || enemies.map(e => e.group.position);
+  const fromSpawnPoint = options.spawnPoint === true;
+
+  if (fromSpawnPoint && index === 0) {
+    return { x: origin.x, z: origin.z };
+  }
 
   if (placement === 'grouped') {
-    const angle = (index / Math.max(1, count)) * Math.PI * 2;
-    const ring = 7.5 + Math.floor(index / 8) * 1.8;
+    const spawnIndex = fromSpawnPoint ? Math.max(0, index - 1) : index;
+    const spawnCount = fromSpawnPoint ? Math.max(1, count - 1) : Math.max(1, count);
+    const angle = (spawnIndex / spawnCount) * Math.PI * 2;
+    const ring = fromSpawnPoint ? (1.8 + Math.floor(spawnIndex / 8) * 1.45) : (7.5 + Math.floor(index / 8) * 1.8);
     return {
       x: origin.x + Math.cos(angle) * ring + randomRange(-0.45, 0.45),
       z: origin.z + Math.sin(angle) * ring + randomRange(-0.45, 0.45),
@@ -1306,10 +1313,10 @@ function getSpawnPosition(index, count, options = {}) {
   }
 
   // Anti-clump spawn: try up to 12 positions, pick one not too close to existing enemies
-  const minSpawnSep = 2.2;
+  const minSpawnSep = fromSpawnPoint ? 1.35 : 2.2;
   for (let attempt = 0; attempt < 12; attempt++) {
     const angle = Math.random() * Math.PI * 2;
-    const radius = randomRange(7.5, 17.5);
+    const radius = fromSpawnPoint ? randomRange(1.6, 4.5) : randomRange(7.5, 17.5);
     const pos = {
       x: origin.x + Math.cos(angle) * radius,
       z: origin.z + Math.sin(angle) * radius,
@@ -1323,10 +1330,25 @@ function getSpawnPosition(index, count, options = {}) {
   }
   // Fallback: spawn slightly farther out
   const angle = Math.random() * Math.PI * 2;
+  const fallbackRadius = fromSpawnPoint ? (2.4 + index * 0.75) : 20;
   return {
-    x: origin.x + Math.cos(angle) * 20,
-    z: origin.z + Math.sin(angle) * 20,
+    x: origin.x + Math.cos(angle) * fallbackRadius,
+    z: origin.z + Math.sin(angle) * fallbackRadius,
   };
+}
+
+function getEnemySpawnPointOrigin() {
+  const p = state.params;
+  return {
+    x: Number.isFinite(Number(p.enemySpawnX)) ? Number(p.enemySpawnX) : playerGroup.position.x,
+    y: Number.isFinite(Number(p.enemySpawnY)) ? Math.max(0, Number(p.enemySpawnY)) : 0,
+    z: Number.isFinite(Number(p.enemySpawnZ)) ? Number(p.enemySpawnZ) : playerGroup.position.z,
+  };
+}
+
+function getEnemySpawnPointYaw() {
+  const raw = Number(state.params.enemySpawnYaw);
+  return Number.isFinite(raw) ? raw : 0;
 }
 
 // Returns all active enemy mesh objects for raycasting (e.g. reticle hover check).
@@ -1661,8 +1683,31 @@ export function spawnEnemiesFromSettings() {
   clearEnemies();
   const type = state.params.enemyType || ENEMY_TYPE.RUSHER;
   const count = clamp(Math.round(Number(state.params.enemyCount) || 0), 0, 100);
+  const useEnemySpawn = state.params.enemySpawnEnabled === true;
+  const spawnOrigin = useEnemySpawn ? getEnemySpawnPointOrigin() : null;
+  const existingPositions = [];
+  const spawnOptions = {
+    health: state.params.enemyHealth,
+    behavior: state.params.enemyBehavior,
+    moveSpeed: state.params.enemyMoveSpeed,
+    damage: state.params.enemyDamage,
+    weaponType: state.params.enemyWeaponType,
+    awarenessRange: state.params.enemyAwarenessRange,
+    accuracy: state.params.enemyAccuracy,
+  };
+  if (useEnemySpawn) spawnOptions.ry = getEnemySpawnPointYaw();
   for (let i = 0; i < count; i++) {
-    enemies.push(makeEnemy(type, getSpawnPosition(i, count), i));
+    const position = useEnemySpawn
+      ? getSpawnPosition(i, count, {
+          placement: state.params.enemyPlacement || 'random',
+          origin: spawnOrigin,
+          existingPositions,
+          spawnPoint: true,
+        })
+      : getSpawnPosition(i, count);
+    const enemy = makeEnemy(type, position, i, spawnOptions);
+    enemies.push(enemy);
+    existingPositions.push(enemy.group.position);
   }
   return enemies.length;
 }

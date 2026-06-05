@@ -371,6 +371,16 @@ window.addEventListener('keydown', e => {
       if (state.params.playerSpawnEnabled === true) state.params.playerSpawnYaw = next;
       return;
     }
+    if (state.params.editorPlacementTarget === 'enemySpawn') {
+      const current = Number.isFinite(Number(state.params.editorEnemySpawnYaw))
+        ? Number(state.params.editorEnemySpawnYaw)
+        : (Number.isFinite(Number(state.params.enemySpawnYaw)) ? Number(state.params.enemySpawnYaw) : Number(state.params.editorYaw) || 0);
+      const step = k === 'q' ? -Math.PI / 2 : Math.PI / 2;
+      const next = snapYawToGridEdge(current + step);
+      state.params.editorEnemySpawnYaw = next;
+      if (state.params.enemySpawnEnabled === true) state.params.enemySpawnYaw = next;
+      return;
+    }
     const current = Number(state.params.placerRotationDeg) || 0;
     const step = k === 'q' ? -90 : 90;
     state.params.placerRotationDeg = ((Math.round((current + step) / 90) * 90) % 360 + 360) % 360;
