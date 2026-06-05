@@ -1175,6 +1175,15 @@ function updateNpcWeaponVisual(npc, targetPoint = null) {
   }
 }
 
+export function applyNpcWeaponSettings() {
+  [...enemies, ...allies].forEach(npc => {
+    if (!npc) return;
+    npc._weaponTransformKey = '';
+    const target = findNearestOpponent(npc);
+    updateNpcWeaponVisual(npc, target ? getNpcAimPoint(target, _npcAimPoint) : null);
+  });
+}
+
 
 // Call from loop.js when dwell threshold is reached
 export function tagEnemy(enemy) {
@@ -1688,55 +1697,129 @@ function destroyEnemy(enemy) {
   disposeEnemy(enemy);
 }
 
-export function spawnEnemiesFromSettings() {
-  clearEnemies();
-  const type = state.params.enemyType || ENEMY_TYPE.RUSHER;
-  const count = clamp(Math.round(Number(state.params.enemyCount) || 0), 0, 100);
-  const useEnemySpawn = state.params.enemySpawnEnabled === true;
-  const spawnOrigin = useEnemySpawn ? getEnemySpawnPointOrigin() : null;
-  const existingPositions = [];
-  const spawnOptions = {
-    health: state.params.enemyHealth,
-    behavior: state.params.enemyBehavior,
-    moveSpeed: state.params.enemyMoveSpeed,
-    damage: state.params.enemyDamage,
-    weaponType: state.params.enemyWeaponType,
-    awarenessRange: state.params.enemyAwarenessRange,
-    accuracy: state.params.enemyAccuracy,
-  };
-  if (useEnemySpawn) spawnOptions.ry = getEnemySpawnPointYaw();
-  for (let i = 0; i < count; i++) {
-    const position = useEnemySpawn
-      ? getSpawnPosition(i, count, {
-          placement: state.params.enemyPlacement || 'random',
-          origin: spawnOrigin,
-          existingPositions,
-          spawnPoint: true,
-        })
-      : getSpawnPosition(i, count);
-    const enemy = makeEnemy(type, position, i, spawnOptions);
-    enemies.push(enemy);
-    existingPositions.push(enemy.group.position);
+
+function normalizeNpcGroupId(value) {
+  const text = String(value ?? '1');
+  return ['1', '2', '3'].includes(text) ? text : '1';
+}
+
+function normalizeSpawnPointId(value) {
+  const numeric = Math.round(Number(value));
+  return Math.min(6, Math.max(1, Number.isFinite(numeric) ? numeric : 1));
+}
+
+function teamFields(team) {
+  return team === 'ally'
+    ? ['type', 'count', 'health', 'invincible', 'friendlyFire', 'behavior', 'moveSpeed', 'damage', 'accuracy', 'placement', 'weaponType', 'awarenessRange', 'awarenessVisible', 'awarenessColor', 'awarenessOutlineColor', 'awarenessOpacity', 'awarenessFillTransparent']
+    : ['type', 'count', 'health', 'invincible', 'behavior', 'moveSpeed', 'damage', 'accuracy', 'placement', 'weaponType', 'awarenessRange', 'awarenessVisible', 'awarenessColor', 'awarenessOutlineColor', 'awarenessOpacity', 'awarenessFillTransparent'];
+}
+
+function teamParamKey(team, field) {
+  return `${team}${field.charAt(0).toUpperCase()}${field.slice(1)}`;
+}
+
+function snapshotCurrentTeamSettings(team) {
+  const out = { group: normalizeNpcGroupId(state.params[`${team}Group`]) };
+  teamFields(team).forEach(field => {
+    const key = teamParamKey(team, field);
+    if (Object.prototype.hasOwnProperty.call(state.params, key)) out[field] = state.params[key];
+  });
+  return out;
+}
+
+function getTeamGroupConfig(team, groupId = state.params[`${team}Group`]) {
+  const group = normalizeNpcGroupId(groupId);
+  const configs = Array.isArray(state.params[`${team}GroupConfigs`]) ? state.params[`${team}GroupConfigs`] : [];
+  const found = configs.find(item => normalizeNpcGroupId(item?.group) === group);
+  return { ...snapshotCurrentTeamSettings(team), ...(found || {}), group };
+}
+
+function spawnPointList(team) {
+  const key = `${team}SpawnPoints`;
+  const list = Array.isArray(state.params[key]) ? state.params[key] : [];
+  const clean = list.map(item => ({
+    id: normalizeSpawnPointId(item?.id),
+    group: normalizeNpcGroupId(item?.group),
+    x: Number.isFinite(Number(item?.x)) ? Number(item.x) : 0,
+    y: Math.max(0, Number.isFinite(Number(item?.y)) ? Number(item.y) : 0),
+    z: Number.isFinite(Number(item?.z)) ? Number(item.z) : 8,
+    yaw: Number.isFinite(Number(item?.yaw)) ? Number(item.yaw) : 0,
+    enabled: item?.enabled !== false,
+  })).filter(item => item.enabled);
+  if (team === 'enemy' && state.params.enemySpawnEnabled === true && !clean.length) {
+    clean.push({
+      id: 1,
+      group: normalizeNpcGroupId(state.params.editorEnemySpawnGroup),
+      x: Number.isFinite(Number(state.params.enemySpawnX)) ? Number(state.params.enemySpawnX) : playerGroup.position.x,
+      y: Number.isFinite(Number(state.params.enemySpawnY)) ? Math.max(0, Number(state.params.enemySpawnY)) : 0,
+      z: Number.isFinite(Number(state.params.enemySpawnZ)) ? Number(state.params.enemySpawnZ) : playerGroup.position.z,
+      yaw: Number.isFinite(Number(state.params.enemySpawnYaw)) ? Number(state.params.enemySpawnYaw) : 0,
+      enabled: true,
+    });
   }
-  return enemies.length;
+  return clean.sort((a, b) => a.id - b.id);
+}
+
+function buildSpawnOptionsFromConfig(team, config) {
+  return {
+    team,
+    health: config.health,
+    behavior: config.behavior,
+    moveSpeed: config.moveSpeed,
+    damage: config.damage,
+    weaponType: config.weaponType,
+    awarenessRange: config.awarenessRange,
+    accuracy: config.accuracy,
+  };
+}
+
+function spawnTeamFromSettings(team) {
+  const list = team === 'ally' ? allies : enemies;
+  if (team === 'ally') clearAllies();
+  else clearEnemies();
+  const points = spawnPointList(team);
+  const activeConfig = getTeamGroupConfig(team, state.params[`${team}Group`]);
+  const pointSet = points.length ? points : [{
+    id: 1,
+    group: normalizeNpcGroupId(state.params[`${team}Group`]),
+    x: playerGroup.position.x,
+    y: 0,
+    z: playerGroup.position.z,
+    yaw: 0,
+    enabled: true,
+    fallback: true,
+  }];
+  const existingPositions = team === 'ally' ? enemies.map(e => e.group.position) : [];
+  pointSet.forEach(point => {
+    const config = points.length ? getTeamGroupConfig(team, point.group) : activeConfig;
+    const type = config.type || (team === 'ally' ? state.params.allyType : state.params.enemyType) || ENEMY_TYPE.RUSHER;
+    const count = clamp(Math.round(Number(config.count) || 0), 0, 100);
+    const origin = point.fallback ? playerGroup.position : point;
+    const options = buildSpawnOptionsFromConfig(team, config);
+    options.ry = point.fallback ? undefined : point.yaw;
+    for (let i = 0; i < count; i++) {
+      const position = point.fallback
+        ? getSpawnPosition(i, count, { placement: config.placement || 'random', existingPositions })
+        : getSpawnPosition(i, count, {
+            placement: config.placement || 'random',
+            origin,
+            existingPositions,
+            spawnPoint: true,
+          });
+      const npc = makeEnemy(type, position, list.length, options);
+      list.push(npc);
+      existingPositions.push(npc.group.position);
+    }
+  });
+  return list.length;
+}
+
+export function spawnEnemiesFromSettings() {
+  return spawnTeamFromSettings('enemy');
 }
 
 export function spawnAlliesFromSettings() {
-  clearAllies();
-  const type = state.params.allyType || ENEMY_TYPE.RUSHER;
-  const count = clamp(Math.round(Number(state.params.allyCount) || 0), 0, 100);
-  const existingPositions = [...enemies, ...allies].map(e => e.group.position);
-  for (let i = 0; i < count; i++) {
-    allies.push(makeEnemy(type, getSpawnPosition(i, count, {
-      placement: state.params.allyPlacement || 'random',
-      existingPositions,
-    }), i, {
-      team: 'ally',
-      health: state.params.allyHealth,
-    }));
-    existingPositions.push(allies[allies.length - 1].group.position);
-  }
-  return allies.length;
+  return spawnTeamFromSettings('ally');
 }
 
 

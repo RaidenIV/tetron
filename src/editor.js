@@ -29,6 +29,9 @@ let _playerSpawnMarker = null;
 let _playerSpawnPreviewMarker = null;
 let _enemySpawnMarker = null;
 let _enemySpawnPreviewMarker = null;
+let _allySpawnPreviewMarker = null;
+const _enemySpawnMarkers = new Map();
+const _allySpawnMarkers = new Map();
 const SPAWN_ARROW_TEXTURE_URL = new URL('../assets/spawn_arrow.svg', import.meta.url).href;
 let _editorWasEnabled = false;
 let _primaryPrev = false;
@@ -53,8 +56,18 @@ function numberOr(value, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function normalizeNpcGroupId(value) {
+  const text = String(value ?? '1');
+  return ['1', '2', '3'].includes(text) ? text : '1';
+}
+
+function normalizeSpawnPointId(value) {
+  const numeric = Math.round(Number(value));
+  return Math.min(6, Math.max(1, Number.isFinite(numeric) ? numeric : 1));
+}
+
 function validTarget(value) {
-  return value === 'enemy' || value === 'ally' || value === 'asset' || value === 'playerSpawn' || value === 'enemySpawn' ? value : 'asset';
+  return value === 'enemy' || value === 'ally' || value === 'asset' || value === 'playerSpawn' || value === 'enemySpawn' || value === 'allySpawn' ? value : 'asset';
 }
 
 function ensureEditorHud() {
@@ -97,7 +110,8 @@ function editorPlacementLabel() {
   if (target === 'enemy') return `Enemy · ${state.params.enemyType || 'rusher'}`;
   if (target === 'ally') return `Ally · ${state.params.allyType || 'rusher'}`;
   if (target === 'playerSpawn') return 'Player Spawn';
-  if (target === 'enemySpawn') return 'Enemy Spawn';
+  if (target === 'enemySpawn') return `Enemy Spawn ${state.params.editorEnemySpawnPoint || 1} · Group ${state.params.editorEnemySpawnGroup || 1}`;
+  if (target === 'allySpawn') return `Ally Spawn ${state.params.editorAllySpawnPoint || 1} · Group ${state.params.editorAllySpawnGroup || 1}`;
   return `Asset · ${state.params.placerSelectedAsset || 'box'}`;
 }
 
@@ -135,6 +149,18 @@ function sanitizeEditorParams() {
   p.enemySpawnY = Math.max(0, numberOr(p.enemySpawnY, 0));
   p.enemySpawnZ = numberOr(p.enemySpawnZ, playerGroup.position.z);
   p.enemySpawnYaw = snapYawToGridEdge(numberOr(p.enemySpawnYaw, p.editorEnemySpawnYaw));
+  p.editorAllySpawnYaw = snapYawToGridEdge(numberOr(p.editorAllySpawnYaw, p.allySpawnYaw ?? p.editorYaw));
+  p.allySpawnEnabled = p.allySpawnEnabled === true;
+  p.allySpawnX = numberOr(p.allySpawnX, playerGroup.position.x - 8);
+  p.allySpawnY = Math.max(0, numberOr(p.allySpawnY, 0));
+  p.allySpawnZ = numberOr(p.allySpawnZ, playerGroup.position.z);
+  p.allySpawnYaw = snapYawToGridEdge(numberOr(p.allySpawnYaw, p.editorAllySpawnYaw));
+  p.editorEnemySpawnPoint = normalizeSpawnPointId(p.editorEnemySpawnPoint);
+  p.editorAllySpawnPoint = normalizeSpawnPointId(p.editorAllySpawnPoint);
+  p.editorEnemySpawnGroup = normalizeNpcGroupId(p.editorEnemySpawnGroup);
+  p.editorAllySpawnGroup = normalizeNpcGroupId(p.editorAllySpawnGroup);
+  p.enemySpawnPoints = normalizeTeamSpawnPoints('enemy');
+  p.allySpawnPoints = normalizeTeamSpawnPoints('ally');
   if (!Array.isArray(p.editorPlacedNpcs)) p.editorPlacedNpcs = [];
 }
 
@@ -505,41 +531,175 @@ function tintSpawnMarker(marker, color) {
   });
 }
 
-function ensureEnemySpawnMarker() {
-  if (!_enemySpawnMarker) {
-    _enemySpawnMarker = createPlayerSpawnMarker();
-    _enemySpawnMarker.name = 'EditorEnemySpawnMarker';
-    tintSpawnMarker(_enemySpawnMarker, '#ff3030');
+function getSpawnMarkerMaps(team) {
+  return team === 'ally'
+    ? { markers: _allySpawnMarkers, preview: () => _allySpawnPreviewMarker, setPreview: value => { _allySpawnPreviewMarker = value; }, color: '#35ff00', name: 'Ally' }
+    : { markers: _enemySpawnMarkers, preview: () => _enemySpawnPreviewMarker, setPreview: value => { _enemySpawnPreviewMarker = value; }, color: '#ff3030', name: 'Enemy' };
+}
+
+function teamSpawnArrayKey(team) {
+  return team === 'ally' ? 'allySpawnPoints' : 'enemySpawnPoints';
+}
+
+function teamSpawnSelectedPointKey(team) {
+  return team === 'ally' ? 'editorAllySpawnPoint' : 'editorEnemySpawnPoint';
+}
+
+function teamSpawnSelectedGroupKey(team) {
+  return team === 'ally' ? 'editorAllySpawnGroup' : 'editorEnemySpawnGroup';
+}
+
+function normalizeTeamSpawnPoint(item = {}, fallbackId = 1) {
+  return {
+    id: normalizeSpawnPointId(item.id ?? fallbackId),
+    group: normalizeNpcGroupId(item.group),
+    x: numberOr(item.x, 0),
+    y: Math.max(0, numberOr(item.y, 0)),
+    z: numberOr(item.z, 8),
+    yaw: snapYawToGridEdge(numberOr(item.yaw, 0)),
+    enabled: item.enabled !== false,
+  };
+}
+
+function normalizeTeamSpawnPoints(team) {
+  const key = teamSpawnArrayKey(team);
+  const raw = Array.isArray(state.params[key]) ? state.params[key] : [];
+  const byId = new Map();
+  raw.forEach((item, index) => {
+    const clean = normalizeTeamSpawnPoint(item, index + 1);
+    byId.set(clean.id, clean);
+  });
+  return [...byId.values()].sort((a, b) => a.id - b.id);
+}
+
+function getTeamSpawnPoints(team) {
+  const key = teamSpawnArrayKey(team);
+  const points = normalizeTeamSpawnPoints(team);
+  state.params[key] = points;
+  return points;
+}
+
+function getSelectedTeamSpawnPoint(team) {
+  const id = normalizeSpawnPointId(state.params[teamSpawnSelectedPointKey(team)]);
+  return getTeamSpawnPoints(team).find(point => point.id === id) || null;
+}
+
+function syncLegacyTeamSpawn(team, point = null) {
+  const enabledKey = team === 'ally' ? 'allySpawnEnabled' : 'enemySpawnEnabled';
+  const prefix = team === 'ally' ? 'allySpawn' : 'enemySpawn';
+  const points = getTeamSpawnPoints(team);
+  const active = point || points[0] || null;
+  state.params[enabledKey] = !!active;
+  if (!active) return;
+  state.params[`${prefix}X`] = active.x;
+  state.params[`${prefix}Y`] = active.y;
+  state.params[`${prefix}Z`] = active.z;
+  state.params[`${prefix}Yaw`] = active.yaw;
+}
+
+function upsertTeamSpawnPoint(team, { id, group, x, y, z, yaw }) {
+  const key = teamSpawnArrayKey(team);
+  const point = normalizeTeamSpawnPoint({ id, group, x, y, z, yaw, enabled: true });
+  const points = getTeamSpawnPoints(team).filter(item => item.id !== point.id);
+  points.push(point);
+  state.params[key] = points.sort((a, b) => a.id - b.id);
+  syncLegacyTeamSpawn(team, point);
+  return point;
+}
+
+function clearTeamSpawn(team, id = null) {
+  const key = teamSpawnArrayKey(team);
+  const numericId = id == null ? null : normalizeSpawnPointId(id);
+  if (numericId == null) state.params[key] = [];
+  else state.params[key] = getTeamSpawnPoints(team).filter(point => point.id !== numericId);
+  syncLegacyTeamSpawn(team);
+  refreshTeamSpawnMarkers(team);
+  setTeamSpawnPreviewVisible(team, false);
+  return true;
+}
+
+function makeNumberSprite(number, color = '#ffffff') {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(0,0,0,0.72)';
+  ctx.beginPath();
+  ctx.arc(64, 64, 44, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = color;
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '800 62px Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(number), 64, 67);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, toneMapped: false }));
+  sprite.name = 'SpawnMarkerNumber';
+  sprite.position.y = 4.55;
+  sprite.scale.set(0.9, 0.9, 1);
+  sprite.renderOrder = 40;
+  return sprite;
+}
+
+function setMarkerNumber(marker, number, color) {
+  let sprite = marker.getObjectByName('SpawnMarkerNumber');
+  if (sprite) {
+    sprite.material?.map?.dispose?.();
+    sprite.material?.dispose?.();
+    marker.remove(sprite);
   }
-  return _enemySpawnMarker;
+  marker.add(makeNumberSprite(number, color));
 }
 
-function setEnemySpawnMarkerVisible(visible) {
-  if (_enemySpawnMarker) _enemySpawnMarker.visible = visible;
-}
-
-function ensureEnemySpawnPreviewMarker() {
-  if (!_enemySpawnPreviewMarker) {
-    _enemySpawnPreviewMarker = createPlayerSpawnMarker();
-    _enemySpawnPreviewMarker.name = 'EditorEnemySpawnPreviewMarker';
-    tintSpawnMarker(_enemySpawnPreviewMarker, '#ff3030');
+function ensureTeamSpawnMarker(team, id) {
+  const cfg = getSpawnMarkerMaps(team);
+  const pointId = normalizeSpawnPointId(id);
+  let marker = cfg.markers.get(pointId);
+  if (!marker) {
+    marker = createPlayerSpawnMarker();
+    marker.name = `Editor${cfg.name}SpawnMarker_${pointId}`;
+    tintSpawnMarker(marker, cfg.color);
+    cfg.markers.set(pointId, marker);
   }
-  return _enemySpawnPreviewMarker;
+  setMarkerNumber(marker, pointId, cfg.color);
+  return marker;
 }
 
-function setEnemySpawnPreviewVisible(visible) {
-  if (_enemySpawnPreviewMarker) _enemySpawnPreviewMarker.visible = visible;
+function ensureTeamSpawnPreviewMarker(team) {
+  const cfg = getSpawnMarkerMaps(team);
+  let marker = cfg.preview();
+  if (!marker) {
+    marker = createPlayerSpawnMarker();
+    marker.name = `Editor${cfg.name}SpawnPreviewMarker`;
+    tintSpawnMarker(marker, cfg.color);
+    cfg.setPreview(marker);
+  }
+  return marker;
 }
 
-function updateEnemySpawnMarker(position = null, yaw = null, { preview = false } = {}) {
-  const p = state.params;
-  const marker = ensureEnemySpawnMarker();
-  const x = position ? position.x : p.enemySpawnX;
-  const y = position ? position.y : p.enemySpawnY;
-  const z = position ? position.z : p.enemySpawnZ;
-  marker.position.set(numberOr(x, 0), numberOr(y, 0), numberOr(z, 0));
+function setTeamSpawnMarkerVisible(team, visible) {
+  getSpawnMarkerMaps(team).markers.forEach(marker => { marker.visible = visible; });
+}
+
+function setTeamSpawnPreviewVisible(team, visible) {
+  const marker = getSpawnMarkerMaps(team).preview();
+  if (marker) marker.visible = visible;
+}
+
+function updateTeamSpawnMarker(team, point, { preview = false } = {}) {
+  const cfg = getSpawnMarkerMaps(team);
+  const marker = preview
+    ? ensureTeamSpawnPreviewMarker(team)
+    : ensureTeamSpawnMarker(team, point.id);
+  marker.position.set(numberOr(point.x, 0), numberOr(point.y, 0), numberOr(point.z, 0));
   marker.rotation.y = 0;
   marker.visible = true;
+  setMarkerNumber(marker, point.id, cfg.color);
 
   const body = marker.getObjectByName('PlayerSpawnMarkerBody');
   const footprint = marker.getObjectByName('PlayerSpawnMarkerFootprint');
@@ -553,54 +713,51 @@ function updateEnemySpawnMarker(position = null, yaw = null, { preview = false }
     setMarkerOpacity(footprint, markerOpacity);
   }
   if (indicator) {
-    indicator.visible = !preview && p.enemySpawnEnabled === true;
+    indicator.visible = !preview;
     setMarkerOpacity(indicator, indicator.visible ? 0.88 : 0);
   }
-  if (arrowPivot) arrowPivot.rotation.y = snapYawToGridEdge(numberOr(yaw, p.enemySpawnYaw));
+  if (arrowPivot) arrowPivot.rotation.y = snapYawToGridEdge(numberOr(point.yaw, 0));
   if (arrow?.material) arrow.material.opacity = preview ? 0.7 : 0.95;
 }
 
-function updateEnemySpawnPreviewMarker(position, yaw) {
-  const marker = ensureEnemySpawnPreviewMarker();
-  marker.position.set(numberOr(position?.x, 0), numberOr(position?.y, 0), numberOr(position?.z, 0));
-  marker.rotation.y = 0;
-  marker.visible = true;
-
-  const body = marker.getObjectByName('PlayerSpawnMarkerBody');
-  const footprint = marker.getObjectByName('PlayerSpawnMarkerFootprint');
-  const indicator = marker.getObjectByName('PlayerSpawnPlacedIndicator');
-  const arrowPivot = marker.getObjectByName('PlayerSpawnMarkerFacingArrowPivot');
-  const arrow = marker.getObjectByName('PlayerSpawnMarkerFacingArrow');
-
-  if (body?.material) body.material.opacity = 0.22;
-  if (footprint) {
-    footprint.rotation.y = 0;
-    setMarkerOpacity(footprint, 0.5);
-  }
-  if (indicator) {
-    indicator.visible = false;
-    setMarkerOpacity(indicator, 0);
-  }
-  if (arrowPivot) arrowPivot.rotation.y = snapYawToGridEdge(numberOr(yaw, state.params.editorEnemySpawnYaw));
-  if (arrow?.material) arrow.material.opacity = 0.55;
+function updateTeamSpawnPreviewMarker(team, position, yaw) {
+  const point = {
+    id: normalizeSpawnPointId(state.params[teamSpawnSelectedPointKey(team)]),
+    group: normalizeNpcGroupId(state.params[teamSpawnSelectedGroupKey(team)]),
+    x: numberOr(position?.x, 0),
+    y: numberOr(position?.y, 0),
+    z: numberOr(position?.z, 0),
+    yaw: snapYawToGridEdge(numberOr(yaw, 0)),
+  };
+  updateTeamSpawnMarker(team, point, { preview: true });
 }
 
-export function clearEnemySpawn() {
-  sanitizeEditorParams();
-  state.params.enemySpawnEnabled = false;
-  setEnemySpawnMarkerVisible(false);
-  setEnemySpawnPreviewVisible(false);
-  return true;
+function refreshTeamSpawnMarkers(team) {
+  const points = getTeamSpawnPoints(team);
+  const activeIds = new Set(points.map(point => normalizeSpawnPointId(point.id)));
+  const cfg = getSpawnMarkerMaps(team);
+  cfg.markers.forEach((marker, id) => {
+    if (!activeIds.has(id)) marker.visible = false;
+  });
+  points.forEach(point => updateTeamSpawnMarker(team, point, { preview: false }));
 }
 
-export function refreshEnemySpawnMarker() {
-  sanitizeEditorParams();
-  if (state.params.enemySpawnEnabled === true) {
-    updateEnemySpawnMarker(null, state.params.enemySpawnYaw, { preview: false });
-  } else {
-    setEnemySpawnMarkerVisible(false);
-  }
+function ensureEnemySpawnMarker() { return ensureTeamSpawnMarker('enemy', state.params.editorEnemySpawnPoint || 1); }
+function setEnemySpawnMarkerVisible(visible) { setTeamSpawnMarkerVisible('enemy', visible); }
+function ensureEnemySpawnPreviewMarker() { return ensureTeamSpawnPreviewMarker('enemy'); }
+function setEnemySpawnPreviewVisible(visible) { setTeamSpawnPreviewVisible('enemy', visible); }
+function updateEnemySpawnMarker(position = null, yaw = null, { preview = false } = {}) {
+  const point = position
+    ? { id: normalizeSpawnPointId(state.params.editorEnemySpawnPoint), group: normalizeNpcGroupId(state.params.editorEnemySpawnGroup), x: position.x, y: position.y, z: position.z, yaw: numberOr(yaw, state.params.editorEnemySpawnYaw) }
+    : (getSelectedTeamSpawnPoint('enemy') || { id: normalizeSpawnPointId(state.params.editorEnemySpawnPoint), group: normalizeNpcGroupId(state.params.editorEnemySpawnGroup), x: state.params.enemySpawnX, y: state.params.enemySpawnY, z: state.params.enemySpawnZ, yaw: state.params.enemySpawnYaw });
+  updateTeamSpawnMarker('enemy', point, { preview });
 }
+function updateEnemySpawnPreviewMarker(position, yaw) { updateTeamSpawnPreviewMarker('enemy', position, yaw); }
+
+export function clearEnemySpawn(id = null) { return clearTeamSpawn('enemy', id); }
+export function refreshEnemySpawnMarker() { refreshTeamSpawnMarkers('enemy'); }
+export function clearAllySpawn(id = null) { return clearTeamSpawn('ally', id); }
+export function refreshAllySpawnMarker() { refreshTeamSpawnMarkers('ally'); }
 
 function snapNpcAxis(v) {
   return Math.floor(v) + 0.5;
@@ -748,8 +905,10 @@ export function updateEditorPlacement() {
     hideNpcGhost();
     setPlayerSpawnPreviewVisible(false);
     setEnemySpawnPreviewVisible(false);
+    setTeamSpawnPreviewVisible('ally', false);
     refreshPlayerSpawnMarker();
     refreshEnemySpawnMarker();
+    refreshAllySpawnMarker();
     _primaryPrev = !!state.primaryFire;
     _secondaryPrev = !!state.secondaryFire;
     return;
@@ -766,11 +925,8 @@ export function updateEditorPlacement() {
     } else if (target !== 'playerSpawn') {
       setPlayerSpawnMarkerVisible(false);
     }
-    if (state.params.enemySpawnEnabled === true) {
-      updateEnemySpawnMarker(null, state.params.enemySpawnYaw, { preview: false });
-    } else if (target !== 'enemySpawn') {
-      setEnemySpawnMarkerVisible(false);
-    }
+    refreshEnemySpawnMarker();
+    refreshAllySpawnMarker();
     _primaryPrev = !!state.primaryFire;
     _secondaryPrev = !!state.secondaryFire;
     return;
@@ -780,8 +936,10 @@ export function updateEditorPlacement() {
     hideNpcGhost();
     setPlayerSpawnPreviewVisible(false);
     setEnemySpawnPreviewVisible(false);
+    setTeamSpawnPreviewVisible('ally', false);
     refreshPlayerSpawnMarker();
     refreshEnemySpawnMarker();
+    refreshAllySpawnMarker();
     _primaryPrev = !!state.primaryFire;
     _secondaryPrev = !!state.secondaryFire;
     return;
@@ -793,7 +951,9 @@ export function updateEditorPlacement() {
   if (target === 'playerSpawn') {
     hideNpcGhost();
     setEnemySpawnPreviewVisible(false);
+    setTeamSpawnPreviewVisible('ally', false);
     refreshEnemySpawnMarker();
+    refreshAllySpawnMarker();
 
     if (removePressed) {
       clearPlayerSpawn();
@@ -841,25 +1001,25 @@ export function updateEditorPlacement() {
     return;
   }
 
-  if (target === 'enemySpawn') {
+  if (target === 'enemySpawn' || target === 'allySpawn') {
+    const team = target === 'allySpawn' ? 'ally' : 'enemy';
     hideNpcGhost();
     setPlayerSpawnPreviewVisible(false);
+    if (team === 'enemy') setTeamSpawnPreviewVisible('ally', false);
+    else setEnemySpawnPreviewVisible(false);
     refreshPlayerSpawnMarker();
+    refreshEnemySpawnMarker();
+    refreshAllySpawnMarker();
 
     if (removePressed) {
-      clearEnemySpawn();
+      clearTeamSpawn(team, state.params[teamSpawnSelectedPointKey(team)]);
       _primaryPrev = !!state.primaryFire;
       _secondaryPrev = !!state.secondaryFire;
       return;
     }
 
     if (!hit) {
-      setEnemySpawnPreviewVisible(false);
-      if (state.params.enemySpawnEnabled === true) {
-        updateEnemySpawnMarker(null, state.params.enemySpawnYaw, { preview: false });
-      } else {
-        setEnemySpawnMarkerVisible(false);
-      }
+      setTeamSpawnPreviewVisible(team, false);
       _primaryPrev = !!state.primaryFire;
       _secondaryPrev = !!state.secondaryFire;
       return;
@@ -867,24 +1027,22 @@ export function updateEditorPlacement() {
 
     const sx = snapNpcAxis(_hitPoint.x);
     const sz = snapNpcAxis(_hitPoint.z);
-    const yaw = snapYawToGridEdge(numberOr(state.params.editorEnemySpawnYaw, state.params.editorYaw));
-    if (state.params.enemySpawnEnabled === true) {
-      updateEnemySpawnMarker(null, state.params.enemySpawnYaw, { preview: false });
-      updateEnemySpawnPreviewMarker({ x: sx, y: 0, z: sz }, yaw);
-    } else {
-      setEnemySpawnMarkerVisible(false);
-      updateEnemySpawnPreviewMarker({ x: sx, y: 0, z: sz }, yaw);
-    }
+    const yawKey = team === 'ally' ? 'editorAllySpawnYaw' : 'editorEnemySpawnYaw';
+    const yaw = snapYawToGridEdge(numberOr(state.params[yawKey], state.params.editorYaw));
+    updateTeamSpawnPreviewMarker(team, { x: sx, y: 0, z: sz }, yaw);
 
     if (state.primaryFire && !_primaryPrev) {
-      state.params.enemySpawnEnabled = true;
-      state.params.enemySpawnX = sx;
-      state.params.enemySpawnY = 0;
-      state.params.enemySpawnZ = sz;
-      state.params.enemySpawnYaw = yaw;
-      state.params.editorEnemySpawnYaw = yaw;
-      setEnemySpawnPreviewVisible(false);
-      updateEnemySpawnMarker(null, yaw, { preview: false });
+      const point = upsertTeamSpawnPoint(team, {
+        id: state.params[teamSpawnSelectedPointKey(team)],
+        group: state.params[teamSpawnSelectedGroupKey(team)],
+        x: sx,
+        y: 0,
+        z: sz,
+        yaw,
+      });
+      state.params[yawKey] = yaw;
+      setTeamSpawnPreviewVisible(team, false);
+      updateTeamSpawnMarker(team, point, { preview: false });
     }
 
     _primaryPrev = !!state.primaryFire;
@@ -894,8 +1052,10 @@ export function updateEditorPlacement() {
 
   setPlayerSpawnPreviewVisible(false);
   setEnemySpawnPreviewVisible(false);
+  setTeamSpawnPreviewVisible('ally', false);
   refreshPlayerSpawnMarker();
   refreshEnemySpawnMarker();
+  refreshAllySpawnMarker();
 
   if (removePressed && removeNpcByAim()) {
     _primaryPrev = !!state.primaryFire;
