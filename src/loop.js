@@ -356,7 +356,6 @@ function syncKillScreenRuntime() {
 }
 
 function getTargetWorldScale() {
-  updatePlayerSpawnInvincibility(delta);
   if (state.playerDead) {
     const killScreenActive = state.params.killScreenEnabled !== false && Number(state.killScreenTimer) > 0;
     return killScreenActive ? clamp(Number(state.params.killScreenWorldScale) || 0.25, 0.05, 1.0) : 1.0;
@@ -366,6 +365,7 @@ function getTargetWorldScale() {
 }
 
 function updateTimeSlow(delta) {
+  updatePlayerSpawnInvincibility(delta);
   const wasBulletTimeActive = state.slowTimer > 0;
   const p = state.params;
   const maxAmount = getBulletTimeMaxAmount();
