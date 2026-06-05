@@ -26,6 +26,8 @@ import { resetWeaponAmmo, resetAllWeaponAmmo, syncWeaponAmmoHud } from '../weapo
 import { setEditorModeEnabled, applyEditorSettings, teleportPlayerToSpawn, clearPlayerSpawn, refreshPlayerSpawnMarker, clearEnemySpawn, refreshEnemySpawnMarker, clearAllySpawn, refreshAllySpawnMarker } from '../editor.js';
 
 const sidebar = document.getElementById('sidebar');
+const openSidebarSections = new Set();
+
 
 // ── SVG icons (from uploaded assets) ──────────────────────────────────────────
 const ICON_CAMERA = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M481-590.77h299.62q-26.24-70.54-83.66-124.65Q639.54-769.54 566-788l-99.69 171.85q-5.23 8.46-.04 16.92 5.2 8.46 14.73 8.46Zm-127.08 54.62q5.18 8.46 14.67 8.46t14.72-8.46l151.46-259.74q-11-2.11-27.39-3.11-16.38-1-27.38-1-66 0-123 25t-101 67l97.92 171.85ZM170-400h197.62q9.23 0 14.69-8.46 5.46-8.46.23-16.92L234.15-683.69q-35.07 43.31-54.61 94.53Q160-537.95 160-480q0 21 2.5 40.5T170-400Zm225.54 228L495-343.85q5.23-8.46-.23-16.92-5.46-8.46-14.69-8.46h-300.7q26.24 70.54 84.43 124.65Q322-190.46 395.54-172ZM480-160q66 0 123-25t101-67l-97.92-171.85q-5.18-8.46-14.67-8.46t-14.72 8.46L426.77-165.54q11 2.77 26.11 4.16Q468-160 480-160Zm245.85-116.31q32-41 53.07-94.34Q800-424 800-480q0-21-2.5-40.5T790-560H592.38q-9.23 0-14.69 8.46-5.46 8.46-.23 16.92l148.39 258.31ZM480-480Zm-.24 360q-74.07 0-139.65-28.3-65.58-28.3-114.55-77.26-48.96-48.97-77.26-114.55Q120-405.69 120-479.76q0-74.96 28.42-140.45 28.43-65.48 77.16-114.21 48.73-48.73 114.51-77.16Q405.86-840 479.75-840q74.79 0 140.37 28.42 65.57 28.43 114.3 77.16 48.73 48.73 77.16 114.21Q840-554.72 840-479.76q0 74.07-28.42 139.76-28.43 65.69-77.16 114.42-48.73 48.73-114.21 77.16Q554.72-120 479.76-120Z"/></svg>`;
@@ -40,7 +42,7 @@ const ICON_HUD = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox=
 const ICON_CONTROLLER = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M189-186q-51 0-86-35t-35-86q0-8 .5-15t2.5-15l84-336q12-45 48-73t82-28h390q46 0 82 28t48 73l84 336q2 8 3 15.5t1 15.5q0 51-35.5 85.5T771-186q-35 0-64-18.5T662-254l-29-59q-8-17-24-25t-34-8H385q-18 0-34 8t-24 25l-29 59q-15 32-44.5 50T189-186Zm3-28q26 0 48-14t33-37l28-58q12-24 35-37.5t49-13.5h190q27 0 49.5 14.5T660-322l28 57q11 23 33 37t48 14q39 0 67-26.5t28-64.5q0-3-3-25l-84-335q-9-35-37.5-58T675-746H285q-37 0-65.5 23T183-665L99-330q-1 4-3 24 0 39 28.5 65.5T192-214Zm367.5-326.5Q568-549 568-560t-8.5-19.5Q551-588 540-588t-19.5 8.5Q512-571 512-560t8.5 19.5Q529-532 540-532t19.5-8.5Zm80-80Q648-629 648-640t-8.5-19.5Q631-668 620-668t-19.5 8.5Q592-651 592-640t8.5 19.5Q609-612 620-612t19.5-8.5Zm0 160Q648-469 648-480t-8.5-19.5Q631-508 620-508t-19.5 8.5Q592-491 592-480t8.5 19.5Q609-452 620-452t19.5-8.5Zm80-80Q728-549 728-560t-8.5-19.5Q711-588 700-588t-19.5 8.5Q672-571 672-560t8.5 19.5Q689-532 700-532t19.5-8.5ZM350-480q4-4 4-10v-56h56q6 0 10-4t4-10q0-6-4-10t-10-4h-56v-56q0-6-4-10t-10-4q-6 0-10 4t-4 10v56h-56q-6 0-10 4t-4 10q0 6 4 10t10 4h56v56q0 6 4 10t10 4q6 0 10-4Zm130 0Z"/></svg>`;
 
 const ICON_SOUND = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M564-195v-30q81-30 130.5-100T744-481q0-86-49.5-156T564-737v-30q92 33 150 111t58 175q0 97-58 175T564-195ZM188-412v-136h130l126-126v388L318-412H188Zm376 56v-250q30 22 45 55.5t15 70.5q0 37-15.5 69.5T564-356ZM416-606l-86 86H216v80h114l86 86v-252ZM316-480Z"/></svg>`;
-const ICON_ALLIES = `<img class="sb-icon-img" src="./assets/allies.svg" alt="" aria-hidden="true" />`;
+const ICON_ALLIES = `<span class="sb-icon-mask" style="--icon-url: url('./assets/allies.svg');" aria-hidden="true"></span>`;
 const ICON_LANDSCAPE = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M206-416q8-15 21.88-23.5Q241.75-448 259-448q18 0 33.1 9.37 15.1 9.38 21.9 26.63l19 44q9 19 33.06 17.43Q390.13-352.14 397-371l83-261q12-37 44-58.5t70.38-21.5Q632-712 664-691q32 21 44 57l148 404q2 7-1 12.5t-10.97 5.5q-4.55 0-8.34-2.5T830-221L681-625q-9-28-33.5-43.5T594-684q-29 0-53.5 16T507-624l-83 261q-7 19-23 30.5T364.61-321q-18.35 0-33.98-9.5Q315-340 307-357l-21-50q-8-17-27.5-17.5T230-408l-98 189q-1.69 3.18-5.08 5.09-3.39 1.91-7.12 1.91-7.8 0-11.8-6-4-6 0-13l98-185Zm58.94-148q-37.94 0-65.44-27.15-27.5-27.14-27.5-64.61Q172-694 199.5-721q27.5-27 65.44-27t64.5 26.92Q356-694.15 356-655.69 356-618 329.44-591t-64.5 27Zm-.1-28q26.84 0 45-19T328-656.5q0-26.5-18.16-45t-45-18.5Q238-720 219-701.6q-19 18.4-19 45.6 0 26 19 45t45.84 19ZM365-321ZM264-656Z"/></svg>`;
 const ICON_ASSETS = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="M450-199 256-312q-14.25-8.43-22.12-22.21Q226-348 226-364v-226q0-16 7.88-29.79Q241.75-633.57 256-642l194-113q14.33-8 30.16-8 15.84 0 29.84 8l194 113q14.25 8.43 22.13 22.21Q734-606 734-590v226q0 16-7.87 29.79Q718.25-320.43 704-312L510-199q-14.33 8-30.16 8-15.84 0-29.84-8Zm16-23v-248L254-590v226q0 8 4 15t12 12l196 115Zm28 0 196-115q8-5 12-12t4-15v-226L494-470v248ZM145.96-666q-5.96 0-9.96-4.03-4-4.02-4-9.97v-88q0-24.75 17.63-42.38Q167.25-828 192-828h88q5.95 0 9.98 4.04 4.02 4.03 4.02 10 0 5.96-4.02 9.96-4.03 4-9.98 4h-88q-14 0-23 9t-9 23v88q0 5.95-4.04 9.97-4.03 4.03-10 4.03ZM192-132q-24.75 0-42.37-17.63Q132-167.25 132-192v-88q0-5.95 4.04-9.98 4.03-4.02 10-4.02 5.96 0 9.96 4.02 4 4.03 4 9.98v88q0 14 9 23t23 9h88q5.95 0 9.98 4.04 4.02 4.03 4.02 10 0 5.96-4.02 9.96-4.03 4-9.98 4h-88Zm576 0h-88q-5.95 0-9.97-4.04-4.03-4.03-4.03-10 0-5.96 4.03-9.96 4.02-4 9.97-4h88q14 0 23-9t9-23v-88q0-5.95 4.04-9.98 4.03-4.02 10-4.02 5.96 0 9.96 4.02 4 4.03 4 9.98v88q0 24.75-17.62 42.37Q792.75-132 768-132Zm32-548v-88q0-14-9-23t-23-9h-88q-5.95 0-9.97-4.04-4.03-4.03-4.03-10 0-5.96 4.03-9.96 4.02-4 9.97-4h88q24.75 0 42.38 17.62Q828-792.75 828-768v88q0 5.95-4.04 9.97-4.03 4.03-10 4.03-5.96 0-9.96-4.03-4-4.02-4-9.97ZM480-494l212-122-196-113q-8-5-16-5t-16 5L268-616l212 122Zm0 14Zm0-14Zm14 24Zm-28 0Z"/></svg>`;
 const ICON_SCENARIOS = `<svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor"><path d="m192-748 39 78q7 14 20 22t28 8q30 0 46-25.5t2-52.5l-15-30h80l39 78q7 14 20 22t28 8q30 0 46-25.5t2-52.5l-15-30h80l39 78q7 14 20 22t28 8q30 0 46-25.5t2-52.5l-15-30h56q26 0 43 17t17 43v416q0 26-17 43t-43 17H192q-26 0-43-17t-17-43v-416q0-26 17-43t43-17Zm-32 136v340q0 14 9 23t23 9h576q14 0 23-9t9-23v-340H160Zm0 0v372-372Z"/></svg>`;
@@ -10263,7 +10265,8 @@ function sectionKey(title) {
 function section(icon, title, buildFn) {
   const wrap = document.createElement('div');
   wrap.className = 'sb-section';
-  wrap.dataset.sectionKey = sectionKey(title);
+  const key = sectionKey(title);
+  wrap.dataset.sectionKey = key;
   wrap.dataset.sectionTitle = title;
 
   const hdr = document.createElement('div');
@@ -10288,18 +10291,26 @@ function section(icon, title, buildFn) {
   const body = document.createElement('div');
   body.className = 'sb-section-body'; // display: none by default
 
+  const setSectionOpen = open => {
+    body.classList.toggle('open', open);
+    wrap.classList.toggle('open', open);
+    hdr.querySelector('.arrow').textContent = open ? '▴' : '▾';
+    if (open) openSidebarSections.add(key);
+    else openSidebarSections.delete(key);
+  };
+
+  if (openSidebarSections.has(key)) {
+    setSectionOpen(true);
+  }
+
   hdr.addEventListener('click', () => {
     if (state.panelMinimized) {
       setPanelMinimized(false);
-      body.classList.add('open');
-      wrap.classList.add('open');
-      hdr.querySelector('.arrow').textContent = '▴';
+      setSectionOpen(true);
       return;
     }
 
-    const open = body.classList.toggle('open'); // display: block when open
-    wrap.classList.toggle('open', open);
-    hdr.querySelector('.arrow').textContent = open ? '▴' : '▾';
+    setSectionOpen(!body.classList.contains('open'));
   });
 
   wrap.appendChild(hdr);
