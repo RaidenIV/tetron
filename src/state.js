@@ -14,7 +14,7 @@ export const state = {
   playerDeathTimer: 0,
   playerDeathDuration: 0,
   killScreenTimer: 0,
-  activePreset: 'g53',
+  activePreset: 'g54',
   mouseLookActive: false,
   isAiming: false,          // true while right-mouse / L2 held
   activeSlot: 0,            // 0 = laser, 1 = object placer
@@ -78,7 +78,7 @@ export const state = {
     "aimSmooth": 10,
     "thirdMouseSensitivityX": 0.003,
     "thirdMouseSensitivityY": 0.0024,
-    "thirdPitch": -0.11353156709671092,
+    "thirdPitch": -0.058331567096711084,
     "thirdOffsetMode": "parallel",
     "thirdOffsetX": 1.25,
     "thirdOffsetY": -0.25,
@@ -97,9 +97,9 @@ export const state = {
     "playerRadius": 0.4,
     "playerLength": 1.2,
     "playerMaxHealth": 100,
-    "playerHealth": 65,
+    "playerHealth": 100,
     "playerMaxArmor": 100,
-    "playerArmor": 0,
+    "playerArmor": 100,
     "playerInvincible": false,
     "jumpEnabled": true,
     "doubleJumpEnabled": true,
@@ -189,7 +189,7 @@ export const state = {
     "laserRange": 42,
     "laserFireRate": 5,
     "enemyType": "sniper",
-    "enemyCount": 15,
+    "enemyCount": 5,
     "enemyHealth": 100,
     "enemyInvincible": false,
     "enemyBehavior": "keepDistance",
@@ -9228,16 +9228,16 @@ export const state = {
     "editorFov": 70,
     "editorMouseSensitivityX": 0.003,
     "editorMouseSensitivityY": 0.0024,
-    "editorCameraX": -1.2356679200159255,
-    "editorCameraY": 11.026832711805062,
-    "editorCameraZ": 82.58700963443923,
+    "editorCameraX": -73.89352621263176,
+    "editorCameraY": 11.91015505542189,
+    "editorCameraZ": -42.703587673831606,
     "editorYaw": 0,
-    "editorPitch": -0.5636000000000024,
+    "editorPitch": -0.6607315670967139,
     "editorPlacedNpcs": [],
-    "enemySpawnEnabled": false,
-    "enemySpawnX": 0.5,
+    "enemySpawnEnabled": true,
+    "enemySpawnX": -75.5,
     "enemySpawnY": 0,
-    "enemySpawnZ": 8.5,
+    "enemySpawnZ": -12.5,
     "enemySpawnYaw": 0,
     "editorEnemySpawnYaw": 0,
     "soundSfx_jump": 1,
@@ -9493,7 +9493,7 @@ export const state = {
     "killScreenEnabled": true,
     "killScreenDuration": 10,
     "killScreenSaturation": 0,
-    "killScreenText": "FAGGOT!",
+    "killScreenText": "YOU ARE DEAD",
     "killScreenTextSize": 144,
     "killScreenTextColor": "#ff0000",
     "killScreenTextOpacity": 1,
@@ -9521,8 +9521,9 @@ export const state = {
     "enemyGroup": "1",
     "enemyGroupConfigs": [
         {
+            "group": "1",
             "type": "sniper",
-            "count": 15,
+            "count": 5,
             "health": 100,
             "invincible": false,
             "behavior": "keepDistance",
@@ -9536,12 +9537,12 @@ export const state = {
             "awarenessColor": "#ff3030",
             "awarenessOutlineColor": "#000000",
             "awarenessOpacity": 0.18,
-            "awarenessFillTransparent": false,
-            "group": "1"
+            "awarenessFillTransparent": false
         },
         {
-            "type": "sniper",
-            "count": 15,
+            "group": "2",
+            "type": "orbiter",
+            "count": 5,
             "health": 100,
             "invincible": false,
             "behavior": "keepDistance",
@@ -9549,18 +9550,18 @@ export const state = {
             "damage": 20,
             "accuracy": 85,
             "placement": "random",
-            "weaponType": "shotgun",
+            "weaponType": "pistol",
             "awarenessRange": 75,
             "awarenessVisible": false,
             "awarenessColor": "#ff3030",
             "awarenessOutlineColor": "#000000",
             "awarenessOpacity": 0.18,
-            "awarenessFillTransparent": false,
-            "group": "2"
+            "awarenessFillTransparent": false
         },
         {
-            "type": "sniper",
-            "count": 15,
+            "group": "3",
+            "type": "splitter",
+            "count": 5,
             "health": 100,
             "invincible": false,
             "behavior": "keepDistance",
@@ -9574,13 +9575,13 @@ export const state = {
             "awarenessColor": "#ff3030",
             "awarenessOutlineColor": "#000000",
             "awarenessOpacity": 0.18,
-            "awarenessFillTransparent": false,
-            "group": "3"
+            "awarenessFillTransparent": false
         }
     ],
     "allyGroup": "1",
     "allyGroupConfigs": [
         {
+            "group": "1",
             "type": "orbiter",
             "count": 10,
             "health": 100,
@@ -9597,10 +9598,10 @@ export const state = {
             "awarenessColor": "#ff0000",
             "awarenessOutlineColor": "#ffffff",
             "awarenessOpacity": 0.48,
-            "awarenessFillTransparent": false,
-            "group": "1"
+            "awarenessFillTransparent": false
         },
         {
+            "group": "2",
             "type": "orbiter",
             "count": 10,
             "health": 100,
@@ -9617,10 +9618,10 @@ export const state = {
             "awarenessColor": "#ff0000",
             "awarenessOutlineColor": "#ffffff",
             "awarenessOpacity": 0.48,
-            "awarenessFillTransparent": false,
-            "group": "2"
+            "awarenessFillTransparent": false
         },
         {
+            "group": "3",
             "type": "orbiter",
             "count": 10,
             "health": 100,
@@ -9637,11 +9638,38 @@ export const state = {
             "awarenessColor": "#ff0000",
             "awarenessOutlineColor": "#ffffff",
             "awarenessOpacity": 0.48,
-            "awarenessFillTransparent": false,
-            "group": "3"
+            "awarenessFillTransparent": false
         }
     ],
-    "enemySpawnPoints": [],
+    "enemySpawnPoints": [
+        {
+            "id": 1,
+            "group": "1",
+            "x": 61.5,
+            "y": 0,
+            "z": -37.5,
+            "yaw": 0,
+            "enabled": true
+        },
+        {
+            "id": 2,
+            "group": "2",
+            "x": -29.5,
+            "y": 0,
+            "z": -69.5,
+            "yaw": 0,
+            "enabled": true
+        },
+        {
+            "id": 3,
+            "group": "3",
+            "x": -75.5,
+            "y": 0,
+            "z": -12.5,
+            "yaw": 0,
+            "enabled": true
+        }
+    ],
     "allySpawnPoints": [],
     "allySpawnEnabled": false,
     "allySpawnX": -0.5,
@@ -9649,8 +9677,8 @@ export const state = {
     "allySpawnZ": 8.5,
     "allySpawnYaw": 0,
     "editorAllySpawnYaw": 0,
-    "editorEnemySpawnPoint": 1,
-    "editorEnemySpawnGroup": "1",
+    "editorEnemySpawnPoint": 3,
+    "editorEnemySpawnGroup": "3",
     "editorAllySpawnPoint": 1,
     "editorAllySpawnGroup": "1"
 }

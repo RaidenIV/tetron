@@ -61,9 +61,11 @@ function normalizeNpcGroupId(value) {
   return ['1', '2', '3'].includes(text) ? text : '1';
 }
 
+const MAX_TEAM_SPAWN_POINTS = 6;
+
 function normalizeSpawnPointId(value) {
   const numeric = Math.round(Number(value));
-  return Math.min(6, Math.max(1, Number.isFinite(numeric) ? numeric : 1));
+  return Math.min(MAX_TEAM_SPAWN_POINTS, Math.max(1, Number.isFinite(numeric) ? numeric : 1));
 }
 
 function validTarget(value) {
@@ -584,6 +586,23 @@ function getSelectedTeamSpawnPoint(team) {
   return getTeamSpawnPoints(team).find(point => point.id === id) || null;
 }
 
+function nextAvailableTeamSpawnPointId(team, startAt = 1) {
+  const used = new Set(getTeamSpawnPoints(team).map(point => normalizeSpawnPointId(point.id)));
+  const start = normalizeSpawnPointId(startAt);
+  for (let id = start; id <= MAX_TEAM_SPAWN_POINTS; id++) {
+    if (!used.has(id)) return id;
+  }
+  for (let id = 1; id < start; id++) {
+    if (!used.has(id)) return id;
+  }
+  return null;
+}
+
+function advanceTeamSpawnPointSelection(team, placedId) {
+  const next = nextAvailableTeamSpawnPointId(team, normalizeSpawnPointId(placedId) + 1);
+  if (next != null) state.params[teamSpawnSelectedPointKey(team)] = next;
+}
+
 function syncLegacyTeamSpawn(team, point = null) {
   const enabledKey = team === 'ally' ? 'allySpawnEnabled' : 'enemySpawnEnabled';
   const prefix = team === 'ally' ? 'allySpawn' : 'enemySpawn';
@@ -721,8 +740,13 @@ function updateTeamSpawnMarker(team, point, { preview = false } = {}) {
 }
 
 function updateTeamSpawnPreviewMarker(team, position, yaw) {
+  const pointId = nextAvailableTeamSpawnPointId(team);
+  if (pointId == null) {
+    setTeamSpawnPreviewVisible(team, false);
+    return;
+  }
   const point = {
-    id: normalizeSpawnPointId(state.params[teamSpawnSelectedPointKey(team)]),
+    id: pointId,
     group: normalizeNpcGroupId(state.params[teamSpawnSelectedGroupKey(team)]),
     x: numberOr(position?.x, 0),
     y: numberOr(position?.y, 0),
@@ -1032,17 +1056,21 @@ export function updateEditorPlacement() {
     updateTeamSpawnPreviewMarker(team, { x: sx, y: 0, z: sz }, yaw);
 
     if (state.primaryFire && !_primaryPrev) {
-      const point = upsertTeamSpawnPoint(team, {
-        id: state.params[teamSpawnSelectedPointKey(team)],
-        group: state.params[teamSpawnSelectedGroupKey(team)],
-        x: sx,
-        y: 0,
-        z: sz,
-        yaw,
-      });
-      state.params[yawKey] = yaw;
-      setTeamSpawnPreviewVisible(team, false);
-      updateTeamSpawnMarker(team, point, { preview: false });
+      const pointId = nextAvailableTeamSpawnPointId(team);
+      if (pointId != null) {
+        const point = upsertTeamSpawnPoint(team, {
+          id: pointId,
+          group: state.params[teamSpawnSelectedGroupKey(team)],
+          x: sx,
+          y: 0,
+          z: sz,
+          yaw,
+        });
+        state.params[yawKey] = yaw;
+        advanceTeamSpawnPointSelection(team, point.id);
+        setTeamSpawnPreviewVisible(team, false);
+        updateTeamSpawnMarker(team, point, { preview: false });
+      }
     }
 
     _primaryPrev = !!state.primaryFire;
