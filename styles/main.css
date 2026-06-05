@@ -157,6 +157,14 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   -webkit-mask-image: url('../assets/allies.svg');
   mask-image: url('../assets/allies.svg');
 }
+.sb-icon-zones {
+  -webkit-mask-image: url('../assets/zones.svg');
+  mask-image: url('../assets/zones.svg');
+}
+.sb-icon-behavior {
+  -webkit-mask-image: url('../assets/behavior.svg');
+  mask-image: url('../assets/behavior.svg');
+}
 .sidebar.minimized .sb-section-hdr > span:not(.sb-icon),
 .sidebar.minimized .arrow { display: none; }
 .arrow { color: var(--sb-muted); font-size: 10px; margin-left: auto; }

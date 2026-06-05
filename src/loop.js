@@ -10,11 +10,12 @@ import { updateSunPosition } from './lighting.js';
 import { updateChunks, clampPositionToBuildArea } from './terrain.js';
 import { playerGroup, updatePlayer, updateDashStreaks } from './player.js';
 import { updateLaserProjectiles, resolveAimTarget, aimResult, syncWeaponAmmoHud } from './weapons.js';
-import { updateEnemies, updateNpcTeamCombat, getEnemyMeshes, tagEnemy, getEnemies, getAllies, updatePlayerDeath } from './enemies.js';
+import { updateEnemies, updateNpcTeamCombat, getEnemyMeshes, tagEnemy, getEnemies, getAllies, updatePlayerDeath, updatePlayerSpawnInvincibility, spawnZoneReinforcements } from './enemies.js';
 import { updatePlacer } from './placer.js';
 import { isEditorModeEnabled, updateEditorCamera, updateEditorPlacement } from './editor.js';
 import { updateController } from './input.js';
 import { updateBulletTimeAudioPitch, playBulletTimeActivationSounds, playBulletTimeEndSound } from './audio.js';
+import { updateZones } from './zones.js';
 
 const clock = new THREE.Clock();
 // ── Radar canvas ──────────────────────────────────────────────────────────────
@@ -355,6 +356,7 @@ function syncKillScreenRuntime() {
 }
 
 function getTargetWorldScale() {
+  updatePlayerSpawnInvincibility(delta);
   if (state.playerDead) {
     const killScreenActive = state.params.killScreenEnabled !== false && Number(state.killScreenTimer) > 0;
     return killScreenActive ? clamp(Number(state.params.killScreenWorldScale) || 0.25, 0.05, 1.0) : 1.0;
@@ -460,6 +462,10 @@ export function tick() {
     if (!state.paused && state.params.landscapeEditorModeEnabled === true) {
       const worldDelta = delta * (Number(state.worldScale) || 1);
       updateNpcTeamCombat(worldDelta, _elapsed);
+      updateZones([...getEnemies(), ...getAllies()], {
+        spawnReinforcements: spawnZoneReinforcements,
+        playerGroup,
+      });
       [...getEnemies(), ...getAllies()].forEach(npc => {
         if (npc?.group?.position) clampPositionToBuildArea(npc.group.position, npc.radius || 0.4);
       });
@@ -531,6 +537,10 @@ export function tick() {
 
   const worldDelta = delta * state.worldScale;
   updateEnemies(worldDelta, _elapsed);
+  updateZones([...getEnemies(), ...getAllies()], {
+    spawnReinforcements: spawnZoneReinforcements,
+    playerGroup,
+  });
   [...getEnemies(), ...getAllies()].forEach(npc => {
     if (npc?.group?.position) clampPositionToBuildArea(npc.group.position, npc.radius || 0.4);
   });

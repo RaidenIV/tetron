@@ -14,6 +14,7 @@ import { state, addBulletTimeAmount } from './state.js';
 import * as PlayerModule from './player.js';
 import { getSfxVolume, applyBulletTimeAudioPitch, registerManagedAudio, setManagedAudioVolume, playObjectExplosionSound, playBulletTimeEndSound, playPlayerDeathSound } from './audio.js';
 import { resolveCircleAgainstPlacedObjects, isPlacedObjectHit, isPlacedObjectLineBlocked } from './placer.js';
+import { findBehaviorZoneForNpc } from './zones.js';
 
 const playerGroup = PlayerModule.playerGroup;
 const beginPlayerCorpseVisual = (duration) => {
@@ -1231,6 +1232,7 @@ function makeEnemy(type, position, index = 0, options = {}) {
   group.position.set(position.x, 0, position.z);
 
   const material = makeEnemyMaterial(def);
+  const npcGroup = normalizeNpcGroupId(options.npcGroup || options.group || options.groupId || '1');
   const mesh = new THREE.Mesh(getEnemyGeometry(def.sizeMult), material);
   mesh.name = 'EnemyBody';
   mesh.castShadow = true;
@@ -1242,7 +1244,7 @@ function makeEnemy(type, position, index = 0, options = {}) {
   const healthKey = team === 'ally' ? 'allyHealth' : 'enemyHealth';
   const maxHp = Math.max(1, Number(options.health ?? state.params[healthKey]) || 100);
   const enemy = {
-    type, def, group, mesh, material, maxHp, team, isAlly: team === 'ally',
+    type, def, group, mesh, material, maxHp, team, isAlly: team === 'ally', npcGroup, groupId: npcGroup,
     hp: maxHp,
     _healthBarDamaged: false,
     radius: BASE_RADIUS * def.sizeMult,
@@ -1763,6 +1765,8 @@ function spawnPointList(team) {
 function buildSpawnOptionsFromConfig(team, config) {
   return {
     team,
+    group: normalizeNpcGroupId(config.group),
+    npcGroup: normalizeNpcGroupId(config.group),
     health: config.health,
     behavior: config.behavior,
     moveSpeed: config.moveSpeed,
@@ -1823,6 +1827,33 @@ export function spawnAlliesFromSettings() {
 }
 
 
+export function spawnZoneReinforcements(team = 'ally', groupId = '1', zone = null, count = 2) {
+  const cleanTeam = team === 'enemy' ? 'enemy' : 'ally';
+  const group = normalizeNpcGroupId(groupId);
+  const config = getTeamGroupConfig(cleanTeam, group);
+  const type = config.type || (cleanTeam === 'ally' ? state.params.allyType : state.params.enemyType) || ENEMY_TYPE.RUSHER;
+  const list = cleanTeam === 'ally' ? allies : enemies;
+  const existingPositions = getActiveNpcs().map(npc => npc.group.position);
+  const origin = zone?.x != null && zone?.z != null
+    ? { x: Number(zone.x) || 0, z: Number(zone.z) || 0 }
+    : playerGroup.position;
+  const spawnCount = clamp(Math.round(Number(count) || 0), 0, 24);
+  const options = buildSpawnOptionsFromConfig(cleanTeam, { ...config, group });
+  for (let i = 0; i < spawnCount; i++) {
+    const position = getSpawnPosition(i, spawnCount, {
+      placement: 'grouped',
+      origin,
+      existingPositions,
+      spawnPoint: true,
+    });
+    const npc = makeEnemy(type, position, list.length, options);
+    list.push(npc);
+    existingPositions.push(npc.group.position);
+  }
+  return spawnCount;
+}
+
+
 function nextEditorNpcId() {
   return `editor_npc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -1833,6 +1864,7 @@ function normalizeEditorNpcData(data = {}) {
   return {
     id: data.id || nextEditorNpcId(),
     team,
+    group: normalizeNpcGroupId(data.group || data.npcGroup),
     type,
     x: Number.isFinite(Number(data.x)) ? Number(data.x) : 0.5,
     z: Number.isFinite(Number(data.z)) ? Number(data.z) : 0.5,
@@ -1852,6 +1884,8 @@ function spawnEditorNpcFromData(data, { persist = true } = {}) {
   const list = clean.team === 'ally' ? allies : enemies;
   const npc = makeEnemy(clean.type, { x: clean.x, z: clean.z }, list.length, {
     team: clean.team,
+    group: clean.group,
+    npcGroup: clean.group,
     health: clean.health,
     ry: clean.ry,
     editorPlaced: true,
@@ -2301,6 +2335,23 @@ function awardBulletTimeForKill() {
   addBulletTimeAmount(Math.max(0, Number(state.params.bulletTimeKillGain) || 0));
 }
 
+
+export function triggerPlayerSpawnInvincibility(duration = state.params.playerSpawnInvincibleDuration) {
+  const seconds = Math.max(0, Number(duration) || 0);
+  state.playerSpawnInvincibleTimer = seconds;
+  return seconds;
+}
+
+export function updatePlayerSpawnInvincibility(delta = 0) {
+  const current = Math.max(0, Number(state.playerSpawnInvincibleTimer) || 0);
+  if (current <= 0) {
+    state.playerSpawnInvincibleTimer = 0;
+    return 0;
+  }
+  state.playerSpawnInvincibleTimer = Math.max(0, current - Math.max(0, Number(delta) || 0));
+  return state.playerSpawnInvincibleTimer;
+}
+
 function respawnPlayerAfterDeath() {
   clearPlayerDeathState();
   const p = state.params;
@@ -2332,6 +2383,7 @@ function respawnPlayerAfterDeath() {
   state.dashVZ = 0;
   state.lastMoveX = -Math.sin(spawnYaw);
   state.lastMoveZ = -Math.cos(spawnYaw);
+  triggerPlayerSpawnInvincibility();
 }
 
 export function respawnPlayerAtFullHealth() {
@@ -2342,7 +2394,7 @@ export function respawnPlayerAtFullHealth() {
 function applyPlayerDamage(amount) {
   if (state.playerDead) return;
   const p = state.params;
-  if (p.playerInvincible) return;
+  if (p.playerInvincible || Number(state.playerSpawnInvincibleTimer) > 0) return;
   let incomingDamage = Math.max(0, Number(amount) || 0);
   if (incomingDamage <= 0) return;
 
@@ -2592,11 +2644,61 @@ function applyNpcEngagedMovementGuarantee(enemy, delta, targetPos, fromX, fromZ,
   resolveCircleAgainstPlacedObjects(enemy.group.position, enemy.radius);
 }
 
+
+function getNpcRoamTarget(npc, delta = 0) {
+  npc.__roamTimer = Math.max(0, Number(npc.__roamTimer) || 0) - Math.max(0, Number(delta) || 0);
+  const target = npc.__roamTarget;
+  const needsTarget = !target
+    || npc.__roamTimer <= 0
+    || Math.hypot((target.x || 0) - npc.group.position.x, (target.z || 0) - npc.group.position.z) < 1.2;
+  if (needsTarget) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = randomRange(5.5, 14.0);
+    npc.__roamTarget = {
+      x: npc.group.position.x + Math.cos(angle) * radius,
+      z: npc.group.position.z + Math.sin(angle) * radius,
+    };
+    npc.__roamTimer = randomRange(2.0, 5.0);
+  }
+  return npc.__roamTarget;
+}
+
+function getNpcZoneGoal(npc, behavior, delta = 0) {
+  const zone = findBehaviorZoneForNpc(npc, behavior === 'attackZone' ? 'attack' : 'patrol');
+  if (!zone) return null;
+  if (behavior === 'patrolZone') {
+    const base = Number.isFinite(Number(npc.__zonePatrolAngle))
+      ? Number(npc.__zonePatrolAngle)
+      : Math.atan2(npc.group.position.z - zone.z, npc.group.position.x - zone.x);
+    const direction = npc.isAlly ? 1 : -1;
+    npc.__zonePatrolAngle = base + direction * Math.max(0, Number(delta) || 0) * 0.65;
+    const radius = Math.max(1.0, Math.max(0.5, Number(zone.radius) || 4) * 0.72);
+    return {
+      x: zone.x + Math.cos(npc.__zonePatrolAngle) * radius,
+      z: zone.z + Math.sin(npc.__zonePatrolAngle) * radius,
+      zone,
+    };
+  }
+  return { x: zone.x, z: zone.z, zone };
+}
+
 function updateEnemyMovement(enemy, delta, targetNpc = null) {
   const baseBehavior = getEffectiveBehavior(enemy);
-  const engaged = !!targetNpc || isNpcEngagedWithPlayer(enemy);
+  if (baseBehavior === 'holdPosition') return;
+
+  const engagedWithPlayer = !targetNpc && isNpcEngagedWithPlayer(enemy);
+  const engaged = !!targetNpc || engagedWithPlayer;
   const behavior = engaged && baseBehavior === 'guard' ? 'rush' : baseBehavior;
-  const targetPos = targetNpc?.group?.position || playerGroup.position;
+  let targetPos = targetNpc?.group?.position || (engagedWithPlayer ? playerGroup.position : null);
+
+  if (!targetPos) {
+    if (baseBehavior === 'roam') targetPos = getNpcRoamTarget(enemy, delta);
+    else if (baseBehavior === 'patrolZone' || baseBehavior === 'attackZone') targetPos = getNpcZoneGoal(enemy, baseBehavior, delta);
+    else if (baseBehavior === 'defendPlayer') targetPos = playerGroup.position;
+    else targetPos = playerGroup.position;
+  }
+
+  if (!targetPos) return;
   const startX = enemy.group.position.x;
   const startZ = enemy.group.position.z;
 
@@ -2610,7 +2712,18 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
 
   if (behavior === 'guard') return;
 
-  if (behavior === 'orbit') {
+  if (behavior === 'roam' || behavior === 'patrolZone' || behavior === 'attackZone' || behavior === 'defendPlayer') {
+    if (behavior === 'defendPlayer' && dist < 3.2 && !targetNpc) {
+      seekX = 0;
+      seekZ = 0;
+    } else {
+      seekX = toTargetX;
+      seekZ = toTargetZ;
+    }
+    if (behavior === 'patrolZone') speedMult = 0.78;
+    if (behavior === 'roam') speedMult = 0.72;
+    if (behavior === 'attackZone') speedMult = 0.95;
+  } else if (behavior === 'orbit') {
     // Tangential movement + radial correction
     const tangX = -toTargetZ, tangZ = toTargetX;
     const radialBias = clamp((dist - 6.5) / 2.5, -1, 1) * 0.6;
@@ -3191,11 +3304,11 @@ function findNearestOpponent(npc) {
 }
 
 function updateAllyMovement(ally, delta, elapsedTime, index, target = null) {
-  if (target) {
+  const behavior = getEffectiveBehavior(ally) || 'defendPlayer';
+  if (target || ['holdPosition', 'roam', 'patrolZone', 'attackZone'].includes(behavior)) {
     updateEnemyMovement(ally, delta, target);
   } else {
-    const behavior = state.params.allyBehavior || 'guard';
-    const speed = Math.max(0, Number(state.params.allyMoveSpeed) || BASE_SPEED);
+    const speed = getNpcMoveSpeed(ally);
     const playerPos = playerGroup.position;
     let moveX = 0, moveZ = 0;
 

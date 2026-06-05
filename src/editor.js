@@ -11,7 +11,15 @@ import {
   spawnEditorNpcAt,
   removeEditorNpcByMesh,
   getAllNpcMeshes,
+  triggerPlayerSpawnInvincibility,
 } from './enemies.js';
+import {
+  hideZonePreview,
+  updateZonePreview,
+  placeZoneAt,
+  removeZoneNear,
+  refreshZoneMarkers,
+} from './zones.js';
 
 const _floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const _raycaster = new THREE.Raycaster();
@@ -69,7 +77,15 @@ function normalizeSpawnPointId(value) {
 }
 
 function validTarget(value) {
-  return value === 'enemy' || value === 'ally' || value === 'asset' || value === 'playerSpawn' || value === 'enemySpawn' || value === 'allySpawn' ? value : 'asset';
+  return value === 'enemy'
+    || value === 'ally'
+    || value === 'asset'
+    || value === 'playerSpawn'
+    || value === 'enemySpawn'
+    || value === 'allySpawn'
+    || value === 'zone'
+    ? value
+    : 'asset';
 }
 
 function ensureEditorHud() {
@@ -114,6 +130,7 @@ function editorPlacementLabel() {
   if (target === 'playerSpawn') return 'Player Spawn';
   if (target === 'enemySpawn') return `Enemy Spawn ${state.params.editorEnemySpawnPoint || 1} · Group ${state.params.editorEnemySpawnGroup || 1}`;
   if (target === 'allySpawn') return `Ally Spawn ${state.params.editorAllySpawnPoint || 1} · Group ${state.params.editorAllySpawnGroup || 1}`;
+  if (target === 'zone') return `Zone · Radius ${state.params.zoneRadius || 4}`;
   return `Asset · ${state.params.placerSelectedAsset || 'box'}`;
 }
 
@@ -163,6 +180,14 @@ function sanitizeEditorParams() {
   p.editorAllySpawnGroup = normalizeNpcGroupId(p.editorAllySpawnGroup);
   p.enemySpawnPoints = normalizeTeamSpawnPoints('enemy');
   p.allySpawnPoints = normalizeTeamSpawnPoints('ally');
+  p.zoneRadius = clamp(numberOr(p.zoneRadius, 4), 0.5, 40);
+  p.zoneColor = typeof p.zoneColor === 'string' ? p.zoneColor : '#0075ff';
+  p.zoneCapturable = p.zoneCapturable !== false;
+  p.zoneRewardReinforcements = p.zoneRewardReinforcements === true;
+  p.zoneRewardHealth = p.zoneRewardHealth === true;
+  p.zoneRewardPoints = p.zoneRewardPoints === true;
+  p.zoneScore = Math.max(0, Math.round(numberOr(p.zoneScore, 0)));
+  if (!Array.isArray(p.zones)) p.zones = [];
   if (!Array.isArray(p.editorPlacedNpcs)) p.editorPlacedNpcs = [];
 }
 
@@ -203,6 +228,7 @@ export function setEditorModeEnabled(enabled, options = {}) {
     }
   } else {
     hideNpcGhost();
+    hideZonePreview();
     setHudVisible(false);
     teleportPlayerToSpawn();
     refreshPlayerSpawnMarker();
@@ -240,6 +266,7 @@ export function updateEditorCamera(delta = 1 / 60) {
   applyEditorSettings();
   if (!isEditorModeEnabled()) {
     hideNpcGhost();
+    hideZonePreview();
     setHudVisible(false);
     return false;
   }
@@ -514,6 +541,7 @@ export function teleportPlayerToSpawn() {
   state.dashVZ = 0;
   state.lastMoveX = -Math.sin(yaw);
   state.lastMoveZ = -Math.cos(yaw);
+  triggerPlayerSpawnInvincibility?.();
   return true;
 }
 
@@ -909,6 +937,7 @@ function currentNpcPlacementData(target, x, z) {
   const enemy = target === 'enemy';
   return {
     team: target,
+    group: enemy ? state.params.enemyGroup : state.params.allyGroup,
     type: enemy ? state.params.enemyType : state.params.allyType,
     x,
     z,
@@ -927,12 +956,14 @@ export function updateEditorPlacement() {
   const editorOn = isEditorModeEnabled();
   if (!editorOn) {
     hideNpcGhost();
+    hideZonePreview();
     setPlayerSpawnPreviewVisible(false);
     setEnemySpawnPreviewVisible(false);
     setTeamSpawnPreviewVisible('ally', false);
     refreshPlayerSpawnMarker();
     refreshEnemySpawnMarker();
     refreshAllySpawnMarker();
+    refreshZoneMarkers();
     _primaryPrev = !!state.primaryFire;
     _secondaryPrev = !!state.secondaryFire;
     return;
@@ -943,6 +974,7 @@ export function updateEditorPlacement() {
 
   if (state.paused) {
     hideNpcGhost();
+    hideZonePreview();
     setPlayerSpawnPreviewVisible(false);
     if (state.params.playerSpawnEnabled === true) {
       updatePlayerSpawnMarker(null, state.params.playerSpawnYaw, { preview: false });
@@ -951,6 +983,7 @@ export function updateEditorPlacement() {
     }
     refreshEnemySpawnMarker();
     refreshAllySpawnMarker();
+    refreshZoneMarkers();
     _primaryPrev = !!state.primaryFire;
     _secondaryPrev = !!state.secondaryFire;
     return;
@@ -958,12 +991,14 @@ export function updateEditorPlacement() {
 
   if (target === 'asset') {
     hideNpcGhost();
+    hideZonePreview();
     setPlayerSpawnPreviewVisible(false);
     setEnemySpawnPreviewVisible(false);
     setTeamSpawnPreviewVisible('ally', false);
     refreshPlayerSpawnMarker();
     refreshEnemySpawnMarker();
     refreshAllySpawnMarker();
+    refreshZoneMarkers();
     _primaryPrev = !!state.primaryFire;
     _secondaryPrev = !!state.secondaryFire;
     return;
@@ -974,10 +1009,12 @@ export function updateEditorPlacement() {
 
   if (target === 'playerSpawn') {
     hideNpcGhost();
+    hideZonePreview();
     setEnemySpawnPreviewVisible(false);
     setTeamSpawnPreviewVisible('ally', false);
     refreshEnemySpawnMarker();
     refreshAllySpawnMarker();
+    refreshZoneMarkers();
 
     if (removePressed) {
       clearPlayerSpawn();
@@ -1028,6 +1065,7 @@ export function updateEditorPlacement() {
   if (target === 'enemySpawn' || target === 'allySpawn') {
     const team = target === 'allySpawn' ? 'ally' : 'enemy';
     hideNpcGhost();
+    hideZonePreview();
     setPlayerSpawnPreviewVisible(false);
     if (team === 'enemy') setTeamSpawnPreviewVisible('ally', false);
     else setEnemySpawnPreviewVisible(false);
@@ -1078,12 +1116,51 @@ export function updateEditorPlacement() {
     return;
   }
 
+  if (target === 'zone') {
+    hideNpcGhost();
+    setPlayerSpawnPreviewVisible(false);
+    setEnemySpawnPreviewVisible(false);
+    setTeamSpawnPreviewVisible('ally', false);
+    refreshPlayerSpawnMarker();
+    refreshEnemySpawnMarker();
+    refreshAllySpawnMarker();
+    refreshZoneMarkers();
+
+    if (!hit) {
+      hideZonePreview();
+      _primaryPrev = !!state.primaryFire;
+      _secondaryPrev = !!state.secondaryFire;
+      return;
+    }
+
+    const sx = snapNpcAxis(_hitPoint.x);
+    const sz = snapNpcAxis(_hitPoint.z);
+    if (removePressed) {
+      removeZoneNear(sx, sz);
+      hideZonePreview();
+      _primaryPrev = !!state.primaryFire;
+      _secondaryPrev = !!state.secondaryFire;
+      return;
+    }
+
+    const canPlace = updateZonePreview({ x: sx, y: 0, z: sz }, state.params.zoneRadius, state.params.zoneColor);
+    if (canPlace && state.primaryFire && !_primaryPrev) {
+      placeZoneAt(sx, sz);
+      hideZonePreview();
+    }
+
+    _primaryPrev = !!state.primaryFire;
+    _secondaryPrev = !!state.secondaryFire;
+    return;
+  }
+
   setPlayerSpawnPreviewVisible(false);
   setEnemySpawnPreviewVisible(false);
   setTeamSpawnPreviewVisible('ally', false);
   refreshPlayerSpawnMarker();
   refreshEnemySpawnMarker();
   refreshAllySpawnMarker();
+  refreshZoneMarkers();
 
   if (removePressed && removeNpcByAim()) {
     _primaryPrev = !!state.primaryFire;

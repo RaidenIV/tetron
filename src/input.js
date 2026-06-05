@@ -371,6 +371,9 @@ window.addEventListener('keydown', e => {
       if (state.params.playerSpawnEnabled === true) state.params.playerSpawnYaw = next;
       return;
     }
+    if (state.params.editorPlacementTarget === 'zone') {
+      return;
+    }
     if (state.params.editorPlacementTarget === 'enemySpawn' || state.params.editorPlacementTarget === 'allySpawn') {
       const ally = state.params.editorPlacementTarget === 'allySpawn';
       const editorYawKey = ally ? 'editorAllySpawnYaw' : 'editorEnemySpawnYaw';
