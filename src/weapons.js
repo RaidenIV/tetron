@@ -548,7 +548,16 @@ function createProjectileVisual(config) {
   return { group, core, glow, materials: glowMat ? [coreMat, glowMat] : [coreMat] };
 }
 
+function stopProjectileFlightAudio(projectile) {
+  const audio = projectile?.flightAudio;
+  if (!audio) return;
+  try { audio.pause(); } catch (_) {}
+  try { audio.currentTime = 0; } catch (_) {}
+  projectile.flightAudio = null;
+}
+
 function disposeProjectile(projectile) {
+  stopProjectileFlightAudio(projectile);
   scene.remove(projectile.visual.group);
   projectile.visual.materials?.forEach(material => material?.dispose?.());
 }
@@ -907,7 +916,7 @@ window.addEventListener('game-lab-reticle-feedback', event => {
 const _audioCache = new Map();
 
 function playWeaponAsset(path, volume, playbackRate = 1) {
-  if (!volume || state.params.soundMuted) return;
+  if (!volume || state.params.soundMuted) return null;
   let base = _audioCache.get(path);
   if (!base) {
     base = registerManagedAudio(new Audio(path), playbackRate);
@@ -919,32 +928,31 @@ function playWeaponAsset(path, volume, playbackRate = 1) {
   setManagedAudioVolume(audio, volume);
   applyBulletTimeAudioPitch(audio, playbackRate);
   audio.play().catch(() => {});
+  return audio;
 }
 
 function playShootSound(config) {
   const vol = getSfxVolume('soundSfx_shoot', 1);
   if (!vol || state.params.soundMuted) return;
   if (config.type === 'grenades') {
-    playWeaponAsset('./assets/throw.wav', vol, 0.94 + Math.random() * 0.12);
-    return;
+    return playWeaponAsset('./assets/throw.wav', vol, 0.94 + Math.random() * 0.12);
   }
   if (config.type === 'rifle') {
-    playWeaponAsset('./assets/blaster2.wav', vol, 0.96 + Math.random() * 0.08);
-    return;
+    return playWeaponAsset('./assets/blaster2.wav', vol, 0.96 + Math.random() * 0.08);
   }
   if (config.type === 'shotgun') {
-    playWeaponAsset('./assets/shotgun2.wav', vol, 0.96 + Math.random() * 0.08);
-    return;
+    return playWeaponAsset('./assets/shotgun2.wav', vol, 0.96 + Math.random() * 0.08);
   }
   if (config.type === 'sniperRifle') {
-    playWeaponAsset('./assets/sniper.wav', vol, 0.98 + Math.random() * 0.04);
-    return;
+    return playWeaponAsset('./assets/sniper.wav', vol, 0.98 + Math.random() * 0.04);
+  }
+  if (config.type === 'rocketLauncher') {
+    return playWeaponAsset('./assets/launcher_fire.wav', vol, 1);
   }
   const pitchByWeapon = {
     pistol: 1.16,
-    rocketLauncher: 0.58,
   };
-  playWeaponAsset('./assets/blaster1.wav', vol, (pitchByWeapon[config.type] || 1) * (0.94 + Math.random() * 0.12));
+  return playWeaponAsset('./assets/blaster1.wav', vol, (pitchByWeapon[config.type] || 1) * (0.94 + Math.random() * 0.12));
 }
 
 
@@ -1031,6 +1039,7 @@ function createProjectile(config, dir) {
     previousPosition: visual.group.position.clone(),
   };
   _activeProjectiles.push(projectile);
+  return projectile;
 }
 
 function explodeProjectile(projectile) {
@@ -1061,12 +1070,17 @@ function fireWeapon() {
   getProjectileDirection(_spawnPos, targetPoint, _fireDir);
 
   const pelletCount = Math.max(1, Math.min(24, Math.round(config.pellets || 1)));
+  const firedProjectiles = [];
   for (let i = 0; i < pelletCount; i++) {
     randomSpreadDirection(_fireDir, Number(config.spread) || 0, _pelletDir);
-    createProjectile(config, _pelletDir);
+    const projectile = createProjectile(config, _pelletDir);
+    if (projectile) firedProjectiles.push(projectile);
   }
 
-  playShootSound(config);
+  const shotAudio = playShootSound(config);
+  if (config.type === 'rocketLauncher' && shotAudio) {
+    firedProjectiles.forEach(projectile => { projectile.flightAudio = shotAudio; });
+  }
   triggerPlayerWeaponRecoil(config.type, config.recoil);
 }
 

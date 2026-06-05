@@ -261,5 +261,5 @@ export function playPlayerDeathSound(sourcePosition = null) {
     sound.currentTime = 0;
     applyBulletTimeAudioPitch(sound, 1);
     sound.play().catch(() => {});
-  }, 2000);
+  }, 1000);
 }

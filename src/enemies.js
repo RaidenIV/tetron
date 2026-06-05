@@ -1287,7 +1287,16 @@ function disposeEnemy(enemy) {
   if (enemy._awarenessOutlineRing?.material) enemy._awarenessOutlineRing.material.dispose?.();
 }
 
+function stopEnemyBulletFlightAudio(bullet) {
+  const audio = bullet?.flightAudio;
+  if (!audio) return;
+  try { audio.pause(); } catch (_) {}
+  try { audio.currentTime = 0; } catch (_) {}
+  bullet.flightAudio = null;
+}
+
 function disposeEnemyBullet(bullet) {
+  stopEnemyBulletFlightAudio(bullet);
   scene.remove(bullet.mesh);
 }
 
@@ -2669,7 +2678,7 @@ function updateContactDamage(enemy, delta, targetNpc = null) {
 const _npcWeaponAudioCache = new Map();
 
 function playNpcWeaponAsset(path, volume, playbackRate = 1) {
-  if (!volume || state.params.soundMuted) return;
+  if (!volume || state.params.soundMuted) return null;
   let base = _npcWeaponAudioCache.get(path);
   if (!base) {
     base = registerManagedAudio(new Audio(path), playbackRate);
@@ -2681,32 +2690,31 @@ function playNpcWeaponAsset(path, volume, playbackRate = 1) {
   setManagedAudioVolume(audio, volume);
   applyBulletTimeAudioPitch(audio, playbackRate);
   audio.play().catch(() => {});
+  return audio;
 }
 
 function playNpcShootSound(config, sourcePosition = null) {
   const volume = getSfxVolume('soundSfx_shoot', 1, sourcePosition);
   if (!volume || !config) return;
   if (config.type === 'grenades') {
-    playNpcWeaponAsset('./assets/throw.wav', volume, 0.94 + Math.random() * 0.12);
-    return;
+    return playNpcWeaponAsset('./assets/throw.wav', volume, 0.94 + Math.random() * 0.12);
   }
   if (config.type === 'rifle') {
-    playNpcWeaponAsset('./assets/blaster2.wav', volume, 0.96 + Math.random() * 0.08);
-    return;
+    return playNpcWeaponAsset('./assets/blaster2.wav', volume, 0.96 + Math.random() * 0.08);
   }
   if (config.type === 'shotgun') {
-    playNpcWeaponAsset('./assets/shotgun2.wav', volume, 0.96 + Math.random() * 0.08);
-    return;
+    return playNpcWeaponAsset('./assets/shotgun2.wav', volume, 0.96 + Math.random() * 0.08);
   }
   if (config.type === 'sniperRifle') {
-    playNpcWeaponAsset('./assets/sniper.wav', volume, 0.98 + Math.random() * 0.04);
-    return;
+    return playNpcWeaponAsset('./assets/sniper.wav', volume, 0.98 + Math.random() * 0.04);
+  }
+  if (config.type === 'rocketLauncher') {
+    return playNpcWeaponAsset('./assets/launcher_fire.wav', volume, 1);
   }
   const pitchByWeapon = {
     pistol: 1.16,
-    rocketLauncher: 0.58,
   };
-  playNpcWeaponAsset('./assets/blaster1.wav', volume, (pitchByWeapon[config.type] || 1) * (0.94 + Math.random() * 0.12));
+  return playNpcWeaponAsset('./assets/blaster1.wav', volume, (pitchByWeapon[config.type] || 1) * (0.94 + Math.random() * 0.12));
 }
 
 function spawnNpcProjectileShockwave(position, cfg = {}) {
@@ -2881,6 +2889,7 @@ function fireEnemyBullet(enemy, targetNpc = null, config = getNpcWeaponConfig(en
     return;
   }
   const showVisual = shouldShowNpcRifleTracer(config);
+  const firedBullets = [];
 
   for (let shot = 0; shot < shots; shot++) {
     const mesh = createNpcProjectileMesh(config);
@@ -2905,7 +2914,7 @@ function fireEnemyBullet(enemy, targetNpc = null, config = getNpcWeaponConfig(en
     const speed = Math.max(0.1, Number(config.speed) || ENEMY_BULLET_SPEED);
     const maxRange = Math.max(1, Number(config.range) || ENEMY_BULLET_SPEED * ENEMY_BULLET_LIFETIME);
     const life = config.fuse || Math.max(0.05, maxRange / speed);
-    enemyBullets.push({
+    const bullet = {
       mesh,
       dir: _bulletDir.clone(),
       velocity: _bulletDir.clone().multiplyScalar(speed),
@@ -2923,9 +2932,14 @@ function fireEnemyBullet(enemy, targetNpc = null, config = getNpcWeaponConfig(en
       targetTeam: targetNpc ? (targetNpc.isAlly ? 'ally' : 'enemy') : 'player',
       weapon: config.type,
       spin: new THREE.Vector3(randomRange(-7, 7), randomRange(-7, 7), randomRange(-7, 7)),
-    });
+    };
+    enemyBullets.push(bullet);
+    firedBullets.push(bullet);
   }
-  playNpcShootSound(config, enemy.group?.position || null);
+  const shotAudio = playNpcShootSound(config, enemy.group?.position || null);
+  if (config.type === 'rocketLauncher' && shotAudio) {
+    firedBullets.forEach(bullet => { bullet.flightAudio = shotAudio; });
+  }
 }
 
 function updateEnemyShooting(enemy, delta, targetNpc = null) {
