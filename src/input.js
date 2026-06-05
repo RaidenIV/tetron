@@ -553,6 +553,46 @@ const _dashHeld     = new Map();
 const _btHeld       = new Map();
 const _optionsHeld  = new Map();
 
+
+const CONTROLLER_BUTTON_MAPPINGS = [
+  { index: 0,  key: 'controllerMapCross',    fallback: 'jump' },
+  { index: 1,  key: 'controllerMapCircle',   fallback: 'dash' },
+  { index: 2,  key: 'controllerMapSquare',   fallback: 'reload' },
+  { index: 3,  key: 'controllerMapTriangle', fallback: 'none' },
+  { index: 4,  key: 'controllerMapL1',       fallback: 'bulletTime' },
+  { index: 5,  key: 'controllerMapR1',       fallback: 'none' },
+  { index: 6,  key: 'controllerMapL2',       fallback: 'ads' },
+  { index: 7,  key: 'controllerMapR2',       fallback: 'fire' },
+  { index: 8,  key: 'controllerMapShare',    fallback: 'none' },
+  { index: 9,  key: 'controllerMapOptions',  fallback: 'toggleSidebar' },
+  { index: 10, key: 'controllerMapL3',       fallback: 'none' },
+  { index: 11, key: 'controllerMapR3',       fallback: 'none' },
+  { index: 12, key: 'controllerMapDpadUp',   fallback: 'none' },
+  { index: 13, key: 'controllerMapDpadDown', fallback: 'none' },
+  { index: 14, key: 'controllerMapDpadLeft', fallback: 'changeWeaponPrev' },
+  { index: 15, key: 'controllerMapDpadRight', fallback: 'changeWeaponNext' },
+];
+
+const CONTROLLER_ACTIONS = new Set([
+  'none',
+  'jump',
+  'dash',
+  'reload',
+  'ads',
+  'bulletTime',
+  'fire',
+  'changeWeaponPrev',
+  'changeWeaponNext',
+  'toggleSidebar',
+]);
+
+let _controllerPrimaryFireActive = false;
+
+function getControllerButtonAction(spec) {
+  const value = state.params?.[spec.key];
+  return CONTROLLER_ACTIONS.has(value) ? value : spec.fallback;
+}
+
 function applyDeadzone(value, deadzone) {
   if (Math.abs(value) < deadzone) return 0;
   // rescale so edge of deadzone maps to 0 and 1.0 stays at 1.0
@@ -577,6 +617,7 @@ export function updateController(delta) {
     state.controllerMoveX = 0;
     state.controllerMoveZ = 0;
     state.controllerConnected = false;
+    _controllerPrimaryFireActive = false;
     return;
   }
 
@@ -591,6 +632,10 @@ export function updateController(delta) {
   if (!pad) {
     state.controllerMoveX = 0;
     state.controllerMoveZ = 0;
+    if (_controllerPrimaryFireActive) {
+      state.primaryFire = false;
+      _controllerPrimaryFireActive = false;
+    }
     return;
   }
 
@@ -606,18 +651,39 @@ export function updateController(delta) {
     _optionsHeld.set(idx, false);
   }
   const prev = _prevButtons.get(idx);
+  const fireThresh = Math.max(0, Math.min(1, Number(state.params.controllerFireThreshold) ?? 0.5));
 
-  function pressed(i)  { return i < btnCount && pad.buttons[i].pressed; }
-  function justPressed(i) { return pressed(i) && !prev[i]; }
+  function buttonDown(i) {
+    if (i >= btnCount) return false;
+    const button = pad.buttons[i];
+    return !!button?.pressed || (Number(button?.value) || 0) >= fireThresh;
+  }
+
+  function actionHeld(action) {
+    return CONTROLLER_BUTTON_MAPPINGS.some(spec => (
+      getControllerButtonAction(spec) === action && buttonDown(spec.index)
+    ));
+  }
+
+  function actionJustPressed(action) {
+    return CONTROLLER_BUTTON_MAPPINGS.some(spec => (
+      getControllerButtonAction(spec) === action && buttonDown(spec.index) && !prev[spec.index]
+    ));
+  }
+
+  function snapshotButtons() {
+    for (let i = 0; i < btnCount; i++) {
+      prev[i] = buttonDown(i) ? 1 : 0;
+    }
+  }
 
   if (state.paused) {
-    // In paused state only allow Options toggle.
-    if (justPressed(9)) {
+    // In paused state only allow the mapped sidebar toggle.
+    if (actionJustPressed('toggleSidebar')) {
       _togglePanel?.();
       rumble(pad, 0, 0.3, 80);
     }
-    // Update prev so we don't fire on un-pause.
-    for (let i = 0; i < btnCount; i++) prev[i] = pad.buttons[i].pressed ? 1 : 0;
+    snapshotButtons();
     return;
   }
 
@@ -625,7 +691,6 @@ export function updateController(delta) {
   const lookDead = Math.max(0, Math.min(0.99, Number(state.params.controllerLookDeadzone) ?? 0.10));
   const sensX    = Number(state.params.controllerLookSensX) || 0.045;
   const sensY    = Number(state.params.controllerLookSensY) || 0.036;
-  const fireThresh = Math.max(0, Math.min(1, Number(state.params.controllerFireThreshold) ?? 0.5));
   const invertY  = !!state.params.controllerInvertY;
 
   // ── Left stick → movement (analogue) ──────────────────────────────────────
@@ -650,105 +715,86 @@ export function updateController(delta) {
     }
   }
 
-  // ── R2 / R1 → primary fire ─────────────────────────────────────────────────
-  const r2Value = pad.buttons[7]?.value ?? 0;
-  const r1Value = pad.buttons[5]?.value ?? 0;
-  const firePressed = r2Value >= fireThresh || r1Value >= fireThresh;
-  if (firePressed && !state.primaryFire) {
+  // ── Mapped hold actions: fire and ADS ─────────────────────────────────────
+  const firePressed = actionHeld('fire');
+  if (firePressed && !_controllerPrimaryFireActive) {
     rumble(pad, 0, 0.25, 60);
   }
-  // Controller fire: only overwrite primaryFire=false when the gamepad trigger
-  // is released AND no mouse button is currently driving it. This prevents an
-  // idle connected gamepad from clearing mouse left-click fire every frame.
   if (firePressed) {
     state.primaryFire = true;
-  } else if (!state.isAiming) {
-    // Safe to clear: ADS is not active, so this isn't a simultaneous ADS+fire scenario.
+    _controllerPrimaryFireActive = true;
+  } else if (_controllerPrimaryFireActive) {
     state.primaryFire = false;
+    _controllerPrimaryFireActive = false;
   }
 
-  // ── L2 (button 6) → remove while placing, otherwise aim (ADS) ─────────────
-  const l2Value = pad.buttons[6]?.value ?? 0;
+  const adsPressed = actionHeld('ads');
   if ((state.activeSlot ?? 0) === 1) {
-    state.secondaryFire = l2Value >= fireThresh;
+    state.secondaryFire = adsPressed;
     state.isAiming = false;
   } else {
     state.secondaryFire = false;
-    state.isAiming = state.params.aimEnabled !== false && l2Value >= fireThresh;
+    state.isAiming = state.params.aimEnabled !== false && adsPressed;
   }
 
-  // ── Cross (0) → jump ───────────────────────────────────────────────────────
-  if (pressed(0)) {
-    if (!_jumpHeld.get(idx) && state.params.jumpEnabled) {
-      state.jumpQueued = true;
-      _jumpHeld.set(idx, true);
-      rumble(pad, 0.3, 0, 80);
-    }
-  } else {
-    _jumpHeld.set(idx, false);
+  // ── Mapped one-shot actions ───────────────────────────────────────────────
+  if (actionJustPressed('jump') && state.params.jumpEnabled) {
+    state.jumpQueued = true;
+    rumble(pad, 0.3, 0, 80);
   }
 
-  // ── Circle (1) → dash ─────────────────────────────────────────────────────
-  if (pressed(1)) {
-    if (!_dashHeld.get(idx) && state.params.dashEnabled && !state.isAiming) {
-      _dashHeld.set(idx, true);
-      if (state.dashCooldown <= 0 && state.dashTimer <= 0) {
-        // Use analogue stick direction if available, else last move direction.
-        const forward = getMoveForward();
-        const right   = getMoveRight();
-        _dv.set(0, 0, 0);
-        if (Math.abs(lsX) > 0.01 || Math.abs(lsY) > 0.01) {
-          _dv.addScaledVector(forward, -lsY).addScaledVector(right, lsX);
-        } else {
-          _dv.x = state.lastMoveX;
-          _dv.z = state.lastMoveZ;
-        }
-        if (_dv.lengthSq() > 0) {
-          _dv.normalize();
-          state.lastMoveX = _dv.x;
-          state.lastMoveZ = _dv.z;
-        }
-        state.dashVX       = state.lastMoveX;
-        state.dashVZ       = state.lastMoveZ;
-        state.dashTimer    = state.params.dashDuration;
-        state.dashCooldown = state.params.dashCooldown;
-        state.dashGhostTimer = 0;
-        playDashSound();
-        rumble(pad, 0.5, 0.3, 100);
+  if (actionJustPressed('dash') && state.params.dashEnabled && !state.isAiming) {
+    if (state.dashCooldown <= 0 && state.dashTimer <= 0) {
+      // Use analogue stick direction if available, else last move direction.
+      const forward = getMoveForward();
+      const right   = getMoveRight();
+      _dv.set(0, 0, 0);
+      if (Math.abs(lsX) > 0.01 || Math.abs(lsY) > 0.01) {
+        _dv.addScaledVector(forward, -lsY).addScaledVector(right, lsX);
+      } else {
+        _dv.x = state.lastMoveX;
+        _dv.z = state.lastMoveZ;
       }
-    }
-  } else {
-    _dashHeld.set(idx, false);
-  }
-
-  // ── L1 / L2 (4/6) → bullet time ───────────────────────────────────────────
-  const btPressed = pressed(4) || ((state.activeSlot ?? 0) !== 1 && (pad.buttons[6]?.value ?? 0) >= fireThresh);
-  if (btPressed) {
-    if (!_btHeld.get(idx)) {
-      _btHeld.set(idx, true);
-      if (state.params.bulletTimeEnabled !== false) {
-        if (state.slowTimer > 0) state.slowStopRequested = true;
-        else state.slowRequested = true;
-        rumble(pad, 0.2, 0.5, 120);
+      if (_dv.lengthSq() > 0) {
+        _dv.normalize();
+        state.lastMoveX = _dv.x;
+        state.lastMoveZ = _dv.z;
       }
+      state.dashVX       = state.lastMoveX;
+      state.dashVZ       = state.lastMoveZ;
+      state.dashTimer    = state.params.dashDuration;
+      state.dashCooldown = state.params.dashCooldown;
+      state.dashGhostTimer = 0;
+      playDashSound();
+      rumble(pad, 0.5, 0.3, 100);
     }
-  } else {
-    _btHeld.set(idx, false);
   }
 
-  // ── Options (9) → toggle sidebar ──────────────────────────────────────────
-  if (pressed(9)) {
-    if (!_optionsHeld.get(idx)) {
-      _optionsHeld.set(idx, true);
-      _togglePanel?.();
-      rumble(pad, 0, 0.3, 80);
-    }
-  } else {
-    _optionsHeld.set(idx, false);
+  if (actionJustPressed('reload')) {
+    reloadCurrentWeapon();
+    rumble(pad, 0.08, 0.12, 70);
   }
 
-  // Snapshot button state for edge detection next frame.
-  for (let i = 0; i < btnCount; i++) {
-    prev[i] = pad.buttons[i].pressed ? 1 : 0;
+  if (actionJustPressed('bulletTime') && state.params.bulletTimeEnabled !== false) {
+    if (state.slowTimer > 0) state.slowStopRequested = true;
+    else state.slowRequested = true;
+    rumble(pad, 0.2, 0.5, 120);
   }
+
+  if (actionJustPressed('changeWeaponPrev')) {
+    cycleWheelItem(-1);
+    rumble(pad, 0.04, 0.08, 45);
+  }
+
+  if (actionJustPressed('changeWeaponNext')) {
+    cycleWheelItem(1);
+    rumble(pad, 0.04, 0.08, 45);
+  }
+
+  if (actionJustPressed('toggleSidebar')) {
+    _togglePanel?.();
+    rumble(pad, 0, 0.3, 80);
+  }
+
+  snapshotButtons();
 }
