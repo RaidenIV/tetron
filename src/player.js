@@ -180,6 +180,12 @@ function getPlayerWeaponOffsetY(type = getPlayerWeaponType()) {
   return getWeaponNumericParam(type, 'OffsetY', 0, -2, 2);
 }
 
+function getPlayerHeldWeaponColor(type = getPlayerWeaponType()) {
+  if (type !== 'grenades') return '#20242b';
+  const color = String(state.params.weaponGrenadeProjectileColor || '').trim();
+  return /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#ff8844';
+}
+
 function getPlayerWeaponRecoil(type = getPlayerWeaponType()) {
   if (type === 'grenades') return 0;
   return getWeaponNumericParam(type, 'Recoil', 0, 0, 1);
@@ -257,6 +263,7 @@ export function applyPlayerWeaponSettings() {
   if (playerWeaponModelKey !== type || !playerWeaponMesh) {
     rebuildPlayerWeaponVisual(type);
   }
+  playerWeaponMat.color.set(getPlayerHeldWeaponColor(type));
   playerWeaponMat.needsUpdate = true;
   syncPlayerWeaponRestPose();
 }
