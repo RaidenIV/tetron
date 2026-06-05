@@ -14,7 +14,7 @@ import { state, addBulletTimeAmount } from './state.js';
 import * as PlayerModule from './player.js';
 import { getSfxVolume, applyBulletTimeAudioPitch, registerManagedAudio, setManagedAudioVolume, playObjectExplosionSound, playBulletTimeEndSound, playPlayerDeathSound } from './audio.js';
 import { resolveCircleAgainstPlacedObjects, isPlacedObjectHit, isPlacedObjectLineBlocked } from './placer.js';
-import { findBehaviorZoneForNpc } from './zones.js';
+import { findBehaviorZoneForNpc, getZones } from './zones.js';
 
 const playerGroup = PlayerModule.playerGroup;
 const beginPlayerCorpseVisual = (duration) => {
@@ -2682,18 +2682,47 @@ function getNpcZoneGoal(npc, behavior, delta = 0) {
   return { x: zone.x, z: zone.z, zone };
 }
 
+function getAssignedAttackZone(npc) {
+  const assignedId = Number(npc?.__attackZoneId);
+  if (!Number.isFinite(assignedId)) return null;
+  return getZones().find(zone => Number(zone.id) === assignedId) || null;
+}
+
+function getNpcAttackZoneGoal(npc) {
+  if (!npc?.group?.position) return null;
+  let zone = getAssignedAttackZone(npc);
+  if (!zone) {
+    zone = findBehaviorZoneForNpc(npc, 'attack') || findBehaviorZoneForNpc(npc, 'patrol');
+    npc.__attackZoneId = zone ? Number(zone.id) : null;
+  }
+  return zone ? { x: zone.x, z: zone.z, zone } : null;
+}
+
+function isNpcHoldingAttackZone(npc, zone) {
+  if (!npc?.group?.position || !zone) return false;
+  const radius = Math.max(0.5, Number(zone.radius) || 4);
+  const holdRadius = Math.max(0.85, radius * 0.45);
+  const dx = npc.group.position.x - zone.x;
+  const dz = npc.group.position.z - zone.z;
+  return Math.hypot(dx, dz) <= holdRadius;
+}
+
 function updateEnemyMovement(enemy, delta, targetNpc = null) {
   const baseBehavior = getEffectiveBehavior(enemy);
   if (baseBehavior === 'holdPosition') return;
 
+  if (baseBehavior !== 'attackZone') enemy.__attackZoneId = null;
+  const attackZoneGoal = baseBehavior === 'attackZone' ? getNpcAttackZoneGoal(enemy) : null;
+  if (attackZoneGoal && isNpcHoldingAttackZone(enemy, attackZoneGoal.zone)) return;
+
   const engagedWithPlayer = !targetNpc && isNpcEngagedWithPlayer(enemy);
   const engaged = !!targetNpc || engagedWithPlayer;
   const behavior = engaged && baseBehavior === 'guard' ? 'rush' : baseBehavior;
-  let targetPos = targetNpc?.group?.position || (engagedWithPlayer ? playerGroup.position : null);
+  let targetPos = attackZoneGoal || targetNpc?.group?.position || (engagedWithPlayer ? playerGroup.position : null);
 
   if (!targetPos) {
     if (baseBehavior === 'roam') targetPos = getNpcRoamTarget(enemy, delta);
-    else if (baseBehavior === 'patrolZone' || baseBehavior === 'attackZone') targetPos = getNpcZoneGoal(enemy, baseBehavior, delta);
+    else if (baseBehavior === 'patrolZone') targetPos = getNpcZoneGoal(enemy, baseBehavior, delta);
     else if (baseBehavior === 'defendPlayer') targetPos = playerGroup.position;
     else targetPos = playerGroup.position;
   }
@@ -2771,10 +2800,13 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
     seekX = toTargetX; seekZ = toTargetZ;
   }
 
-  const combatSeek = blendNpcCombatStrafe(enemy, delta, { x: seekX, z: seekZ }, toTargetX, toTargetZ, dist, engaged);
+  const allowCombatMovement = !(baseBehavior === 'attackZone' && attackZoneGoal);
+  const combatSeek = allowCombatMovement
+    ? blendNpcCombatStrafe(enemy, delta, { x: seekX, z: seekZ }, toTargetX, toTargetZ, dist, engaged)
+    : { x: seekX, z: seekZ };
   seekX = combatSeek.x;
   seekZ = combatSeek.z;
-  if (engaged) speedMult = Math.max(speedMult, getEffectiveWeapon(enemy) === 'contact' ? 0.75 : 0.82);
+  if (engaged && allowCombatMovement) speedMult = Math.max(speedMult, getEffectiveWeapon(enemy) === 'contact' ? 0.75 : 0.82);
 
   // Normalise seek
   const seekLen = Math.hypot(seekX, seekZ);
@@ -2805,7 +2837,7 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
 
   // If an NPC has an active combat target and steering collapsed to nearly
   // zero, add a strafe fallback so attack state never immobilizes it.
-  if (engaged && Math.hypot(moveX, moveZ) < 0.001 && behavior !== 'guard') {
+  if (engaged && allowCombatMovement && Math.hypot(moveX, moveZ) < 0.001 && behavior !== 'guard') {
     const strafeSign = getNpcCombatStrafeSign(enemy, delta);
     moveX = -toTargetZ * strafeSign;
     moveZ =  toTargetX * strafeSign;
@@ -2817,7 +2849,7 @@ function updateEnemyMovement(enemy, delta, targetNpc = null) {
   enemy.group.position.x += moveX * baseSpeed * speedMult * delta;
   enemy.group.position.z += moveZ * baseSpeed * speedMult * delta;
   resolveCircleAgainstPlacedObjects(enemy.group.position, enemy.radius);
-  if (targetNpc) {
+  if (targetNpc && allowCombatMovement) {
     applyNpcEngagedMovementGuarantee(enemy, delta, targetPos, startX, startZ, toTargetX, toTargetZ, speedMult);
   }
 }

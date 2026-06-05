@@ -274,13 +274,14 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
 /* Toggle */
 .sb-toggle {
   display: flex; align-items: center; gap: 7px;
-  cursor: pointer; user-select: none;
+  cursor: default; user-select: none;
 }
 .sb-toggle input { display: none; }
 .sb-toggle-knob {
   width: 30px; height: 16px; border-radius: 8px;
   background: #21262d; border: 1px solid #30363d;
   position: relative; flex-shrink: 0; transition: background 0.15s, border-color 0.15s;
+  appearance: none; padding: 0; cursor: pointer;
 }
 .sb-toggle-knob::after {
   content: ''; position: absolute;
