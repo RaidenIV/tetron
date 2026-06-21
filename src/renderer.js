@@ -3,54 +3,24 @@ import * as THREE from 'three';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { state } from './state.js';
 
-export const GAME_WIDTH = 1920;
-export const GAME_HEIGHT = 1080;
-const GAME_ASPECT = GAME_WIDTH / GAME_HEIGHT;
-const gameStage = document.getElementById('game-stage');
-const sidebar = document.getElementById('sidebar');
-
-function updateGameStageScale() {
-  if (!gameStage) return;
-
-  const scale = Math.min(
-    window.innerWidth / GAME_WIDTH,
-    window.innerHeight / GAME_HEIGHT
-  );
-  const left = (window.innerWidth - GAME_WIDTH * scale) / 2;
-  const top = (window.innerHeight - GAME_HEIGHT * scale) / 2;
-  const stageRight = left + GAME_WIDTH * scale;
-  const sidebarRect = sidebar?.getBoundingClientRect();
-  const sidebarOverlap = sidebarRect
-    ? Math.max(0, Math.min(sidebarRect.width, stageRight - sidebarRect.left))
-    : 0;
-
-  gameStage.style.transform = `translate3d(${left}px, ${top}px, 0) scale(${scale})`;
-  gameStage.style.setProperty('--sb-width', `${sidebarOverlap / scale}px`);
-}
-
 // ── WebGL renderer ─────────────────────────────────────────────────────────────
 export const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(GAME_WIDTH, GAME_HEIGHT);
+renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
 renderer.toneMapping         = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.9;
-renderer.domElement.style.cssText = 'position:absolute;top:0;left:0;width:1920px;height:1080px;z-index:1;';
+renderer.domElement.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;';
 renderer.domElement.classList.add('game-renderer');
-(gameStage || document.body).appendChild(renderer.domElement);
+document.body.appendChild(renderer.domElement);
 
 // ── CSS2D renderer ─────────────────────────────────────────────────────────────
 export const labelRenderer = new CSS2DRenderer();
-labelRenderer.setSize(GAME_WIDTH, GAME_HEIGHT);
-labelRenderer.domElement.style.cssText = 'position:absolute;top:0;left:0;width:1920px;height:1080px;pointer-events:none;z-index:5;';
+labelRenderer.setSize(window.innerWidth, window.innerHeight);
+labelRenderer.domElement.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:5;';
 labelRenderer.domElement.classList.add('label-renderer');
-(gameStage || document.body).appendChild(labelRenderer.domElement);
-
-updateGameStageScale();
-if (sidebar && typeof ResizeObserver !== 'undefined') {
-  new ResizeObserver(updateGameStageScale).observe(sidebar);
-}
+document.body.appendChild(labelRenderer.domElement);
 
 // ── Scene ──────────────────────────────────────────────────────────────────────
 export const scene = new THREE.Scene();
@@ -83,7 +53,7 @@ scene.environmentIntensity = 1.0;
 pmrem.dispose();
 
 // ── Cameras ────────────────────────────────────────────────────────────────────
-export let aspect = GAME_ASPECT;
+export let aspect = window.innerWidth / window.innerHeight;
 export let CAM_D  = 12; // half-size of the ortho frustum
 
 export const ISO_OFFSET = new THREE.Vector3(28, 28, 28);
@@ -373,7 +343,7 @@ export function getMoveRight() {
 // ── Resize ─────────────────────────────────────────────────────────────────────
 export function applyIsoCamD(d) {
   CAM_D  = d;
-  aspect = GAME_ASPECT;
+  aspect = window.innerWidth / window.innerHeight;
   isoCamera.left   = -CAM_D * aspect;
   isoCamera.right  =  CAM_D * aspect;
   isoCamera.top    =  CAM_D;
@@ -382,13 +352,12 @@ export function applyIsoCamD(d) {
 }
 
 export function onResize() {
-  aspect = GAME_ASPECT;
+  aspect = window.innerWidth / window.innerHeight;
   applyIsoCamD(state.params.isoCamD);
   thirdCamera.aspect = aspect;
   thirdCamera.updateProjectionMatrix();
   editorCamera.aspect = aspect;
   editorCamera.updateProjectionMatrix();
-  renderer.setSize(GAME_WIDTH, GAME_HEIGHT, false);
-  labelRenderer.setSize(GAME_WIDTH, GAME_HEIGHT);
-  updateGameStageScale();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  labelRenderer.setSize(window.innerWidth, window.innerHeight);
 }
