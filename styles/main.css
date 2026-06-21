@@ -43,9 +43,20 @@
 
 body { background: #06080d; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; }
 
-/* Canvas is position:fixed, full-window — sidebar floats over it */
+/* Fixed 1920×1080 game surface; renderer.js scales it uniformly to the viewport. */
+.game-stage {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  transform-origin: top left;
+  z-index: 0;
+}
+
 canvas {
-  position: fixed; top: 0; left: 0;
+  position: absolute; top: 0; left: 0;
   width: 100%; height: 100%;
   display: block; z-index: 1;
 }
@@ -723,12 +734,12 @@ body.sb-resizing { cursor: ew-resize; user-select: none; }
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 25vh;
+  padding-top: 270px;
   pointer-events: none;
   opacity: 0;
   color: rgba(255,255,255,0.94);
   font-family: var(--hud-font-family, 'Square 721 Extended Bold Local', 'Michroma', 'Arial Black', sans-serif);
-  font-size: clamp(11px, 1.75vw, 28px);
+  font-size: 28px;
   font-weight: var(--hud-font-weight, 700);
   letter-spacing: var(--hud-letter-spacing, 0.18em);
   line-height: 1;
@@ -893,40 +904,10 @@ body[data-hud-layout="hud2"] .bullet-time-meter {
   :root {
     --sb-width: 360px;
     --sb-label-w: 148px;
-    --hud-anchor-left: 26px;
-    --hud-anchor-bottom: 38px;
-  }
-
-  /* HUD — more breathing room at the bottom */
-  #game-hud {
-    bottom: 38px;
-    left: 26px;
-  }
-
-  .game-hud-content { width: 240px; }
-
-  .game-hud-label,
-  .game-hud-value { font-size: 13px; }
-
-  .game-hud-track { height: 11px; margin-top: 5px; }
-
-  /* Radar — stays bottom-right, slightly more padding */
-  #radar-canvas {
-    bottom: 38px;
-  }
-
-  .ammo-hud {
-    bottom: 38px;
   }
 
   /* Sidebar body — more comfortable padding */
   .sb-section-body { padding: 8px 12px 12px; }
-
-  /* Pause overlay — nudge up a touch for taller screen */
-  #pause-overlay { padding-top: 27vh; }
-
-  /* Instructions — more bottom breathing room */
-  #instructions { bottom: 20px; }
 }
 
 
