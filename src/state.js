@@ -15,7 +15,7 @@ export const state = {
   playerDeathTimer: 0,
   playerDeathDuration: 0,
   killScreenTimer: 0,
-  activePreset: 'g58',
+  activePreset: 't3',
   mouseLookActive: false,
   isAiming: false,          // true while right-mouse / L2 held
   activeSlot: 0,            // 0 = laser, 1 = object placer

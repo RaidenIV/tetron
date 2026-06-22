@@ -14,7 +14,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_RENDER_PIXEL_RATIO));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
-renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.autoUpdate = true;
 renderer.toneMapping         = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.9;
 renderer.domElement.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;';
