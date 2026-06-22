@@ -15,6 +15,7 @@ const ZONE_PREVIEW_BLOCKED = '#ff3030';
 
 const _zoneMarkers = new Map();
 let _zonePreview = null;
+let _normalizedZonesRef = null;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -65,14 +66,17 @@ function normalizeZone(zone = {}, fallbackId = 1) {
   };
 }
 
-export function normalizeZones() {
+export function normalizeZones({ force = false } = {}) {
   const raw = Array.isArray(state.params.zones) ? state.params.zones : [];
+  if (!force && raw === _normalizedZonesRef) return raw;
+
   const byId = new Map();
   raw.forEach((zone, index) => {
     const clean = normalizeZone(zone, index + 1);
     byId.set(clean.id, clean);
   });
   state.params.zones = [...byId.values()].sort((a, b) => a.id - b.id);
+  _normalizedZonesRef = state.params.zones;
   return state.params.zones;
 }
 
@@ -310,6 +314,7 @@ export function removeZoneNear(x, z) {
 
 export function clearZones() {
   state.params.zones = [];
+  _normalizedZonesRef = state.params.zones;
   state.params.zoneScore = 0;
   for (const marker of _zoneMarkers.values()) disposeMarker(marker);
   _zoneMarkers.clear();

@@ -293,29 +293,44 @@ function ensureAwarenessRing(npc) {
 }
 
 function updateNpcAwarenessRing(npc) {
+  if (!npc?.group) return;
+  const cfg = getAwarenessSettings(npc);
+
+  if (!cfg.visible) {
+    if (npc._awarenessRing) npc._awarenessRing.visible = false;
+    if (npc._awarenessOutlineRing) npc._awarenessOutlineRing.visible = false;
+    return;
+  }
+
   const ring = ensureAwarenessRing(npc);
   if (!ring) return;
   const outline = npc._awarenessOutlineRing || null;
-  const cfg = getAwarenessSettings(npc);
-  const visible = cfg.visible && (cfg.opacity > 0 || cfg.fillTransparent);
-  ring.visible = visible && !cfg.fillTransparent && cfg.opacity > 0;
-  if (outline) outline.visible = cfg.visible;
+  const cache = npc._awarenessRingState || (npc._awarenessRingState = {});
+  const fillVisible = !cfg.fillTransparent && cfg.opacity > 0;
+
+  ring.visible = fillVisible;
+  if (outline) outline.visible = true;
   ring.position.set(npc.group.position.x, AWARENESS_RING_Y, npc.group.position.z);
-  ring.rotation.set(-Math.PI / 2, 0, 0);
-  ring.scale.set(cfg.range, cfg.range, 1);
   if (outline) {
     outline.position.set(npc.group.position.x, AWARENESS_RING_Y + AWARENESS_OUTLINE_Y_OFFSET, npc.group.position.z);
-    outline.rotation.set(-Math.PI / 2, 0, 0);
-    outline.scale.set(cfg.range, cfg.range, 1);
   }
-  if (!visible) return;
-  ring.material.color.set(cfg.color);
-  ring.material.opacity = cfg.opacity;
-  ring.material.needsUpdate = true;
-  if (outline) {
+
+  if (cache.range !== cfg.range) {
+    ring.scale.set(cfg.range, cfg.range, 1);
+    if (outline) outline.scale.set(cfg.range, cfg.range, 1);
+    cache.range = cfg.range;
+  }
+  if (cache.color !== cfg.color) {
+    ring.material.color.set(cfg.color);
+    cache.color = cfg.color;
+  }
+  if (cache.opacity !== cfg.opacity) {
+    ring.material.opacity = cfg.opacity;
+    cache.opacity = cfg.opacity;
+  }
+  if (outline && cache.outlineColor !== cfg.outlineColor) {
     outline.material.color.set(cfg.outlineColor);
-    outline.material.opacity = 1;
-    outline.material.needsUpdate = true;
+    cache.outlineColor = cfg.outlineColor;
   }
 }
 
@@ -408,19 +423,41 @@ class SpatialHash {
   constructor(cellSize) {
     this.cellSize = cellSize;
     this.cells = new Map();
+    this.bucketPool = [];
+    this.maxRadius = BASE_RADIUS;
   }
 
-  clear() { this.cells.clear(); }
+  clear() {
+    for (const column of this.cells.values()) {
+      for (const bucket of column.values()) {
+        bucket.length = 0;
+        this.bucketPool.push(bucket);
+      }
+    }
+    this.cells.clear();
+  }
 
-  _key(ix, iz) { return `${ix},${iz}`; }
   _coord(v) { return Math.floor(v / this.cellSize); }
+
+  _bucket(ix, iz, create = false) {
+    let column = this.cells.get(ix);
+    if (!column && create) {
+      column = new Map();
+      this.cells.set(ix, column);
+    }
+    if (!column) return null;
+    let bucket = column.get(iz);
+    if (!bucket && create) {
+      bucket = this.bucketPool.pop() || [];
+      column.set(iz, bucket);
+    }
+    return bucket || null;
+  }
 
   insert(enemy) {
     const ix = this._coord(enemy.group.position.x);
     const iz = this._coord(enemy.group.position.z);
-    const key = this._key(ix, iz);
-    if (!this.cells.has(key)) this.cells.set(key, []);
-    this.cells.get(key).push(enemy);
+    this._bucket(ix, iz, true).push(enemy);
   }
 
   query(x, z, radius, out = []) {
@@ -429,16 +466,11 @@ class SpatialHash {
     const maxX = this._coord(x + radius);
     const minZ = this._coord(z - radius);
     const maxZ = this._coord(z + radius);
-    const seen = new Set();
     for (let ix = minX; ix <= maxX; ix++) {
       for (let iz = minZ; iz <= maxZ; iz++) {
-        const bucket = this.cells.get(this._key(ix, iz));
+        const bucket = this._bucket(ix, iz, false);
         if (!bucket) continue;
-        for (const e of bucket) {
-          if (seen.has(e)) continue;
-          seen.add(e);
-          out.push(e);
-        }
+        for (let i = 0; i < bucket.length; i++) out.push(bucket[i]);
       }
     }
     return out;
@@ -446,12 +478,28 @@ class SpatialHash {
 
   rebuild(list) {
     this.clear();
-    for (const e of list) this.insert(e);
+    this.maxRadius = BASE_RADIUS;
+    for (let i = 0; i < list.length; i++) {
+      const npc = list[i];
+      if (!npc?.group) continue;
+      npc.__spatialIndex = i;
+      this.maxRadius = Math.max(this.maxRadius, Math.max(0, Number(npc.radius) || BASE_RADIUS));
+      this.insert(npc);
+    }
   }
 }
 
 const _spatialHash = new SpatialHash(ENEMY_GROUPING.hashCellSize);
 const _queryBuf = [];
+const _targetQueryBuf = [];
+const _activeNpcBuffer = [];
+
+export function getActiveNpcs(out = _activeNpcBuffer) {
+  out.length = 0;
+  for (let i = 0; i < enemies.length; i++) out.push(enemies[i]);
+  for (let i = 0; i < allies.length; i++) out.push(allies[i]);
+  return out;
+}
 
 function getSpacingMultiplier(enemy) {
   return ENEMY_GROUPING.archetypeSpacing[enemy.type] ?? 1.0;
@@ -459,10 +507,6 @@ function getSpacingMultiplier(enemy) {
 
 function getEnemyMass(enemy) {
   return ENEMY_GROUPING.archetypeMass[enemy.type] ?? 1.0;
-}
-
-function getActiveNpcs() {
-  return enemies.concat(allies);
 }
 
 // ── Separation steering (soft, before movement) ───────────────────────────────
@@ -572,7 +616,7 @@ function applyHardEnemyDecollision() {
     _spatialHash.query(a.group.position.x, a.group.position.z, ar + cfg.queryPadding, _queryBuf);
     for (const b of _queryBuf) {
       if (!b || b === a) continue;
-      if (npcs.indexOf(b) < npcs.indexOf(a)) continue;
+      if ((b.__spatialIndex ?? -1) <= (a.__spatialIndex ?? -1)) continue;
       const br = b.radius * getSpacingMultiplier(b);
       const minD = ar + br + cfg.extraPadding;
       const dx = b.group.position.x - a.group.position.x;
@@ -596,6 +640,28 @@ function applyHardEnemyDecollision() {
   }
 }
 
+function updateNpcShadowCasters(npcs) {
+  const shadowsEnabled = state.params.shadows !== false;
+  _npcShadowCandidates.length = 0;
+
+  for (let i = 0; i < npcs.length; i++) {
+    const npc = npcs[i];
+    if (!npc?.mesh || !npc?.group) continue;
+    npc.mesh.castShadow = false;
+    if (!shadowsEnabled || !camera?.position) continue;
+    const distanceSq = camera.position.distanceToSquared(npc.group.position);
+    if (distanceSq > NPC_SHADOW_MAX_DISTANCE_SQ) continue;
+    npc.__shadowDistanceSq = distanceSq;
+    _npcShadowCandidates.push(npc);
+  }
+
+  _npcShadowCandidates.sort((a, b) => a.__shadowDistanceSq - b.__shadowDistanceSq);
+  const casterCount = Math.min(NPC_SHADOW_MAX_CASTERS, _npcShadowCandidates.length);
+  for (let i = 0; i < casterCount; i++) {
+    _npcShadowCandidates[i].mesh.castShadow = true;
+  }
+}
+
 // ── Core data ─────────────────────────────────────────────────────────────────
 const enemies = [];
 const allies = [];
@@ -606,10 +672,20 @@ const particlePool = [];
 const npcProjectileShockwaves = [];
 let _npcProjectileShockwaveId = 1;
 
+const NPC_VISUAL_UPDATE_INTERVAL = 1 / 30;
+const NPC_SHADOW_UPDATE_INTERVAL = 0.25;
+const NPC_SHADOW_MAX_CASTERS = 12;
+const NPC_SHADOW_MAX_DISTANCE_SQ = 50 * 50;
+let _npcVisualAccumulator = NPC_VISUAL_UPDATE_INTERVAL;
+let _npcShadowAccumulator = NPC_SHADOW_UPDATE_INTERVAL;
+let _refreshNpcVisuals = true;
+const _npcShadowCandidates = [];
+
 const _enemyGeoCache = new Map();
 const _tmpVec = new THREE.Vector3();
 const _tmpVec2 = new THREE.Vector3();
 const _bulletDir = new THREE.Vector3();
+const _enemyBulletPreviousPosition = new THREE.Vector3();
 const _enemyBulletGeo = new THREE.CapsuleGeometry(0.065, 0.44, 5, 10);
 const _enemyBulletGeoCache = new Map();
 const _particleGeo = new THREE.SphereGeometry(1, 6, 4);
@@ -1177,12 +1253,15 @@ function updateNpcWeaponVisual(npc, targetPoint = null) {
 }
 
 export function applyNpcWeaponSettings() {
-  [...enemies, ...allies].forEach(npc => {
-    if (!npc) return;
+  const npcs = getActiveNpcs();
+  _spatialHash.rebuild(npcs);
+  for (let i = 0; i < npcs.length; i++) {
+    const npc = npcs[i];
+    if (!npc) continue;
     npc._weaponTransformKey = '';
-    const target = findNearestOpponent(npc);
+    const target = findNearestOpponent(npc, true);
     updateNpcWeaponVisual(npc, target ? getNpcAimPoint(target, _npcAimPoint) : null);
-  });
+  }
 }
 
 
@@ -1547,7 +1626,7 @@ function spawnEnemyCorpse(enemy, cfg = getDestructionConfig(enemy)) {
 
   const mesh = new THREE.Mesh(getEnemyGeometry(enemy.sizeMult), corpseMaterial);
   mesh.name = 'EnemyPhysicsCorpse';
-  mesh.castShadow = true;
+  mesh.castShadow = false;
   mesh.receiveShadow = true;
 
   enemy.mesh.getWorldPosition(_corpseWorldPos);
@@ -3112,8 +3191,8 @@ function fireEnemyBullet(enemy, targetNpc = null, config = getNpcWeaponConfig(en
   const shots = Math.max(1, Number(config.pellets) || 1);
   const targetPoint = getNpcAimPoint(targetNpc, _npcFireTargetPoint);
   if (targetNpc) {
-    if (!hasNpcLineOfSightToNpc(enemy, targetNpc)) return;
-  } else if (!enemy.isAlly && !hasNpcLineOfSightToPlayer(enemy)) {
+    if (!hasCachedNpcLineOfSightToNpc(enemy, targetNpc)) return;
+  } else if (!enemy.isAlly && !hasCachedNpcLineOfSightToPlayer(enemy)) {
     return;
   }
   const showVisual = shouldShowNpcRifleTracer(config);
@@ -3211,7 +3290,7 @@ function updateEnemyBullets(delta) {
   for (let i = enemyBullets.length - 1; i >= 0; i--) {
     const bullet = enemyBullets[i];
     bullet.life -= delta;
-    const before = bullet.mesh.position.clone();
+    const before = _enemyBulletPreviousPosition.copy(bullet.mesh.position);
     if (bullet.ballistic) {
       bullet.velocity.y -= PARTICLE_GRAVITY * 1.75 * delta;
       bullet.mesh.position.addScaledVector(bullet.velocity, delta);
@@ -3280,58 +3359,123 @@ function isLiveNpc(npc) {
   return !!npc?.group && Number(npc.hp) > 0;
 }
 
-function getNpcHorizontalDelta(a, b) {
-  if (!a?.group || !b?.group) return { dx: 0, dz: 0, d2: Infinity, distance: Infinity };
-  const dx = b.group.position.x - a.group.position.x;
-  const dz = b.group.position.z - a.group.position.z;
-  const d2 = dx * dx + dz * dz;
-  return { dx, dz, d2, distance: Math.sqrt(d2) };
-}
+const NPC_TARGET_REFRESH_INTERVAL = 0.1;
+let _npcAiTime = 0;
 
-function getNpcAwarenessClearance(npc, targetNpc) {
-  const delta = getNpcHorizontalDelta(npc, targetNpc);
-  if (!Number.isFinite(delta.distance)) return Infinity;
-  const targetRadius = Math.max(0, Number(targetNpc?.radius) || BASE_RADIUS);
-  const selfRadius = Math.max(0, Number(npc?.radius) || BASE_RADIUS);
-  return Math.max(0, delta.distance - targetRadius - selfRadius);
+function isNpcTargetInRange(npc, targetNpc) {
+  if (!isLiveNpc(npc) || !isLiveNpc(targetNpc)) return false;
+  const dx = targetNpc.group.position.x - npc.group.position.x;
+  const dz = targetNpc.group.position.z - npc.group.position.z;
+  const range = getNpcAttackRange(npc)
+    + Math.max(0, Number(targetNpc.radius) || BASE_RADIUS)
+    + Math.max(0, Number(npc.radius) || BASE_RADIUS);
+  return dx * dx + dz * dz <= range * range;
 }
 
 function getNpcAttackRange(npc) {
   return getNpcAwarenessRange(npc);
 }
 
+function hasCachedNpcLineOfSightToNpc(npc, targetNpc, force = false) {
+  if (!npc?.group || !targetNpc?.group) return false;
+  if (
+    !force
+    && npc._losTarget === targetNpc
+    && Number(npc._losNextUpdate) > _npcAiTime
+  ) {
+    return npc._losVisible === true;
+  }
+
+  const visible = hasNpcLineOfSightToNpc(npc, targetNpc);
+  npc._losTarget = targetNpc;
+  npc._losVisible = visible;
+  npc._losNextUpdate = _npcAiTime + NPC_TARGET_REFRESH_INTERVAL;
+  return visible;
+}
+
+function hasCachedNpcLineOfSightToPlayer(npc, force = false) {
+  if (!npc?.group) return false;
+  if (!force && Number(npc._playerLosNextUpdate) > _npcAiTime) {
+    return npc._playerLosVisible === true;
+  }
+
+  const visible = hasNpcLineOfSightToPlayer(npc);
+  npc._playerLosVisible = visible;
+  npc._playerLosNextUpdate = _npcAiTime + NPC_TARGET_REFRESH_INTERVAL;
+  return visible;
+}
+
 function isTargetWithinNpcAwareness(npc, targetNpc) {
-  if (!isLiveNpc(npc) || !isLiveNpc(targetNpc)) return false;
-  const range = getNpcAttackRange(npc);
-  if (getNpcAwarenessClearance(npc, targetNpc) > range) return false;
-  return hasNpcLineOfSightToNpc(npc, targetNpc);
+  return isNpcTargetInRange(npc, targetNpc) && hasCachedNpcLineOfSightToNpc(npc, targetNpc);
 }
 
 function isPlayerWithinNpcAwareness(npc) {
   if (!isLiveNpc(npc)) return false;
-  const range = getNpcAttackRange(npc);
   const dx = playerGroup.position.x - npc.group.position.x;
   const dz = playerGroup.position.z - npc.group.position.z;
-  const playerRadius = Math.max(0.25, Number(state.params.playerRadius) || 0.4);
-  if (Math.max(0, Math.hypot(dx, dz) - playerRadius) > range) return false;
-  return hasNpcLineOfSightToPlayer(npc);
+  const range = getNpcAttackRange(npc) + Math.max(0.25, Number(state.params.playerRadius) || 0.4);
+  if (dx * dx + dz * dz > range * range) return false;
+  return hasCachedNpcLineOfSightToPlayer(npc);
 }
 
-function findNearestOpponent(npc) {
+function findNearestOpponent(npc, force = false) {
   if (!isLiveNpc(npc)) return null;
-  const candidates = npc.isAlly ? enemies : allies;
-  let nearest = null;
-  let best = Infinity;
-  for (const target of candidates) {
-    if (!isLiveNpc(target)) continue;
-    if (target.isAlly === npc.isAlly) continue;
-    if (!isTargetWithinNpcAwareness(npc, target)) continue;
-    const d2 = getNpcHorizontalDelta(npc, target).d2;
-    if (d2 < best) {
-      best = d2;
-      nearest = target;
+
+  if (
+    !force
+    && npc._targetCacheInitialized === true
+    && Number(npc._targetNextUpdate) > _npcAiTime
+  ) {
+    const cached = npc._targetNpc || null;
+    if (cached && isLiveNpc(cached) && cached.isAlly !== npc.isAlly && isNpcTargetInRange(npc, cached)) {
+      return cached;
     }
   }
+
+  const range = getNpcAttackRange(npc);
+  const queryRadius = range
+    + Math.max(0, Number(npc.radius) || BASE_RADIUS)
+    + Math.max(BASE_RADIUS, Number(_spatialHash.maxRadius) || BASE_RADIUS);
+  let candidates;
+  if (_spatialHash.cells.size > 0) {
+    candidates = _spatialHash.query(npc.group.position.x, npc.group.position.z, queryRadius, _targetQueryBuf);
+  } else {
+    const source = npc.isAlly ? enemies : allies;
+    _targetQueryBuf.length = 0;
+    for (let i = 0; i < source.length; i++) _targetQueryBuf.push(source[i]);
+    candidates = _targetQueryBuf;
+  }
+
+  for (let i = 0; i < candidates.length; i++) {
+    const target = candidates[i];
+    if (!target) continue;
+    if (!isLiveNpc(target) || target === npc || target.isAlly === npc.isAlly) {
+      target.__targetSearchD2 = Infinity;
+      continue;
+    }
+    const dx = target.group.position.x - npc.group.position.x;
+    const dz = target.group.position.z - npc.group.position.z;
+    target.__targetSearchD2 = dx * dx + dz * dz;
+  }
+  candidates.sort((a, b) => (a?.__targetSearchD2 ?? Infinity) - (b?.__targetSearchD2 ?? Infinity));
+
+  let nearest = null;
+  for (let i = 0; i < candidates.length; i++) {
+    const target = candidates[i];
+    if (!target || !Number.isFinite(target.__targetSearchD2)) break;
+    if (!isNpcTargetInRange(npc, target)) continue;
+    if (!hasNpcLineOfSightToNpc(npc, target)) continue;
+    nearest = target;
+    npc._losTarget = target;
+    npc._losVisible = true;
+    npc._losNextUpdate = _npcAiTime + NPC_TARGET_REFRESH_INTERVAL;
+    break;
+  }
+
+  npc._targetNpc = nearest;
+  npc._targetCacheInitialized = true;
+  npc._targetNextUpdate = _npcAiTime
+    + NPC_TARGET_REFRESH_INTERVAL * (0.8 + Math.random() * 0.4);
   return nearest;
 }
 
@@ -3395,8 +3539,10 @@ function updateAllyMovement(ally, delta, elapsedTime, index, target = null) {
     ally.material.emissive.set(ally.def.color);
     ally.material.emissiveIntensity = 0.06;
   }
-  updateNpcWeaponVisual(ally, target ? getNpcAimPoint(target, _npcAimPoint) : null);
-  updateNpcHealthBar(ally);
+  if (_refreshNpcVisuals) {
+    updateNpcWeaponVisual(ally, target ? getNpcAimPoint(target, _npcAimPoint) : null);
+    updateNpcHealthBar(ally);
+  }
 }
 
 
@@ -3405,29 +3551,32 @@ function updateAllies(delta, elapsedTime = 0) {
     const ally = allies[i];
     const target = findNearestOpponent(ally);
     updateAllyMovement(ally, delta, elapsedTime, i, target);
-    updateNpcAwarenessRing(ally);
+    if (_refreshNpcVisuals) updateNpcAwarenessRing(ally);
     updateEnemyShooting(ally, delta, target);
     updateContactDamage(ally, delta, target);
   }
 }
 
 function updateEnemyTeamCombat(delta, elapsedTime = 0, { includePlayer = true } = {}) {
-  // Rebuild before allied movement so allies have a current NPC set for
-  // targeting/separation after scene loads or editor-spawn changes.
-  _spatialHash.rebuild(getActiveNpcs());
-  updateAllies(delta, elapsedTime);
+  const safeDelta = Math.max(0, Number(delta) || 0);
+  _npcAiTime += safeDelta;
+  _npcVisualAccumulator += safeDelta;
+  _npcShadowAccumulator += safeDelta;
+  _refreshNpcVisuals = _npcVisualAccumulator >= NPC_VISUAL_UPDATE_INTERVAL;
+  if (_refreshNpcVisuals) _npcVisualAccumulator %= NPC_VISUAL_UPDATE_INTERVAL;
+  const refreshNpcShadows = _npcShadowAccumulator >= NPC_SHADOW_UPDATE_INTERVAL;
+  if (refreshNpcShadows) _npcShadowAccumulator %= NPC_SHADOW_UPDATE_INTERVAL;
 
-  // Rebuild after allied movement and before enemy movement so enemies see the
-  // current ally positions in the same frame.
-  _spatialHash.rebuild(getActiveNpcs());
+  const npcs = getActiveNpcs();
+  _spatialHash.rebuild(npcs);
+  updateAllies(delta, elapsedTime);
 
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemies[i];
     enemy.spawnFlashTimer = Math.max(0, enemy.spawnFlashTimer - delta);
     const opponentTarget = findNearestOpponent(enemy);
-    const target = opponentTarget || (includePlayer && isPlayerWithinNpcAwareness(enemy) ? null : null);
     if (opponentTarget || includePlayer) updateEnemyMovement(enemy, delta, opponentTarget || null);
-    updateNpcAwarenessRing(enemy);
+    if (_refreshNpcVisuals) updateNpcAwarenessRing(enemy);
 
     const lookPos = opponentTarget?.group?.position || (includePlayer ? playerGroup.position : null);
     if (lookPos) {
@@ -3437,8 +3586,8 @@ function updateEnemyTeamCombat(delta, elapsedTime = 0, { includePlayer = true } 
     }
 
     if (opponentTarget || includePlayer) {
-      updateEnemyShooting(enemy, delta, target);
-      updateContactDamage(enemy, delta, target);
+      updateEnemyShooting(enemy, delta, opponentTarget || null);
+      updateContactDamage(enemy, delta, opponentTarget || null);
     }
     enemy.mesh.position.y = (BASE_RADIUS + BASE_LENGTH / 2) * enemy.sizeMult;
 
@@ -3449,13 +3598,15 @@ function updateEnemyTeamCombat(delta, elapsedTime = 0, { includePlayer = true } 
       enemy.material.emissive.set(enemy.def.color);
       enemy.material.emissiveIntensity = 0.06;
     }
-    updateNpcWeaponVisual(enemy, getNpcAimPoint(opponentTarget, _npcAimPoint));
-    updateNpcHealthBar(enemy);
+    if (_refreshNpcVisuals) {
+      updateNpcWeaponVisual(enemy, getNpcAimPoint(opponentTarget, _npcAimPoint));
+      updateNpcHealthBar(enemy);
+    }
   }
 
-  _spatialHash.rebuild(getActiveNpcs());
+  _spatialHash.rebuild(npcs);
   applyHardEnemyDecollision();
-  _spatialHash.rebuild(getActiveNpcs());
+  if (refreshNpcShadows) updateNpcShadowCasters(npcs);
 }
 
 export function updateNpcTeamCombat(delta, elapsedTime = 0) {

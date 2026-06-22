@@ -10,7 +10,7 @@ import { updateSunPosition } from './lighting.js';
 import { updateChunks, clampPositionToBuildArea } from './terrain.js';
 import { playerGroup, updatePlayer, updateDashStreaks } from './player.js';
 import { updateLaserProjectiles, resolveAimTarget, aimResult, syncWeaponAmmoHud } from './weapons.js';
-import { updateEnemies, updateNpcTeamCombat, getEnemyMeshes, tagEnemy, getEnemies, getAllies, updatePlayerDeath, updatePlayerSpawnInvincibility, spawnZoneReinforcements } from './enemies.js';
+import { updateEnemies, updateNpcTeamCombat, getEnemyMeshes, tagEnemy, getEnemies, getAllies, getActiveNpcs, updatePlayerDeath, updatePlayerSpawnInvincibility, spawnZoneReinforcements } from './enemies.js';
 import { updatePlacer } from './placer.js';
 import { isEditorModeEnabled, updateEditorCamera, updateEditorPlacement } from './editor.js';
 import { updateController } from './input.js';
@@ -21,6 +21,14 @@ const clock = new THREE.Clock();
 // ── Radar canvas ──────────────────────────────────────────────────────────────
 const _radarCanvas = document.getElementById('radar-canvas');
 const _radarCtx = _radarCanvas ? _radarCanvas.getContext('2d') : null;
+const _fpsEl = document.getElementById('fps-val');
+const _reticleEl = document.getElementById('target-reticle');
+const _bulletTimeIndicatorEl = document.getElementById('bullet-time-indicator');
+const _bulletTimeMeterEl = document.getElementById('bullet-time-meter');
+const _bulletTimeMeterFillEl = _bulletTimeMeterEl?.querySelector('[data-hud-fill="bullet-time"]') || null;
+const _bulletTimeActiveIndicatorEl = document.getElementById('bullet-time-active-indicator');
+const _killScreenOverlay = document.getElementById('kill-screen-overlay');
+const _killScreenText = document.querySelector('[data-kill-screen-text]');
 
 // Tag icon path for canvas (from tag.svg, viewBox 0 -960 960 960, upside-down triangle)
 // Pre-built as Path2D for performance. The SVG coords are in 960-unit space.
@@ -29,6 +37,20 @@ const _tagIconPath = new Path2D(
 );
 // Centre of the SVG triangle in its own coordinate space
 const _tagIconCx = 480, _tagIconCy = -431, _tagIconW = 504, _tagIconH = 438;
+const _radarPoint = { x: 0, y: 0 };
+
+function projectRadarPoint(worldX, worldZ, px, pz, rightX, rightZ, forwardX, forwardZ, radius, range, out = _radarPoint) {
+  const dx = worldX - px;
+  const dz = worldZ - pz;
+  const distanceSq = dx * dx + dz * dz;
+  if (distanceSq > range * range) return null;
+  const localRight = dx * rightX + dz * rightZ;
+  const localForward = dx * forwardX + dz * forwardZ;
+  const scale = (radius - 6) / range;
+  out.x = radius + localRight * scale;
+  out.y = radius - localForward * scale;
+  return out;
+}
 
 function drawTagIcon(ctx, x, y, iconSize, color) {
   const sc = iconSize / Math.max(_tagIconW, _tagIconH);
@@ -76,7 +98,7 @@ function positionHud2BulletTimeIndicator(el, size) {
 }
 
 function updateBulletTimeActiveIcon() {
-  const el = document.getElementById('bullet-time-active-indicator');
+  const el = _bulletTimeActiveIndicatorEl;
   if (!el) return;
   const p = state.params;
   const active = state.slowTimer > 0;
@@ -100,9 +122,9 @@ function updateBulletTimeActiveIcon() {
 }
 
 function updateBulletTimeIndicator() {
-  const el = document.getElementById('bullet-time-indicator');
-  const meter = document.getElementById('bullet-time-meter');
-  const meterFill = meter?.querySelector('[data-hud-fill="bullet-time"]');
+  const el = _bulletTimeIndicatorEl;
+  const meter = _bulletTimeMeterEl;
+  const meterFill = _bulletTimeMeterFillEl;
   const p = state.params;
   const enabled = p.hudVisible !== false && p.hudBulletTimeIndicator !== false && p.bulletTimeEnabled !== false;
   const hud2 = p.hudLayout === 'hud2';
@@ -201,20 +223,9 @@ function updateRadar() {
   const rightX = Math.cos(camAzimuth);
   const rightZ = -Math.sin(camAzimuth);
 
-  const projectRadarPoint = (worldX, worldZ) => {
-    const dx = worldX - px;
-    const dz = worldZ - pz;
-    const dist = Math.hypot(dx, dz);
-    if (dist > range) return null;
-    const localRight = dx * rightX + dz * rightZ;
-    const localForward = dx * forwardX + dz * forwardZ;
-    const scale = (radius - 6) / range;
-    return { x: radius + localRight * scale, y: radius - localForward * scale };
-  };
-
   for (const enemy of getEnemies()) {
     if (!enemy || !enemy.group) continue;
-    const point = projectRadarPoint(enemy.group.position.x, enemy.group.position.z);
+    const point = projectRadarPoint(enemy.group.position.x, enemy.group.position.z, px, pz, rightX, rightZ, forwardX, forwardZ, radius, range);
     if (!point) continue;
 
     if (enemy.tagged) {
@@ -235,7 +246,7 @@ function updateRadar() {
 
   for (const ally of getAllies()) {
     if (!ally || !ally.group) continue;
-    const point = projectRadarPoint(ally.group.position.x, ally.group.position.z);
+    const point = projectRadarPoint(ally.group.position.x, ally.group.position.z, px, pz, rightX, rightZ, forwardX, forwardZ, radius, range);
     if (!point) continue;
 
     ctx.save();
@@ -255,6 +266,21 @@ function updateRadar() {
 let _aimDwellEnemy = null;  // enemy currently being aimed at for tagging
 let _aimDwellTimer = 0;     // accumulated aim-on-enemy time
 let _fpsEMA = 60;
+
+const FPS_UPDATE_INTERVAL = 0.25;
+const RADAR_UPDATE_INTERVAL = 1 / 30;
+const LABEL_UPDATE_INTERVAL = 1 / 30;
+const HUD_UPDATE_INTERVAL = 1 / 30;
+const SHADOW_UPDATE_INTERVAL = 1 / 30;
+const ZONE_UPDATE_INTERVAL = 0.1;
+let _fpsUpdateAccumulator = FPS_UPDATE_INTERVAL;
+let _radarUpdateAccumulator = RADAR_UPDATE_INTERVAL;
+let _labelUpdateAccumulator = LABEL_UPDATE_INTERVAL;
+let _hudUpdateAccumulator = HUD_UPDATE_INTERVAL;
+let _shadowUpdateAccumulator = SHADOW_UPDATE_INTERVAL;
+let _zoneUpdateAccumulator = ZONE_UPDATE_INTERVAL;
+const _loopNpcBuffer = [];
+let _killScreenRuntimeKey = '';
 
 let _elapsed = 0;
 
@@ -288,6 +314,65 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function updateFpsCounter(rawDelta, delta) {
+  _fpsEMA = _fpsEMA * 0.9 + (1 / Math.max(rawDelta, 0.001)) * 0.1;
+  _fpsUpdateAccumulator += delta;
+  if (_fpsEl && _fpsUpdateAccumulator >= FPS_UPDATE_INTERVAL) {
+    _fpsEl.textContent = Math.round(_fpsEMA);
+    _fpsUpdateAccumulator %= FPS_UPDATE_INTERVAL;
+  }
+}
+
+function updateRadarIfDue(delta) {
+  _radarUpdateAccumulator += delta;
+  if (_radarUpdateAccumulator < RADAR_UPDATE_INTERVAL) return;
+  _radarUpdateAccumulator %= RADAR_UPDATE_INTERVAL;
+  updateRadar();
+}
+
+function updateHudIfDue(delta) {
+  _hudUpdateAccumulator += delta;
+  if (_hudUpdateAccumulator < HUD_UPDATE_INTERVAL) return;
+  _hudUpdateAccumulator %= HUD_UPDATE_INTERVAL;
+  syncWeaponAmmoHud();
+  updateBulletTimeIndicator();
+}
+
+function updateZonesAndNpcBounds(delta) {
+  const npcs = getActiveNpcs(_loopNpcBuffer);
+  _zoneUpdateAccumulator += Math.max(0, delta);
+  if (_zoneUpdateAccumulator >= ZONE_UPDATE_INTERVAL) {
+    _zoneUpdateAccumulator %= ZONE_UPDATE_INTERVAL;
+    updateZones(npcs, {
+      spawnReinforcements: spawnZoneReinforcements,
+      playerGroup,
+    });
+  }
+
+  if (state.params.buildAreaBoundaryCollision === true) {
+    for (let i = 0; i < npcs.length; i++) {
+      const npc = npcs[i];
+      if (npc?.group?.position) clampPositionToBuildArea(npc.group.position, npc.radius || 0.4);
+    }
+  }
+}
+
+function renderFrame(delta) {
+  _shadowUpdateAccumulator += delta;
+  if (renderer.shadowMap.enabled && _shadowUpdateAccumulator >= SHADOW_UPDATE_INTERVAL) {
+    renderer.shadowMap.needsUpdate = true;
+    _shadowUpdateAccumulator %= SHADOW_UPDATE_INTERVAL;
+  }
+
+  renderer.render(scene, camera);
+
+  _labelUpdateAccumulator += delta;
+  if (_labelUpdateAccumulator >= LABEL_UPDATE_INTERVAL) {
+    labelRenderer.render(scene, camera);
+    _labelUpdateAccumulator %= LABEL_UPDATE_INTERVAL;
+  }
+}
+
 function syncKillScreenRuntime() {
   const dead = state.playerDead === true;
   const enabled = state.params.killScreenEnabled !== false;
@@ -315,6 +400,13 @@ function syncKillScreenRuntime() {
     : '#ffffff';
   const text = String(state.params.killScreenText ?? 'PLAYER KILLED');
   const { key: killScreenFontKey, style: killScreenFont } = getKillScreenFontStyle();
+  const runtimeKey = [
+    dead, enabled, active, bulletTimeActive, saturation, bulletTimeSaturation,
+    textSize, textOpacity, textOffsetX, textOffsetY, textColor, text,
+    killScreenFontKey,
+  ].join('|');
+  if (runtimeKey === _killScreenRuntimeKey) return;
+  _killScreenRuntimeKey = runtimeKey;
 
   if (dead) document.body.setAttribute('data-player-dead', 'true');
   else document.body.removeAttribute('data-player-dead');
@@ -329,7 +421,7 @@ function syncKillScreenRuntime() {
   if (renderer?.domElement) renderer.domElement.style.setProperty('filter', rendererFilter, rendererFilterPriority);
   if (labelRenderer?.domElement) labelRenderer.domElement.style.setProperty('filter', rendererFilter, rendererFilterPriority);
 
-  const overlay = document.getElementById('kill-screen-overlay');
+  const overlay = _killScreenOverlay;
   if (overlay) {
     overlay.classList.toggle('kill-screen-enabled', enabled);
     overlay.dataset.killScreenActive = active ? 'true' : 'false';
@@ -351,7 +443,7 @@ function syncKillScreenRuntime() {
     overlay.style.setProperty('pointer-events', 'none');
   }
 
-  const textEl = document.querySelector('[data-kill-screen-text]');
+  const textEl = _killScreenText;
   if (textEl) {
     textEl.textContent = text;
     textEl.style.setProperty('display', active ? 'block' : 'none', 'important');
@@ -432,10 +524,8 @@ export function tick() {
   const delta    = Math.min(rawDelta, 0.05);
   _elapsed += delta;
 
-  // FPS — exponential moving average, update display every frame
-  _fpsEMA = _fpsEMA * 0.9 + (1 / Math.max(rawDelta, 0.001)) * 0.1;
-  const fpsEl = document.getElementById('fps-val');
-  if (fpsEl) fpsEl.textContent = Math.round(_fpsEMA);
+  // FPS sampling stays per-frame, while the DOM counter updates at 4 Hz.
+  updateFpsCounter(rawDelta, delta);
 
   setActiveCamera(state.params.cameraMode);
 
@@ -454,10 +544,9 @@ export function tick() {
 
   // Poll controller every frame (including paused — Options button must work).
   updateController(delta);
-  updateRadar();
-  syncWeaponAmmoHud();
+  updateRadarIfDue(delta);
+  updateHudIfDue(delta);
   updateBulletTimeAudioPitch();
-  updateBulletTimeIndicator();
   syncKillScreenRuntime();
   updatePlacer(delta);
   updateEditorPlacement(delta);
@@ -472,18 +561,11 @@ export function tick() {
     if (!state.paused && state.params.landscapeEditorModeEnabled === true) {
       const worldDelta = delta * (Number(state.worldScale) || 1);
       updateNpcTeamCombat(worldDelta, _elapsed);
-      updateZones([...getEnemies(), ...getAllies()], {
-        spawnReinforcements: spawnZoneReinforcements,
-        playerGroup,
-      });
-      [...getEnemies(), ...getAllies()].forEach(npc => {
-        if (npc?.group?.position) clampPositionToBuildArea(npc.group.position, npc.radius || 0.4);
-      });
+      updateZonesAndNpcBounds(delta);
     }
 
     updateCameraShake(delta);
-    renderer.render(scene, camera);
-    labelRenderer.render(scene, camera);
+    renderFrame(delta);
     return;
   }
 
@@ -495,7 +577,7 @@ export function tick() {
 
   // Reticle hover colour + MGSV dwell tagging
   {
-    const reticleEl = document.getElementById('target-reticle');
+    const reticleEl = _reticleEl;
     const isEnemyHit = !state.paused && aimResult.type === 'enemy' && !aimResult.enemy?.isAlly;
     if (reticleEl && reticleEl.style.display !== 'none') {
       reticleEl.classList.toggle('reticle-enemy-hover', isEnemyHit);
@@ -525,8 +607,7 @@ export function tick() {
     state.primaryFire = false;
     state.secondaryFire = false;
     updateCameraShake(delta);
-    renderer.render(scene, camera);
-    labelRenderer.render(scene, camera);
+    renderFrame(delta);
     return;
   }
 
@@ -547,18 +628,11 @@ export function tick() {
 
   const worldDelta = delta * state.worldScale;
   updateEnemies(worldDelta, _elapsed);
-  updateZones([...getEnemies(), ...getAllies()], {
-    spawnReinforcements: spawnZoneReinforcements,
-    playerGroup,
-  });
-  [...getEnemies(), ...getAllies()].forEach(npc => {
-    if (npc?.group?.position) clampPositionToBuildArea(npc.group.position, npc.radius || 0.4);
-  });
+  updateZonesAndNpcBounds(delta);
   if ((state.activeSlot ?? 0) === 0) {
     updateLaserProjectiles(delta, worldDelta);
   }
 
   updateCameraShake(delta);
-  renderer.render(scene, camera);
-  labelRenderer.render(scene, camera);
+  renderFrame(delta);
 }

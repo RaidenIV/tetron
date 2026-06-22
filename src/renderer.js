@@ -4,11 +4,17 @@ import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { state } from './state.js';
 
 // ── WebGL renderer ─────────────────────────────────────────────────────────────
-export const renderer = new THREE.WebGLRenderer({ antialias: true });
+const MAX_RENDER_PIXEL_RATIO = 1;
+
+export const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  powerPreference: 'high-performance',
+});
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_RENDER_PIXEL_RATIO));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate = false;
 renderer.toneMapping         = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.9;
 renderer.domElement.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;';

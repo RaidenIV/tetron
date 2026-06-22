@@ -18,6 +18,10 @@ const _spawnPos = new THREE.Vector3();
 const _tmpQuat = new THREE.Quaternion();
 const _aimRaycaster = new THREE.Raycaster();
 const _aimNdc = new THREE.Vector2(0, 0); // always reticle centre
+const _aimVolumeCenter = new THREE.Vector3();
+const _aimToCenter = new THREE.Vector3();
+const _aimClosestPoint = new THREE.Vector3();
+const _projectileDirectionTmp = new THREE.Vector3();
 
 // ── Aim constants (from AIMING.md) ───────────────────────────────────────────
 const AIM_FALLBACK_DISTANCE = 1000;
@@ -89,6 +93,13 @@ let _projectileShockwaveId = 1;
 let _rifleTracerShotCounter = 0;
 
 const MAGAZINE_WEAPON_TYPES = new Set(['pistol', 'rifle', 'shotgun', 'sniperRifle', 'rocketLauncher']);
+const _ammoHud = document.getElementById('ammo-hud');
+const _ammoTitleEl = _ammoHud?.querySelector('[data-ammo-title]') || null;
+const _ammoMagEl = _ammoHud?.querySelector('[data-ammo-mag]') || null;
+const _ammoReserveEl = _ammoHud?.querySelector('[data-ammo-reserve]') || null;
+const _ammoMagLabelEl = _ammoHud?.querySelector('[data-ammo-mag-label]') || null;
+let _ammoHudRenderKey = '';
+
 const WEAPON_AMMO_SPECS = Object.freeze({
   pistol: { prefix: 'Pistol', label: 'PISTOL', magazineKey: 'weaponPistolMagazineSize', totalKey: 'weaponPistolTotalAmmo', defaultMagazine: 12, defaultTotal: 60, defaultReloadTime: 1.0 },
   rifle: { prefix: 'Rifle', label: 'RIFLE', magazineKey: 'weaponRifleMagazineSize', totalKey: 'weaponRifleTotalAmmo', defaultMagazine: 30, defaultTotal: 180, defaultReloadTime: 1.25 },
@@ -309,7 +320,7 @@ export function reloadCurrentWeapon() {
 }
 
 export function syncWeaponAmmoHud() {
-  const hud = document.getElementById('ammo-hud');
+  const hud = _ammoHud;
   if (!hud) return;
   const p = state.params;
   const type = getSelectedWeaponType();
@@ -317,7 +328,6 @@ export function syncWeaponAmmoHud() {
   const record = getAmmoRecord(type);
   const infinite = p.weaponInfiniteAmmo === true;
   const ammoHudVisible = p.hudVisible !== false && p.laserEnabled !== false && p.hudWeaponAmmoVisible !== false;
-  hud.style.display = ammoHudVisible ? '' : 'none';
   const numericSetting = (value, fallback, min, max) => {
     const numeric = Number(value);
     return Math.min(max, Math.max(min, Number.isFinite(numeric) ? numeric : fallback));
@@ -327,6 +337,18 @@ export function syncWeaponAmmoHud() {
   const bgOpacity = numericSetting(p.hudWeaponAmmoBgOpacity, 0.36, 0, 1);
   const offsetX = numericSetting(p.hudWeaponAmmoOffsetX, 0, -400, 400);
   const offsetY = numericSetting(p.hudWeaponAmmoOffsetY, 0, -300, 300);
+  const magazineSize = getConfiguredMagazineSize(type);
+  const reserveText = infinite ? '∞' : String(Math.max(0, record.reserve));
+  const magazineText = spec.magazineKey ? (infinite ? String(magazineSize) : String(Math.max(0, record.magazine))) : '—';
+  const magLabel = spec.magazineKey ? (type === 'rocketLauncher' ? 'CLIP' : 'MAG') : 'MAG';
+  const renderKey = [
+    ammoHudVisible, type, magazineText, reserveText, magLabel,
+    scale, opacity, bgOpacity, offsetX, offsetY, p.hudLayout,
+  ].join('|');
+  if (renderKey === _ammoHudRenderKey) return;
+  _ammoHudRenderKey = renderKey;
+
+  hud.style.display = ammoHudVisible ? '' : 'none';
   hud.style.transformOrigin = 'bottom right';
   hud.style.transform = `scale(${scale})`;
   hud.style.opacity = String(opacity);
@@ -337,18 +359,10 @@ export function syncWeaponAmmoHud() {
     hud.style.right = `calc(var(--sb-width, 320px) + 28px + var(--radar-size, 180px) + 14px + ${offsetX}px)`;
   }
   hud.style.bottom = `${28 + offsetY}px`;
-  const magazineSize = getConfiguredMagazineSize(type);
-  const reserveText = infinite ? '∞' : String(Math.max(0, record.reserve));
-  const magazineText = spec.magazineKey ? (infinite ? String(magazineSize) : String(Math.max(0, record.magazine))) : '—';
-  const magLabel = spec.magazineKey ? (type === 'rocketLauncher' ? 'CLIP' : 'MAG') : 'MAG';
-  const title = hud.querySelector('[data-ammo-title]');
-  const mag = hud.querySelector('[data-ammo-mag]');
-  const reserve = hud.querySelector('[data-ammo-reserve]');
-  const magLabelEl = hud.querySelector('[data-ammo-mag-label]');
-  if (title) title.textContent = spec.label;
-  if (mag) mag.textContent = magazineText;
-  if (reserve) reserve.textContent = reserveText;
-  if (magLabelEl) magLabelEl.textContent = magLabel;
+  if (_ammoTitleEl) _ammoTitleEl.textContent = spec.label;
+  if (_ammoMagEl) _ammoMagEl.textContent = magazineText;
+  if (_ammoReserveEl) _ammoReserveEl.textContent = reserveText;
+  if (_ammoMagLabelEl) _ammoMagLabelEl.textContent = magLabel;
 }
 
 function weaponValue(prefix, field, fallback, min = -Infinity, max = Infinity) {
@@ -780,33 +794,27 @@ function updateProjectileExplosionParticles(delta) {
 
 /**
  * Test a ray against a sphere centred at the enemy's visual mid-point.
- * Returns { point, distance } or null.
+ * Returns the hit distance or null.
  */
 function intersectEnemyAimVolume(rayOrigin, rayDir, enemy) {
   if (!enemy || !enemy.group) return null;
 
-  const center = enemy.group.position.clone();
-  // Aim at visual centre, not the floor origin.
+  _aimVolumeCenter.copy(enemy.group.position);
   const bodyHeight = (enemy.radius * 2 + (enemy.sizeMult || 1) * 1.2);
-  center.y += bodyHeight * 0.5;
+  _aimVolumeCenter.y += bodyHeight * 0.5;
 
   const radius = (enemy.radius || 0.4) + AIM_ENEMY_RADIUS_PADDING;
+  _aimToCenter.copy(_aimVolumeCenter).sub(rayOrigin);
+  const projection = _aimToCenter.dot(rayDir);
+  if (projection < 0) return null;
 
-  const toCenter = center.clone().sub(rayOrigin);
-  const proj = toCenter.dot(rayDir);
-  if (proj < 0) return null;
+  _aimClosestPoint.copy(rayOrigin).addScaledVector(rayDir, projection);
+  const missSq = _aimClosestPoint.distanceToSquared(_aimVolumeCenter);
+  const radiusSq = radius * radius;
+  if (missSq > radiusSq) return null;
 
-  const closest = rayOrigin.clone().addScaledVector(rayDir, proj);
-  const miss = closest.distanceTo(center);
-  if (miss > radius) return null;
-
-  const offset = Math.sqrt(Math.max(0, radius * radius - miss * miss));
-  const hitDist = Math.max(0, proj - offset);
-
-  return {
-    point: rayOrigin.clone().addScaledVector(rayDir, hitDist),
-    distance: hitDist,
-  };
+  const offset = Math.sqrt(Math.max(0, radiusSq - missSq));
+  return Math.max(0, projection - offset);
 }
 
 /**
@@ -820,29 +828,36 @@ export function resolveAimTarget() {
   _aimRaycaster.setFromCamera(_aimNdc, camera);
 
   const rayOrigin = _aimRaycaster.ray.origin;
-  const rayDir    = _aimRaycaster.ray.direction;
+  const rayDir = _aimRaycaster.ray.direction;
+  let bestEnemy = null;
+  let bestDistance = Infinity;
 
-  let bestHit = null;
+  const enemies = getEnemies();
+  for (let i = 0; i < enemies.length; i++) {
+    const enemy = enemies[i];
+    const hitDistance = intersectEnemyAimVolume(rayOrigin, rayDir, enemy);
+    if (hitDistance === null || hitDistance >= bestDistance) continue;
+    bestEnemy = enemy;
+    bestDistance = hitDistance;
+  }
 
-  const aimTargets = state.params.allyFriendlyFire === true
-    ? getEnemies().concat(getAllies())
-    : getEnemies();
-
-  for (const enemy of aimTargets) {
-    if (!enemy || !enemy.group) continue;
-    const hit = intersectEnemyAimVolume(rayOrigin, rayDir, enemy);
-    if (!hit) continue;
-    if (!bestHit || hit.distance < bestHit.distance) {
-      bestHit = { type: 'enemy', enemy, point: hit.point, distance: hit.distance };
+  if (state.params.allyFriendlyFire === true) {
+    const allies = getAllies();
+    for (let i = 0; i < allies.length; i++) {
+      const ally = allies[i];
+      const hitDistance = intersectEnemyAimVolume(rayOrigin, rayDir, ally);
+      if (hitDistance === null || hitDistance >= bestDistance) continue;
+      bestEnemy = ally;
+      bestDistance = hitDistance;
     }
   }
 
-  if (bestHit) {
-    aimResult.type  = 'enemy';
-    aimResult.enemy = bestHit.enemy;
-    aimResult.point.copy(bestHit.point);
+  if (bestEnemy) {
+    aimResult.type = 'enemy';
+    aimResult.enemy = bestEnemy;
+    aimResult.point.copy(rayOrigin).addScaledVector(rayDir, bestDistance);
   } else {
-    aimResult.type  = 'fallback';
+    aimResult.type = 'fallback';
     aimResult.enemy = null;
     aimResult.point.copy(rayOrigin).addScaledVector(rayDir, AIM_FALLBACK_DISTANCE);
   }
@@ -1138,7 +1153,8 @@ export function updateLaserProjectiles(delta, projectileDelta = delta) {
         }
       }
     } else if (projectile.velocity.lengthSq() > 0.0001) {
-      _tmpQuat.setFromUnitVectors(_up, projectile.velocity.clone().normalize());
+      _projectileDirectionTmp.copy(projectile.velocity).normalize();
+      _tmpQuat.setFromUnitVectors(_up, _projectileDirectionTmp);
       visual.group.quaternion.copy(_tmpQuat);
     }
     if (visual.glow) visual.glow.visible = visual.group.visible && projectileConfig.projectileBloom !== false;
