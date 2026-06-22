@@ -113,6 +113,7 @@ export const state = {
       "bulletTimeDuration": 5,
       "bulletTimeCooldown": 5,
       "bulletTimeScale": 0.25,
+      "bulletTimeSaturation": 0.5,
       "bulletTimeReplenishRate": 0.1,
       "bulletTimeKillGain": 0.5,
       "shieldVisible": false,

@@ -110,6 +110,7 @@ const PRESET_SETTINGS = [
       "bulletTimeDuration": 5,
       "bulletTimeCooldown": 5,
       "bulletTimeScale": 0.25,
+      "bulletTimeSaturation": 0.5,
       "bulletTimeReplenishRate": 0.1,
       "bulletTimeKillGain": 0.5,
       "shieldVisible": false,
@@ -2483,6 +2484,7 @@ function buildAbilities(body) {
     bulletBody.appendChild(slider({ key: 'bulletTimeKillGain', label: 'Earn Per Kill', min: 0, max: 30, step: 0.1, dec: 1 }));
     bulletBody.appendChild(slider({ key: 'bulletTimeCooldown', label: 'Cooldown', min: 0, max: 120, step: 0.5, dec: 1 }));
     bulletBody.appendChild(slider({ key: 'bulletTimeScale', label: 'World Scale', min: 0.05, max: 1, step: 0.05, dec: 2 }));
+    bulletBody.appendChild(slider({ key: 'bulletTimeSaturation', label: 'Saturation', min: 0, max: 1, step: 0.05, dec: 2 }));
   }, true));
 
   body.appendChild(createManualSubsection('Dash', dashBody => {
@@ -3847,6 +3849,13 @@ function applyHudSettings() {
   const rawKillScreenTextOffsetX = Number(p.killScreenTextOffsetX);
   const rawKillScreenTextOffsetY = Number(p.killScreenTextOffsetY);
   const killScreenSaturation = Math.min(1, Math.max(0, Number.isFinite(rawKillScreenSaturation) ? rawKillScreenSaturation : 0.15));
+  const rawBulletTimeSaturation = Number(p.bulletTimeSaturation);
+  const bulletTimeSaturation = Math.min(1, Math.max(0, Number.isFinite(rawBulletTimeSaturation) ? rawBulletTimeSaturation : 0.5));
+  const bulletTimeActive = p.bulletTimeEnabled !== false && state.slowTimer > 0;
+  const displaySaturation = killScreenActive
+    ? killScreenSaturation
+    : (bulletTimeActive ? bulletTimeSaturation : 1);
+  const displaySaturationActive = killScreenActive || bulletTimeActive;
   const killScreenTextSize = Math.min(160, Math.max(12, Number.isFinite(rawKillScreenTextSize) ? rawKillScreenTextSize : 42));
   const killScreenTextColor = /^#[0-9a-f]{6}$/i.test(String(p.killScreenTextColor || '')) ? p.killScreenTextColor : '#ffffff';
   const killScreenTextOpacity = Math.min(1, Math.max(0, Number.isFinite(rawKillScreenTextOpacity) ? rawKillScreenTextOpacity : 0.9));
@@ -3856,8 +3865,14 @@ function applyHudSettings() {
   const killScreenFont = HUD_FONT_STYLES[killScreenFontKey] || HUD_FONT_STYLES.system;
   document.documentElement.style.setProperty('--kill-screen-saturation', String(killScreenSaturation));
   document.body?.style?.setProperty('--kill-screen-saturation', String(killScreenSaturation));
+  document.documentElement.style.setProperty('--bullet-time-saturation', String(bulletTimeSaturation));
+  document.body?.style?.setProperty('--bullet-time-saturation', String(bulletTimeSaturation));
   document.querySelectorAll('.game-renderer, .label-renderer').forEach(el => {
-    el.style.setProperty('filter', killScreenActive ? `saturate(${killScreenSaturation})` : '', killScreenActive ? 'important' : '');
+    el.style.setProperty(
+      'filter',
+      displaySaturationActive ? `saturate(${displaySaturation})` : '',
+      displaySaturationActive ? 'important' : ''
+    );
   });
   if (killScreenEl) {
     killScreenEl.classList.toggle('kill-screen-enabled', killScreenEnabled);

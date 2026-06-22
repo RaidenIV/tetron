@@ -293,12 +293,19 @@ function syncKillScreenRuntime() {
   const enabled = state.params.killScreenEnabled !== false;
   const killScreenTimeLeft = Number(state.killScreenTimer);
   const active = dead && enabled && Number.isFinite(killScreenTimeLeft) && killScreenTimeLeft > 0;
+  const bulletTimeActive = state.params.bulletTimeEnabled !== false && state.slowTimer > 0;
   const rawSaturation = Number(state.params.killScreenSaturation);
+  const rawBulletTimeSaturation = Number(state.params.bulletTimeSaturation);
   const rawTextSize = Number(state.params.killScreenTextSize);
   const rawTextOpacity = Number(state.params.killScreenTextOpacity);
   const rawTextOffsetX = Number(state.params.killScreenTextOffsetX);
   const rawTextOffsetY = Number(state.params.killScreenTextOffsetY);
   const saturation = clamp(Number.isFinite(rawSaturation) ? rawSaturation : 0.15, 0, 1);
+  const bulletTimeSaturation = clamp(Number.isFinite(rawBulletTimeSaturation) ? rawBulletTimeSaturation : 0.5, 0, 1);
+  const displaySaturation = active
+    ? saturation
+    : (bulletTimeActive ? bulletTimeSaturation : 1);
+  const displaySaturationActive = active || bulletTimeActive;
   const textSize = clamp(Number.isFinite(rawTextSize) ? rawTextSize : 42, 12, 160);
   const textOpacity = clamp(Number.isFinite(rawTextOpacity) ? rawTextOpacity : 0.9, 0, 1);
   const textOffsetX = clamp(Number.isFinite(rawTextOffsetX) ? rawTextOffsetX : 0, -600, 600);
@@ -314,10 +321,13 @@ function syncKillScreenRuntime() {
   document.body.setAttribute('data-kill-screen-active', active ? 'true' : 'false');
   document.body.style.setProperty('--kill-screen-saturation', String(saturation));
   document.documentElement.style.setProperty('--kill-screen-saturation', String(saturation));
+  document.body.style.setProperty('--bullet-time-saturation', String(bulletTimeSaturation));
+  document.documentElement.style.setProperty('--bullet-time-saturation', String(bulletTimeSaturation));
 
-  const rendererFilter = active ? `saturate(${saturation})` : '';
-  if (renderer?.domElement) renderer.domElement.style.setProperty('filter', rendererFilter, active ? 'important' : '');
-  if (labelRenderer?.domElement) labelRenderer.domElement.style.setProperty('filter', rendererFilter, active ? 'important' : '');
+  const rendererFilter = displaySaturationActive ? `saturate(${displaySaturation})` : '';
+  const rendererFilterPriority = displaySaturationActive ? 'important' : '';
+  if (renderer?.domElement) renderer.domElement.style.setProperty('filter', rendererFilter, rendererFilterPriority);
+  if (labelRenderer?.domElement) labelRenderer.domElement.style.setProperty('filter', rendererFilter, rendererFilterPriority);
 
   const overlay = document.getElementById('kill-screen-overlay');
   if (overlay) {
